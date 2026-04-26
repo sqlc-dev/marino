@@ -28,7 +28,7 @@ parser/%arser_golden.y: parser/%arser.y
 	@(git diff --no-index --exit-code $< $@ && rm $@) || (mv $@ $< && >&2 echo "formatted $<" && exit 1)
 
 bin/goyacc: goyacc/main.go goyacc/format_yacc.go
-	GO111MODULE=on go build -o bin/goyacc goyacc/main.go goyacc/format_yacc.go
+	GO111MODULE=on go build -C goyacc -o ../bin/goyacc .
 
 fmt: bin/goyacc parser/parser_golden.y parser/hintparser_golden.y
 	@echo "gofmt (simplify)"
