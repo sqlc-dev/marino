@@ -3993,7 +3993,7 @@ type HintTimeRange struct {
 //	will be parsed into a LeadingList like:
 //	Items = [HintTable("a"), LeadingList{[HintTable("b"), HintTable("c")]}, HintTable("d")]
 type LeadingList struct {
-	Items []interface{}
+	Items []any
 }
 
 // HintSetVar is the payload of `SET_VAR` hint

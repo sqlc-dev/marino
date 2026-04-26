@@ -81,11 +81,11 @@ func extractMiddle(str, startMarker, endMarker string) string {
 		return ""
 	}
 	str = str[startIdx+len(startMarker):]
-	endIdx := strings.Index(str, endMarker)
-	if endIdx == -1 {
+	before, _, ok := strings.Cut(str, endMarker)
+	if !ok {
 		return ""
 	}
-	return str[:endIdx]
+	return before
 }
 
 func extractQuotedWords(strs []string) []string {
