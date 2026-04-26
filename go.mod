@@ -3,7 +3,6 @@ module github.com/sqlc-dev/marino
 go 1.25
 
 require (
-	go.uber.org/goleak v1.3.0
 	golang.org/x/text v0.19.0
 	modernc.org/mathutil v1.6.0
 	modernc.org/parser v1.1.0
