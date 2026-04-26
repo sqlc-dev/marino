@@ -15,13 +15,12 @@ package ast
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
 	"strings"
 
-	"github.com/pingcap/errors"
-	"github.com/pingcap/failpoint"
 	"github.com/sqlc-dev/marino/auth"
 	"github.com/sqlc-dev/marino/format"
 	"github.com/sqlc-dev/marino/mysql"
@@ -150,7 +149,7 @@ func (n *TraceStmt) Restore(ctx *format.RestoreCtx) error {
 		ctx.WritePlain(" ")
 	}
 	if err := n.Stmt.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore TraceStmt.Stmt")
+		return annotate(err, "An error occurred while restore TraceStmt.Stmt")
 	}
 	return nil
 }
@@ -226,12 +225,12 @@ func (n *ExplainStmt) Restore(ctx *format.RestoreCtx) error {
 	if showStmt, ok := n.Stmt.(*ShowStmt); ok {
 		ctx.WriteKeyWord("DESC ")
 		if err := showStmt.Table.Restore(ctx); err != nil {
-			return errors.Annotate(err, "An error occurred while restore ExplainStmt.ShowStmt.Table")
+			return annotate(err, "An error occurred while restore ExplainStmt.ShowStmt.Table")
 		}
 		if showStmt.Column != nil {
 			ctx.WritePlain(" ")
 			if err := showStmt.Column.Restore(ctx); err != nil {
-				return errors.Annotate(err, "An error occurred while restore ExplainStmt.ShowStmt.Column")
+				return annotate(err, "An error occurred while restore ExplainStmt.ShowStmt.Column")
 			}
 		}
 		return nil
@@ -256,7 +255,7 @@ func (n *ExplainStmt) Restore(ctx *format.RestoreCtx) error {
 	}
 	if n.Stmt != nil {
 		if err := n.Stmt.Restore(ctx); err != nil {
-			return errors.Annotate(err, "An error occurred while restore ExplainStmt.Stmt")
+			return annotate(err, "An error occurred while restore ExplainStmt.Stmt")
 		}
 	}
 	return nil
@@ -342,7 +341,7 @@ func (n *PlanReplayerStmt) Restore(ctx *format.RestoreCtx) error {
 	if n.HistoricalStatsInfo != nil {
 		ctx.WriteKeyWord("WITH STATS ")
 		if err := n.HistoricalStatsInfo.Restore(ctx); err != nil {
-			return errors.Annotate(err, "An error occurred while restore PlanReplayerStmt.HistoricalStatsInfo")
+			return annotate(err, "An error occurred while restore PlanReplayerStmt.HistoricalStatsInfo")
 		}
 		ctx.WriteKeyWord(" ")
 	}
@@ -371,25 +370,25 @@ func (n *PlanReplayerStmt) Restore(ctx *format.RestoreCtx) error {
 		if n.Where != nil {
 			ctx.WriteKeyWord(" WHERE ")
 			if err := n.Where.Restore(ctx); err != nil {
-				return errors.Annotate(err, "An error occurred while restore PlanReplayerStmt.Where")
+				return annotate(err, "An error occurred while restore PlanReplayerStmt.Where")
 			}
 		}
 		if n.OrderBy != nil {
 			ctx.WriteKeyWord(" ")
 			if err := n.OrderBy.Restore(ctx); err != nil {
-				return errors.Annotate(err, "An error occurred while restore PlanReplayerStmt.OrderBy")
+				return annotate(err, "An error occurred while restore PlanReplayerStmt.OrderBy")
 			}
 		}
 		if n.Limit != nil {
 			ctx.WriteKeyWord(" ")
 			if err := n.Limit.Restore(ctx); err != nil {
-				return errors.Annotate(err, "An error occurred while restore PlanReplayerStmt.Limit")
+				return annotate(err, "An error occurred while restore PlanReplayerStmt.Limit")
 			}
 		}
 		return nil
 	}
 	if err := n.Stmt.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore PlanReplayerStmt.Stmt")
+		return annotate(err, "An error occurred while restore PlanReplayerStmt.Stmt")
 	}
 	return nil
 }
@@ -669,7 +668,7 @@ func (n *PrepareStmt) Restore(ctx *format.RestoreCtx) error {
 	}
 	if n.SQLVar != nil {
 		if err := n.SQLVar.Restore(ctx); err != nil {
-			return errors.Annotate(err, "An error occurred while restore PrepareStmt.SQLVar")
+			return annotate(err, "An error occurred while restore PrepareStmt.SQLVar")
 		}
 		return nil
 	}
@@ -752,7 +751,7 @@ func (n *ExecuteStmt) Restore(ctx *format.RestoreCtx) error {
 				ctx.WritePlain(",")
 			}
 			if err := val.Restore(ctx); err != nil {
-				return errors.Annotatef(err, "An error occurred while restore ExecuteStmt.UsingVars index %d", i)
+				return annotatef(err, "An error occurred while restore ExecuteStmt.UsingVars index %d", i)
 			}
 		}
 	}
@@ -886,7 +885,7 @@ type CommitStmt struct {
 func (n *CommitStmt) Restore(ctx *format.RestoreCtx) error {
 	ctx.WriteKeyWord("COMMIT")
 	if err := n.CompletionType.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore CommitStmt.CompletionType")
+		return annotate(err, "An error occurred while restore CommitStmt.CompletionType")
 	}
 	return nil
 }
@@ -919,7 +918,7 @@ func (n *RollbackStmt) Restore(ctx *format.RestoreCtx) error {
 		ctx.WritePlain(n.SavepointName)
 	}
 	if err := n.CompletionType.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore RollbackStmt.CompletionType")
+		return annotate(err, "An error occurred while restore RollbackStmt.CompletionType")
 	}
 	return nil
 }
@@ -1015,12 +1014,12 @@ func (n *VariableAssignment) Restore(ctx *format.RestoreCtx) error {
 		// need to redact the url for safety when `show processlist;`
 		ctx.WritePlain(RedactURL(n.Value.(ValueExpr).GetString()))
 	} else if err := n.Value.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore VariableAssignment.Value")
+		return annotate(err, "An error occurred while restore VariableAssignment.Value")
 	}
 	if n.ExtendValue != nil {
 		ctx.WriteKeyWord(" COLLATE ")
 		if err := n.ExtendValue.Restore(ctx); err != nil {
-			return errors.Annotate(err, "An error occurred while restore VariableAssignment.ExtendValue")
+			return annotate(err, "An error occurred while restore VariableAssignment.ExtendValue")
 		}
 	}
 	return nil
@@ -1099,7 +1098,7 @@ func (n *FlushStmt) Restore(ctx *format.RestoreCtx) error {
 				ctx.WritePlain(", ")
 			}
 			if err := v.Restore(ctx); err != nil {
-				return errors.Annotatef(err, "An error occurred while restore FlushStmt.Tables[%d]", i)
+				return annotatef(err, "An error occurred while restore FlushStmt.Tables[%d]", i)
 			}
 		}
 		if n.ReadLock {
@@ -1149,7 +1148,7 @@ func (n *FlushStmt) Restore(ctx *format.RestoreCtx) error {
 				ctx.WritePlain(", ")
 			}
 			if err := obj.Restore(ctx); err != nil {
-				return errors.Annotatef(err, "An error occurred while restore FlushStmt.FlushObjects[%d]", i)
+				return annotatef(err, "An error occurred while restore FlushStmt.FlushObjects[%d]", i)
 			}
 		}
 		if n.IsCluster {
@@ -1213,7 +1212,7 @@ func (n *KillStmt) Restore(ctx *format.RestoreCtx) error {
 	if n.Expr != nil {
 		ctx.WriteKeyWord(" ")
 		if err := n.Expr.Restore(ctx); err != nil {
-			return errors.Trace(err)
+			return err
 		}
 	} else {
 		ctx.WritePlainf(" %d", n.ConnectionID)
@@ -1288,7 +1287,7 @@ func (n *SetStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(", ")
 		}
 		if err := v.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore SetStmt.Variables[%d]", i)
+			return annotatef(err, "An error occurred while restore SetStmt.Variables[%d]", i)
 		}
 	}
 	return nil
@@ -1415,7 +1414,7 @@ func (n *SetPwdStmt) Restore(ctx *format.RestoreCtx) error {
 	if n.User != nil {
 		ctx.WriteKeyWord(" FOR ")
 		if err := n.User.Restore(ctx); err != nil {
-			return errors.Annotate(err, "An error occurred while restore SetPwdStmt.User")
+			return annotate(err, "An error occurred while restore SetPwdStmt.User")
 		}
 	}
 	ctx.WritePlain("=")
@@ -1473,7 +1472,7 @@ func (n *SetRoleStmt) Restore(ctx *format.RestoreCtx) error {
 		ctx.WritePlain(" ")
 		err := role.Restore(ctx)
 		if err != nil {
-			return errors.Annotate(err, "An error occurred while restore SetRoleStmt.RoleList")
+			return annotate(err, "An error occurred while restore SetRoleStmt.RoleList")
 		}
 		if i != len(n.RoleList)-1 {
 			ctx.WritePlain(",")
@@ -1513,7 +1512,7 @@ func (n *SetDefaultRoleStmt) Restore(ctx *format.RestoreCtx) error {
 		ctx.WritePlain(" ")
 		err := role.Restore(ctx)
 		if err != nil {
-			return errors.Annotate(err, "An error occurred while restore SetDefaultRoleStmt.RoleList")
+			return annotate(err, "An error occurred while restore SetDefaultRoleStmt.RoleList")
 		}
 		if i != len(n.RoleList)-1 {
 			ctx.WritePlain(",")
@@ -1524,7 +1523,7 @@ func (n *SetDefaultRoleStmt) Restore(ctx *format.RestoreCtx) error {
 		ctx.WritePlain(" ")
 		err := user.Restore(ctx)
 		if err != nil {
-			return errors.Annotate(err, "An error occurred while restore SetDefaultRoleStmt.UserList")
+			return annotate(err, "An error occurred while restore SetDefaultRoleStmt.UserList")
 		}
 		if i != len(n.UserList)-1 {
 			ctx.WritePlain(",")
@@ -1553,12 +1552,12 @@ type UserSpec struct {
 // Restore implements Node interface.
 func (n *UserSpec) Restore(ctx *format.RestoreCtx) error {
 	if err := n.User.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore UserSpec.User")
+		return annotate(err, "An error occurred while restore UserSpec.User")
 	}
 	if n.AuthOpt != nil {
 		ctx.WritePlain(" ")
 		if err := n.AuthOpt.Restore(ctx); err != nil {
-			return errors.Annotate(err, "An error occurred while restore UserSpec.AuthOpt")
+			return annotate(err, "An error occurred while restore UserSpec.AuthOpt")
 		}
 	}
 	return nil
@@ -1607,7 +1606,7 @@ func (t *AuthTokenOrTLSOption) Restore(ctx *format.RestoreCtx) error {
 		ctx.WriteKeyWord("TOKEN_ISSUER ")
 		ctx.WriteString(t.Value)
 	default:
-		return errors.Errorf("Unsupported AuthTokenOrTLSOption.Type %d", t.Type)
+		return fmt.Errorf("Unsupported AuthTokenOrTLSOption.Type %d", t.Type)
 	}
 	return nil
 }
@@ -1671,7 +1670,7 @@ func (r *ResourceOption) Restore(ctx *format.RestoreCtx) error {
 	case MaxUserConnections:
 		ctx.WriteKeyWord("MAX_USER_CONNECTIONS ")
 	default:
-		return errors.Errorf("Unsupported ResourceOption.Type %d", r.Type)
+		return fmt.Errorf("Unsupported ResourceOption.Type %d", r.Type)
 	}
 	ctx.WritePlainf("%d", r.Count)
 	return nil
@@ -1739,7 +1738,7 @@ func (p *PasswordOrLockOption) Restore(ctx *format.RestoreCtx) error {
 	case PasswordReuseDefault:
 		ctx.WriteKeyWord("PASSWORD REUSE INTERVAL DEFAULT")
 	default:
-		return errors.Errorf("Unsupported PasswordOrLockOption.Type %d", p.Type)
+		return fmt.Errorf("Unsupported PasswordOrLockOption.Type %d", p.Type)
 	}
 	return nil
 }
@@ -1800,7 +1799,7 @@ func (n *CreateUserStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(", ")
 		}
 		if err := v.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore CreateUserStmt.Specs[%d]", i)
+			return annotatef(err, "An error occurred while restore CreateUserStmt.Specs[%d]", i)
 		}
 	}
 
@@ -1813,7 +1812,7 @@ func (n *CreateUserStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WriteKeyWord(" AND ")
 		}
 		if err := option.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore CreateUserStmt.AuthTokenOrTLSOptions[%d]", i)
+			return annotatef(err, "An error occurred while restore CreateUserStmt.AuthTokenOrTLSOptions[%d]", i)
 		}
 	}
 
@@ -1824,26 +1823,26 @@ func (n *CreateUserStmt) Restore(ctx *format.RestoreCtx) error {
 	for i, v := range n.ResourceOptions {
 		ctx.WritePlain(" ")
 		if err := v.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore CreateUserStmt.ResourceOptions[%d]", i)
+			return annotatef(err, "An error occurred while restore CreateUserStmt.ResourceOptions[%d]", i)
 		}
 	}
 
 	for i, v := range n.PasswordOrLockOptions {
 		ctx.WritePlain(" ")
 		if err := v.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore CreateUserStmt.PasswordOrLockOptions[%d]", i)
+			return annotatef(err, "An error occurred while restore CreateUserStmt.PasswordOrLockOptions[%d]", i)
 		}
 	}
 
 	if n.CommentOrAttributeOption != nil {
 		if err := n.CommentOrAttributeOption.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore CreateUserStmt.CommentOrAttributeOption")
+			return annotatef(err, "An error occurred while restore CreateUserStmt.CommentOrAttributeOption")
 		}
 	}
 
 	if n.ResourceGroupNameOption != nil {
 		if err := n.ResourceGroupNameOption.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore CreateUserStmt.ResourceGroupNameOption")
+			return annotatef(err, "An error occurred while restore CreateUserStmt.ResourceGroupNameOption")
 		}
 	}
 
@@ -1896,7 +1895,7 @@ func (n *AlterUserStmt) Restore(ctx *format.RestoreCtx) error {
 		ctx.WriteKeyWord("USER")
 		ctx.WritePlain("() ")
 		if err := n.CurrentAuth.Restore(ctx); err != nil {
-			return errors.Annotate(err, "An error occurred while restore AlterUserStmt.CurrentAuth")
+			return annotate(err, "An error occurred while restore AlterUserStmt.CurrentAuth")
 		}
 	}
 	for i, v := range n.Specs {
@@ -1904,7 +1903,7 @@ func (n *AlterUserStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(", ")
 		}
 		if err := v.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore AlterUserStmt.Specs[%d]", i)
+			return annotatef(err, "An error occurred while restore AlterUserStmt.Specs[%d]", i)
 		}
 	}
 
@@ -1917,7 +1916,7 @@ func (n *AlterUserStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WriteKeyWord(" AND ")
 		}
 		if err := option.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore AlterUserStmt.AuthTokenOrTLSOptions[%d]", i)
+			return annotatef(err, "An error occurred while restore AlterUserStmt.AuthTokenOrTLSOptions[%d]", i)
 		}
 	}
 
@@ -1928,26 +1927,26 @@ func (n *AlterUserStmt) Restore(ctx *format.RestoreCtx) error {
 	for i, v := range n.ResourceOptions {
 		ctx.WritePlain(" ")
 		if err := v.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore AlterUserStmt.ResourceOptions[%d]", i)
+			return annotatef(err, "An error occurred while restore AlterUserStmt.ResourceOptions[%d]", i)
 		}
 	}
 
 	for i, v := range n.PasswordOrLockOptions {
 		ctx.WritePlain(" ")
 		if err := v.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore AlterUserStmt.PasswordOrLockOptions[%d]", i)
+			return annotatef(err, "An error occurred while restore AlterUserStmt.PasswordOrLockOptions[%d]", i)
 		}
 	}
 
 	if n.CommentOrAttributeOption != nil {
 		if err := n.CommentOrAttributeOption.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore AlterUserStmt.CommentOrAttributeOption")
+			return annotatef(err, "An error occurred while restore AlterUserStmt.CommentOrAttributeOption")
 		}
 	}
 
 	if n.ResourceGroupNameOption != nil {
 		if err := n.ResourceGroupNameOption.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore AlterUserStmt.ResourceGroupNameOption")
+			return annotatef(err, "An error occurred while restore AlterUserStmt.ResourceGroupNameOption")
 		}
 	}
 
@@ -2019,7 +2018,7 @@ func (n *AlterRangeStmt) Restore(ctx *format.RestoreCtx) error {
 	ctx.WriteName(n.RangeName.O)
 	ctx.WritePlain(" ")
 	if err := n.PlacementOption.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore AlterRangeStmt.PlacementOption")
+		return annotate(err, "An error occurred while restore AlterRangeStmt.PlacementOption")
 	}
 	return nil
 }
@@ -2059,7 +2058,7 @@ func (n *DropUserStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(", ")
 		}
 		if err := v.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore DropUserStmt.UserList[%d]", i)
+			return annotatef(err, "An error occurred while restore DropUserStmt.UserList[%d]", i)
 		}
 	}
 	return nil
@@ -2087,7 +2086,7 @@ func (n *StringOrUserVar) Restore(ctx *format.RestoreCtx) error {
 	}
 	if n.UserVar != nil {
 		if err := n.UserVar.Restore(ctx); err != nil {
-			return errors.Annotate(err, "An error occurred while restore ColumnNameOrUserVar.UserVar")
+			return annotate(err, "An error occurred while restore ColumnNameOrUserVar.UserVar")
 		}
 	}
 	return nil
@@ -2143,7 +2142,7 @@ func (n *RecommendIndexStmt) Restore(ctx *format.RestoreCtx) error {
 				ctx.WriteKeyWord(opt.Option)
 				ctx.WritePlain(" = ")
 				if err := opt.Value.Restore(ctx); err != nil {
-					return errors.Annotatef(err, "An error occurred while restore RecommendIndexStmt.Options[%d]", i)
+					return annotatef(err, "An error occurred while restore RecommendIndexStmt.Options[%d]", i)
 				}
 			}
 		}
@@ -2164,7 +2163,7 @@ func (n *RecommendIndexStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WriteKeyWord(opt.Option)
 			ctx.WritePlain(" = ")
 			if err := opt.Value.Restore(ctx); err != nil {
-				return errors.Annotatef(err, "An error occurred while restore RecommendIndexStmt.Options[%d]", i)
+				return annotatef(err, "An error occurred while restore RecommendIndexStmt.Options[%d]", i)
 			}
 		}
 	}
@@ -2204,17 +2203,17 @@ func (n *CreateBindingStmt) Restore(ctx *format.RestoreCtx) error {
 				ctx.WritePlain(", ")
 			}
 			if err := v.Restore(ctx); err != nil {
-				return errors.Annotatef(err, "An error occurred while restore CreateBindingStmt.PlanDigests[%d]", i)
+				return annotatef(err, "An error occurred while restore CreateBindingStmt.PlanDigests[%d]", i)
 			}
 		}
 	} else {
 		ctx.WriteKeyWord("BINDING FOR ")
 		if err := n.OriginNode.Restore(ctx); err != nil {
-			return errors.Trace(err)
+			return err
 		}
 		ctx.WriteKeyWord(" USING ")
 		if err := n.HintedNode.Restore(ctx); err != nil {
-			return errors.Trace(err)
+			return err
 		}
 	}
 	return nil
@@ -2274,17 +2273,17 @@ func (n *DropBindingStmt) Restore(ctx *format.RestoreCtx) error {
 				ctx.WritePlain(", ")
 			}
 			if err := v.Restore(ctx); err != nil {
-				return errors.Annotatef(err, "An error occurred while restore CreateBindingStmt.PlanDigests[%d]", i)
+				return annotatef(err, "An error occurred while restore CreateBindingStmt.PlanDigests[%d]", i)
 			}
 		}
 	} else {
 		if err := n.OriginNode.Restore(ctx); err != nil {
-			return errors.Trace(err)
+			return err
 		}
 		if n.HintedNode != nil {
 			ctx.WriteKeyWord(" USING ")
 			if err := n.HintedNode.Restore(ctx); err != nil {
-				return errors.Trace(err)
+				return err
 			}
 		}
 	}
@@ -2357,12 +2356,12 @@ func (n *SetBindingStmt) Restore(ctx *format.RestoreCtx) error {
 		ctx.WriteString(n.SQLDigest)
 	} else {
 		if err := n.OriginNode.Restore(ctx); err != nil {
-			return errors.Trace(err)
+			return err
 		}
 		if n.HintedNode != nil {
 			ctx.WriteKeyWord(" USING ")
 			if err := n.HintedNode.Restore(ctx); err != nil {
-				return errors.Trace(err)
+				return err
 			}
 		}
 	}
@@ -2440,7 +2439,7 @@ func (n *CreateStatisticsStmt) Restore(ctx *format.RestoreCtx) error {
 	}
 	ctx.WriteKeyWord("ON ")
 	if err := n.Table.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore CreateStatisticsStmt.Table")
+		return annotate(err, "An error occurred while restore CreateStatisticsStmt.Table")
 	}
 
 	ctx.WritePlain("(")
@@ -2449,7 +2448,7 @@ func (n *CreateStatisticsStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(", ")
 		}
 		if err := col.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore CreateStatisticsStmt.Columns: [%v]", i)
+			return annotatef(err, "An error occurred while restore CreateStatisticsStmt.Columns: [%v]", i)
 		}
 	}
 	ctx.WritePlain(")")
@@ -2520,7 +2519,7 @@ func (n *DoStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(", ")
 		}
 		if err := v.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore DoStmt.Exprs[%d]", i)
+			return annotatef(err, "An error occurred while restore DoStmt.Exprs[%d]", i)
 		}
 	}
 	return nil
@@ -2682,7 +2681,7 @@ func (l *AlterJobOption) Restore(ctx *format.RestoreCtx) error {
 	} else {
 		ctx.WritePlain(l.Name + " = ")
 		if err := l.Value.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore AlterJobOption")
+			return annotatef(err, "An error occurred while restore AlterJobOption")
 		}
 	}
 	return nil
@@ -2716,7 +2715,7 @@ func (n *AdminStmt) Restore(ctx *format.RestoreCtx) error {
 				ctx.WritePlain(", ")
 			}
 			if err := v.Restore(ctx); err != nil {
-				return errors.Annotatef(err, "An error occurred while restore AdminStmt.Tables[%d]", i)
+				return annotatef(err, "An error occurred while restore AdminStmt.Tables[%d]", i)
 			}
 		}
 		return nil
@@ -2742,7 +2741,7 @@ func (n *AdminStmt) Restore(ctx *format.RestoreCtx) error {
 		if n.Where != nil {
 			ctx.WriteKeyWord(" WHERE ")
 			if err := n.Where.Restore(ctx); err != nil {
-				return errors.Annotate(err, "An error occurred while restore ShowStmt.Where")
+				return annotate(err, "An error occurred while restore ShowStmt.Where")
 			}
 		}
 	case AdminShowNextRowID:
@@ -2812,7 +2811,7 @@ func (n *AdminStmt) Restore(ctx *format.RestoreCtx) error {
 	case AdminShowSlow:
 		ctx.WriteKeyWord("SHOW SLOW ")
 		if err := n.ShowSlow.Restore(ctx); err != nil {
-			return errors.Annotate(err, "An error occurred while restore AdminStmt.ShowSlow")
+			return annotate(err, "An error occurred while restore AdminStmt.ShowSlow")
 		}
 	case AdminReloadExprPushdownBlacklist:
 		ctx.WriteKeyWord("RELOAD EXPR_PUSHDOWN_BLACKLIST")
@@ -2880,7 +2879,7 @@ func (n *AdminStmt) Restore(ctx *format.RestoreCtx) error {
 			}
 			ctx.WritePlain(" ")
 			if err := option.Restore(ctx); err != nil {
-				return errors.Annotatef(err, "An error occurred while restore AdminStmt.AlterJobOptions[%d]", i)
+				return annotatef(err, "An error occurred while restore AdminStmt.AlterJobOptions[%d]", i)
 			}
 		}
 	case AdminWorkloadRepoCreate:
@@ -2929,7 +2928,7 @@ func (n *RoleOrPriv) ToRole() (*auth.RoleIdentity, error) {
 		if r, ok := n.Node.(*auth.RoleIdentity); ok {
 			return r, nil
 		}
-		return nil, errors.Errorf("can't convert to RoleIdentity, type %T", n.Node)
+		return nil, fmt.Errorf("can't convert to RoleIdentity, type %T", n.Node)
 	}
 	return &auth.RoleIdentity{Username: n.Symbols, Hostname: "%"}, nil
 }
@@ -2939,7 +2938,7 @@ func (n *RoleOrPriv) ToPriv() (*PrivElem, error) {
 		if p, ok := n.Node.(*PrivElem); ok {
 			return p, nil
 		}
-		return nil, errors.Errorf("can't convert to PrivElem, type %T", n.Node)
+		return nil, fmt.Errorf("can't convert to PrivElem, type %T", n.Node)
 	}
 	if len(n.Symbols) == 0 {
 		return nil, errors.New("symbols should not be length 0")
@@ -2976,7 +2975,7 @@ func (n *PrivElem) Restore(ctx *format.RestoreCtx) error {
 				ctx.WritePlain(",")
 			}
 			if err := v.Restore(ctx); err != nil {
-				return errors.Annotatef(err, "An error occurred while restore PrivElem.Cols[%d]", i)
+				return annotatef(err, "An error occurred while restore PrivElem.Cols[%d]", i)
 			}
 		}
 		ctx.WritePlain(")")
@@ -3093,18 +3092,18 @@ func (n *RevokeStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(", ")
 		}
 		if err := v.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore RevokeStmt.Privs[%d]", i)
+			return annotatef(err, "An error occurred while restore RevokeStmt.Privs[%d]", i)
 		}
 	}
 	ctx.WriteKeyWord(" ON ")
 	if n.ObjectType != ObjectTypeNone {
 		if err := n.ObjectType.Restore(ctx); err != nil {
-			return errors.Annotate(err, "An error occurred while restore RevokeStmt.ObjectType")
+			return annotate(err, "An error occurred while restore RevokeStmt.ObjectType")
 		}
 		ctx.WritePlain(" ")
 	}
 	if err := n.Level.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore RevokeStmt.Level")
+		return annotate(err, "An error occurred while restore RevokeStmt.Level")
 	}
 	ctx.WriteKeyWord(" FROM ")
 	for i, v := range n.Users {
@@ -3112,7 +3111,7 @@ func (n *RevokeStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(", ")
 		}
 		if err := v.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore RevokeStmt.Users[%d]", i)
+			return annotatef(err, "An error occurred while restore RevokeStmt.Users[%d]", i)
 		}
 	}
 	return nil
@@ -3151,7 +3150,7 @@ func (n *RevokeRoleStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(", ")
 		}
 		if err := role.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore RevokeRoleStmt.Roles[%d]", i)
+			return annotatef(err, "An error occurred while restore RevokeRoleStmt.Roles[%d]", i)
 		}
 	}
 	ctx.WriteKeyWord(" FROM ")
@@ -3160,7 +3159,7 @@ func (n *RevokeRoleStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(", ")
 		}
 		if err := v.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore RevokeRoleStmt.Users[%d]", i)
+			return annotatef(err, "An error occurred while restore RevokeRoleStmt.Users[%d]", i)
 		}
 	}
 	return nil
@@ -3198,18 +3197,18 @@ func (n *GrantStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(" ")
 		}
 		if err := v.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore GrantStmt.Privs[%d]", i)
+			return annotatef(err, "An error occurred while restore GrantStmt.Privs[%d]", i)
 		}
 	}
 	ctx.WriteKeyWord(" ON ")
 	if n.ObjectType != ObjectTypeNone {
 		if err := n.ObjectType.Restore(ctx); err != nil {
-			return errors.Annotate(err, "An error occurred while restore GrantStmt.ObjectType")
+			return annotate(err, "An error occurred while restore GrantStmt.ObjectType")
 		}
 		ctx.WritePlain(" ")
 	}
 	if err := n.Level.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore GrantStmt.Level")
+		return annotate(err, "An error occurred while restore GrantStmt.Level")
 	}
 	ctx.WriteKeyWord(" TO ")
 	for i, v := range n.Users {
@@ -3217,7 +3216,7 @@ func (n *GrantStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(", ")
 		}
 		if err := v.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore GrantStmt.Users[%d]", i)
+			return annotatef(err, "An error occurred while restore GrantStmt.Users[%d]", i)
 		}
 	}
 	if n.AuthTokenOrTLSOptions != nil {
@@ -3229,7 +3228,7 @@ func (n *GrantStmt) Restore(ctx *format.RestoreCtx) error {
 				ctx.WriteKeyWord(" AND ")
 			}
 			if err := option.Restore(ctx); err != nil {
-				return errors.Annotatef(err, "An error occurred while restore GrantStmt.AuthTokenOrTLSOptions[%d]", i)
+				return annotatef(err, "An error occurred while restore GrantStmt.AuthTokenOrTLSOptions[%d]", i)
 			}
 		}
 	}
@@ -3290,7 +3289,7 @@ func (n *GrantProxyStmt) Accept(v Visitor) (Node, bool) {
 func (n *GrantProxyStmt) Restore(ctx *format.RestoreCtx) error {
 	ctx.WriteKeyWord("GRANT PROXY ON ")
 	if err := n.LocalUser.Restore(ctx); err != nil {
-		return errors.Annotatef(err, "An error occurred while restore GrantProxyStmt.LocalUser")
+		return annotatef(err, "An error occurred while restore GrantProxyStmt.LocalUser")
 	}
 	ctx.WriteKeyWord(" TO ")
 	for i, v := range n.ExternalUsers {
@@ -3298,7 +3297,7 @@ func (n *GrantProxyStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(", ")
 		}
 		if err := v.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore GrantProxyStmt.ExternalUsers[%d]", i)
+			return annotatef(err, "An error occurred while restore GrantProxyStmt.ExternalUsers[%d]", i)
 		}
 	}
 	if n.WithGrant {
@@ -3334,7 +3333,7 @@ func (n *GrantRoleStmt) Restore(ctx *format.RestoreCtx) error {
 				ctx.WritePlain(", ")
 			}
 			if err := role.Restore(ctx); err != nil {
-				return errors.Annotatef(err, "An error occurred while restore GrantRoleStmt.Roles[%d]", i)
+				return annotatef(err, "An error occurred while restore GrantRoleStmt.Roles[%d]", i)
 			}
 		}
 	}
@@ -3344,7 +3343,7 @@ func (n *GrantRoleStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(", ")
 		}
 		if err := v.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore GrantStmt.Users[%d]", i)
+			return annotatef(err, "An error occurred while restore GrantStmt.Users[%d]", i)
 		}
 	}
 	return nil
@@ -3446,7 +3445,7 @@ func (n *RenameUserStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(", ")
 		}
 		if err := user2user.Restore(ctx); err != nil {
-			return errors.Annotate(err, "An error occurred while restore RenameUserStmt.UserToUsers")
+			return annotate(err, "An error occurred while restore RenameUserStmt.UserToUsers")
 		}
 	}
 	return nil
@@ -3480,11 +3479,11 @@ type UserToUser struct {
 // Restore implements Node interface.
 func (n *UserToUser) Restore(ctx *format.RestoreCtx) error {
 	if err := n.OldUser.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore UserToUser.OldUser")
+		return annotate(err, "An error occurred while restore UserToUser.OldUser")
 	}
 	ctx.WriteKeyWord(" TO ")
 	if err := n.NewUser.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore UserToUser.NewUser")
+		return annotate(err, "An error occurred while restore UserToUser.NewUser")
 	}
 	return nil
 }
@@ -3778,7 +3777,7 @@ func (n *BRIEStmt) Restore(ctx *format.RestoreCtx) error {
 					ctx.WritePlain(", ")
 				}
 				if err := table.Restore(ctx); err != nil {
-					return errors.Annotatef(err, "An error occurred while restore BRIEStmt.Tables[%d]", index)
+					return annotatef(err, "An error occurred while restore BRIEStmt.Tables[%d]", index)
 				}
 			}
 		case len(n.Schemas) != 0:
@@ -3830,9 +3829,6 @@ func RedactURL(str string) string {
 		return str
 	}
 	scheme := u.Scheme
-	failpoint.Inject("forceRedactURL", func() {
-		scheme = "s3"
-	})
 
 	var redactKeys map[string]struct{}
 	switch strings.ToLower(scheme) {
@@ -3903,7 +3899,7 @@ func (n *ImportIntoActionStmt) Accept(v Visitor) (Node, bool) {
 
 func (n *ImportIntoActionStmt) Restore(ctx *format.RestoreCtx) error {
 	if n.Tp != ImportIntoCancel {
-		return errors.Errorf("invalid IMPORT INTO action type: %s", n.Tp)
+		return fmt.Errorf("invalid IMPORT INTO action type: %s", n.Tp)
 	}
 	ctx.WriteKeyWord("CANCEL IMPORT JOB ")
 	ctx.WritePlainf("%d", n.JobID)
@@ -4305,12 +4301,12 @@ type CalibrateResourceStmt struct {
 func (n *CalibrateResourceStmt) Restore(ctx *format.RestoreCtx) error {
 	ctx.WriteKeyWord("CALIBRATE RESOURCE")
 	if err := n.Tp.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore CalibrateResourceStmt.CalibrateResourceType")
+		return annotate(err, "An error occurred while restore CalibrateResourceStmt.CalibrateResourceType")
 	}
 	for i, option := range n.DynamicCalibrateResourceOptionList {
 		ctx.WritePlain(" ")
 		if err := option.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while splicing DynamicCalibrateResourceOption: [%v]", i)
+			return annotatef(err, "An error occurred while splicing DynamicCalibrateResourceOption: [%v]", i)
 		}
 	}
 	return nil
@@ -4354,12 +4350,12 @@ func (n *DynamicCalibrateResourceOption) Restore(ctx *format.RestoreCtx) error {
 	case CalibrateStartTime:
 		ctx.WriteKeyWord("START_TIME ")
 		if err := n.Ts.Restore(ctx); err != nil {
-			return errors.Annotate(err, "An error occurred while splicing DynamicCalibrateResourceOption StartTime")
+			return annotate(err, "An error occurred while splicing DynamicCalibrateResourceOption StartTime")
 		}
 	case CalibrateEndTime:
 		ctx.WriteKeyWord("END_TIME ")
 		if err := n.Ts.Restore(ctx); err != nil {
-			return errors.Annotate(err, "An error occurred while splicing DynamicCalibrateResourceOption EndTime")
+			return annotate(err, "An error occurred while splicing DynamicCalibrateResourceOption EndTime")
 		}
 	case CalibrateDuration:
 		ctx.WriteKeyWord("DURATION ")
@@ -4368,13 +4364,13 @@ func (n *DynamicCalibrateResourceOption) Restore(ctx *format.RestoreCtx) error {
 		} else {
 			ctx.WriteKeyWord("INTERVAL ")
 			if err := n.Ts.Restore(ctx); err != nil {
-				return errors.Annotate(err, "An error occurred while restore DynamicCalibrateResourceOption DURATION TS")
+				return annotate(err, "An error occurred while restore DynamicCalibrateResourceOption DURATION TS")
 			}
 			ctx.WritePlain(" ")
 			ctx.WriteKeyWord(n.Unit.String())
 		}
 	default:
-		return errors.Errorf("invalid DynamicCalibrateResourceOption: %d", n.Tp)
+		return fmt.Errorf("invalid DynamicCalibrateResourceOption: %d", n.Tp)
 	}
 	return nil
 }
@@ -4413,7 +4409,7 @@ func (n *DropQueryWatchStmt) Restore(ctx *format.RestoreCtx) error {
 	case n.GroupNameExpr != nil:
 		ctx.WriteKeyWord("RESOURCE GROUP ")
 		if err := n.GroupNameExpr.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore expr: [%v]", n.GroupNameExpr)
+			return annotatef(err, "An error occurred while restore expr: [%v]", n.GroupNameExpr)
 		}
 	default:
 		ctx.WritePlainf("%d", n.IntValue)
@@ -4439,7 +4435,7 @@ func (n *AddQueryWatchStmt) Restore(ctx *format.RestoreCtx) error {
 	for i, option := range n.QueryWatchOptionList {
 		ctx.WritePlain(" ")
 		if err := option.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while splicing QueryWatchOptionList: [%v]", i)
+			return annotatef(err, "An error occurred while splicing QueryWatchOptionList: [%v]", i)
 		}
 	}
 	return nil
@@ -4538,7 +4534,7 @@ func (n *QueryWatchResourceGroupOption) restore(ctx *format.RestoreCtx) error {
 	ctx.WriteKeyWord("RESOURCE GROUP ")
 	if n.GroupNameExpr != nil {
 		if err := n.GroupNameExpr.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while splicing ExprValue: [%v]", n.GroupNameExpr)
+			return annotatef(err, "An error occurred while splicing ExprValue: [%v]", n.GroupNameExpr)
 		}
 	} else {
 		ctx.WriteName(n.GroupNameStr.String())
@@ -4569,7 +4565,7 @@ func (n *QueryWatchTextOption) Restore(ctx *format.RestoreCtx) error {
 		}
 	}
 	if err := n.PatternExpr.Restore(ctx); err != nil {
-		return errors.Annotatef(err, "An error occurred while splicing ExprValue: [%v]", n.PatternExpr)
+		return annotatef(err, "An error occurred while splicing ExprValue: [%v]", n.PatternExpr)
 	}
 	return nil
 }

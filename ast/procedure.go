@@ -14,9 +14,9 @@
 package ast
 
 import (
+	"fmt"
 	"strconv"
 
-	"github.com/pingcap/errors"
 	"github.com/sqlc-dev/marino/format"
 	"github.com/sqlc-dev/marino/types"
 )
@@ -160,7 +160,7 @@ func (n *ProcedureDecl) Restore(ctx *format.RestoreCtx) error {
 	if n.DeclDefault != nil {
 		ctx.WriteKeyWord(" DEFAULT ")
 		if err := n.DeclDefault.Restore(ctx); err != nil {
-			return errors.Annotate(err, "An error occur while restore expr")
+			return annotate(err, "An error occur while restore expr")
 		}
 	}
 	return nil
@@ -1041,7 +1041,7 @@ func (n *ProcedureLabelBlock) Restore(ctx *format.RestoreCtx) error {
 		return err
 	}
 	if n.LabelError {
-		return errors.Errorf("the same label has different names,begin: %s,end: %s", n.LabelName, n.LabelEnd)
+		return fmt.Errorf("the same label has different names,begin: %s,end: %s", n.LabelName, n.LabelEnd)
 	}
 	ctx.WriteKeyWord(" ")
 	ctx.WriteName(n.LabelName)
@@ -1103,7 +1103,7 @@ func (n *ProcedureLabelLoop) Restore(ctx *format.RestoreCtx) error {
 		return err
 	}
 	if n.LabelError {
-		return errors.Errorf("the same label has different names,begin: %s,end: %s", n.LabelName, n.LabelEnd)
+		return fmt.Errorf("the same label has different names,begin: %s,end: %s", n.LabelName, n.LabelEnd)
 	}
 	ctx.WriteKeyWord(" ")
 	ctx.WriteName(n.LabelName)

@@ -14,7 +14,8 @@
 package ast
 
 import (
-	"github.com/pingcap/errors"
+	"fmt"
+
 	"github.com/sqlc-dev/marino/format"
 )
 
@@ -116,7 +117,7 @@ func (n *AnalyzeTableStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(",")
 		}
 		if err := table.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore AnalyzeTableStmt.TableNames[%d]", i)
+			return annotatef(err, "An error occurred while restore AnalyzeTableStmt.TableNames[%d]", i)
 		}
 	}
 	if len(n.PartitionNames) != 0 {
@@ -216,7 +217,7 @@ func (n *DropStatsStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(", ")
 		}
 		if err := table.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore DropStatsStmt.Tables[%d]", index)
+			return annotatef(err, "An error occurred while restore DropStatsStmt.Tables[%d]", index)
 		}
 	}
 
@@ -293,7 +294,7 @@ func (n *LockStatsStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(", ")
 		}
 		if err := table.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore LockStatsStmt.Tables[%d]", index)
+			return annotatef(err, "An error occurred while restore LockStatsStmt.Tables[%d]", index)
 		}
 	}
 	return nil
@@ -331,7 +332,7 @@ func (n *UnlockStatsStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(", ")
 		}
 		if err := table.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore UnlockStatsStmt.Tables[%d]", index)
+			return annotatef(err, "An error occurred while restore UnlockStatsStmt.Tables[%d]", index)
 		}
 	}
 	return nil
@@ -389,7 +390,7 @@ func (n *RefreshStatsStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(", ")
 		}
 		if err := refreshObject.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore RefreshStatsStmt.RefreshObjects[%d]", index)
+			return annotatef(err, "An error occurred while restore RefreshStatsStmt.RefreshObjects[%d]", index)
 		}
 	}
 	if n.RefreshMode != nil {
@@ -401,7 +402,7 @@ func (n *RefreshStatsStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(" ")
 			ctx.WriteKeyWord("FULL")
 		default:
-			return errors.Errorf("invalid refresh stats mode: %d", *n.RefreshMode)
+			return fmt.Errorf("invalid refresh stats mode: %d", *n.RefreshMode)
 		}
 	}
 	if n.IsClusterWide {
@@ -515,7 +516,7 @@ func (o *StatsObject) Restore(ctx *format.RestoreCtx) error {
 		ctx.WritePlain("*.*")
 	default:
 		// This should never happen.
-		return errors.Errorf("invalid stats object scope: %d", o.StatsObjectScope)
+		return fmt.Errorf("invalid stats object scope: %d", o.StatsObjectScope)
 	}
 	return nil
 }

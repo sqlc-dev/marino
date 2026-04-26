@@ -14,13 +14,13 @@
 package ast
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
 	"regexp"
 	"strings"
 
-	"github.com/pingcap/errors"
 	"github.com/sqlc-dev/marino/format"
 	"github.com/sqlc-dev/marino/opcode"
 )
@@ -89,7 +89,7 @@ func (n *BetweenExpr) Restore(ctx *format.RestoreCtx) error {
 		ctx.WritePlain("(")
 	}
 	if err := n.Expr.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore BetweenExpr.Expr")
+		return annotate(err, "An error occurred while restore BetweenExpr.Expr")
 	}
 	if n.Not {
 		ctx.WriteKeyWord(" NOT BETWEEN ")
@@ -97,11 +97,11 @@ func (n *BetweenExpr) Restore(ctx *format.RestoreCtx) error {
 		ctx.WriteKeyWord(" BETWEEN ")
 	}
 	if err := n.Left.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore BetweenExpr.Left")
+		return annotate(err, "An error occurred while restore BetweenExpr.Left")
 	}
 	ctx.WriteKeyWord(" AND ")
 	if err := n.Right.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore BetweenExpr.Right ")
+		return annotate(err, "An error occurred while restore BetweenExpr.Right ")
 	}
 	if ctx.Flags.HasRestoreBracketAroundBetweenExpr() {
 		ctx.WritePlain(")")
@@ -184,13 +184,13 @@ func (n *BinaryOperationExpr) Restore(ctx *format.RestoreCtx) error {
 		ctx.Flags |= format.RestoreBracketAroundBetweenExpr
 	}
 	if err := n.L.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred when restore BinaryOperationExpr.L")
+		return annotate(err, "An error occurred when restore BinaryOperationExpr.L")
 	}
 	if err := restoreBinaryOpWithSpacesAround(ctx, n.Op); err != nil {
-		return errors.Annotate(err, "An error occurred when restore BinaryOperationExpr.Op")
+		return annotate(err, "An error occurred when restore BinaryOperationExpr.Op")
 	}
 	if err := n.R.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred when restore BinaryOperationExpr.R")
+		return annotate(err, "An error occurred when restore BinaryOperationExpr.R")
 	}
 	if ctx.Flags.HasRestoreBracketAroundBinaryOperation() {
 		ctx.WritePlain(")")
@@ -244,11 +244,11 @@ type WhenClause struct {
 func (n *WhenClause) Restore(ctx *format.RestoreCtx) error {
 	ctx.WriteKeyWord("WHEN ")
 	if err := n.Expr.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore WhenClauses.Expr")
+		return annotate(err, "An error occurred while restore WhenClauses.Expr")
 	}
 	ctx.WriteKeyWord(" THEN ")
 	if err := n.Result.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore WhenClauses.Result")
+		return annotate(err, "An error occurred while restore WhenClauses.Result")
 	}
 	return nil
 }
@@ -292,19 +292,19 @@ func (n *CaseExpr) Restore(ctx *format.RestoreCtx) error {
 	if n.Value != nil {
 		ctx.WritePlain(" ")
 		if err := n.Value.Restore(ctx); err != nil {
-			return errors.Annotate(err, "An error occurred while restore CaseExpr.Value")
+			return annotate(err, "An error occurred while restore CaseExpr.Value")
 		}
 	}
 	for _, clause := range n.WhenClauses {
 		ctx.WritePlain(" ")
 		if err := clause.Restore(ctx); err != nil {
-			return errors.Annotate(err, "An error occurred while restore CaseExpr.WhenClauses")
+			return annotate(err, "An error occurred while restore CaseExpr.WhenClauses")
 		}
 	}
 	if n.ElseClause != nil {
 		ctx.WriteKeyWord(" ELSE ")
 		if err := n.ElseClause.Restore(ctx); err != nil {
-			return errors.Annotate(err, "An error occurred while restore CaseExpr.ElseClause")
+			return annotate(err, "An error occurred while restore CaseExpr.ElseClause")
 		}
 	}
 	ctx.WriteKeyWord(" END")
@@ -383,7 +383,7 @@ func (*SubqueryExpr) resultSet() {}
 func (n *SubqueryExpr) Restore(ctx *format.RestoreCtx) error {
 	ctx.WritePlain("(")
 	if err := n.Query.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore SubqueryExpr.Query")
+		return annotate(err, "An error occurred while restore SubqueryExpr.Query")
 	}
 	ctx.WritePlain(")")
 	return nil
@@ -428,10 +428,10 @@ type CompareSubqueryExpr struct {
 // Restore implements Node interface.
 func (n *CompareSubqueryExpr) Restore(ctx *format.RestoreCtx) error {
 	if err := n.L.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore CompareSubqueryExpr.L")
+		return annotate(err, "An error occurred while restore CompareSubqueryExpr.L")
 	}
 	if err := restoreBinaryOpWithSpacesAround(ctx, n.Op); err != nil {
-		return errors.Annotate(err, "An error occurred while restore CompareSubqueryExpr.Op")
+		return annotate(err, "An error occurred while restore CompareSubqueryExpr.Op")
 	}
 	if n.All {
 		ctx.WriteKeyWord("ALL ")
@@ -439,7 +439,7 @@ func (n *CompareSubqueryExpr) Restore(ctx *format.RestoreCtx) error {
 		ctx.WriteKeyWord("ANY ")
 	}
 	if err := n.R.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore CompareSubqueryExpr.R")
+		return annotate(err, "An error occurred while restore CompareSubqueryExpr.R")
 	}
 	return nil
 }
@@ -480,7 +480,7 @@ type TableNameExpr struct {
 // Restore implements Node interface.
 func (n *TableNameExpr) Restore(ctx *format.RestoreCtx) error {
 	if err := n.Name.Restore(ctx); err != nil {
-		return errors.Trace(err)
+		return err
 	}
 	return nil
 }
@@ -590,7 +590,7 @@ type ColumnNameExpr struct {
 // Restore implements Node interface.
 func (n *ColumnNameExpr) Restore(ctx *format.RestoreCtx) error {
 	if err := n.Name.Restore(ctx); err != nil {
-		return errors.Trace(err)
+		return err
 	}
 	return nil
 }
@@ -629,7 +629,7 @@ func (n *DefaultExpr) Restore(ctx *format.RestoreCtx) error {
 	if n.Name != nil {
 		ctx.WritePlain("(")
 		if err := n.Name.Restore(ctx); err != nil {
-			return errors.Annotate(err, "An error occurred while restore DefaultExpr.Name")
+			return annotate(err, "An error occurred while restore DefaultExpr.Name")
 		}
 		ctx.WritePlain(")")
 	}
@@ -672,7 +672,7 @@ func (n *ExistsSubqueryExpr) Restore(ctx *format.RestoreCtx) error {
 		ctx.WriteKeyWord("EXISTS ")
 	}
 	if err := n.Sel.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore ExistsSubqueryExpr.Sel")
+		return annotate(err, "An error occurred while restore ExistsSubqueryExpr.Sel")
 	}
 	return nil
 }
@@ -713,7 +713,7 @@ type PatternInExpr struct {
 // Restore implements Node interface.
 func (n *PatternInExpr) Restore(ctx *format.RestoreCtx) error {
 	if err := n.Expr.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore PatternInExpr.Expr")
+		return annotate(err, "An error occurred while restore PatternInExpr.Expr")
 	}
 	if n.Not {
 		ctx.WriteKeyWord(" NOT IN ")
@@ -722,7 +722,7 @@ func (n *PatternInExpr) Restore(ctx *format.RestoreCtx) error {
 	}
 	if n.Sel != nil {
 		if err := n.Sel.Restore(ctx); err != nil {
-			return errors.Annotate(err, "An error occurred while restore PatternInExpr.Sel")
+			return annotate(err, "An error occurred while restore PatternInExpr.Sel")
 		}
 	} else {
 		ctx.WritePlain("(")
@@ -731,7 +731,7 @@ func (n *PatternInExpr) Restore(ctx *format.RestoreCtx) error {
 				ctx.WritePlain(",")
 			}
 			if err := expr.Restore(ctx); err != nil {
-				return errors.Annotatef(err, "An error occurred while restore PatternInExpr.List[%d]", i)
+				return annotatef(err, "An error occurred while restore PatternInExpr.List[%d]", i)
 			}
 		}
 		ctx.WritePlain(")")
@@ -797,7 +797,7 @@ type IsNullExpr struct {
 // Restore implements Node interface.
 func (n *IsNullExpr) Restore(ctx *format.RestoreCtx) error {
 	if err := n.Expr.Restore(ctx); err != nil {
-		return errors.Trace(err)
+		return err
 	}
 	if n.Not {
 		ctx.WriteKeyWord(" IS NOT NULL")
@@ -846,7 +846,7 @@ type IsTruthExpr struct {
 // Restore implements Node interface.
 func (n *IsTruthExpr) Restore(ctx *format.RestoreCtx) error {
 	if err := n.Expr.Restore(ctx); err != nil {
-		return errors.Trace(err)
+		return err
 	}
 	if n.Not {
 		ctx.WriteKeyWord(" IS NOT")
@@ -914,7 +914,7 @@ type PatternLikeOrIlikeExpr struct {
 // Restore implements Node interface.
 func (n *PatternLikeOrIlikeExpr) Restore(ctx *format.RestoreCtx) error {
 	if err := n.Expr.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore PatternLikeOrIlikeExpr.Expr")
+		return annotate(err, "An error occurred while restore PatternLikeOrIlikeExpr.Expr")
 	}
 
 	if n.IsLike {
@@ -932,7 +932,7 @@ func (n *PatternLikeOrIlikeExpr) Restore(ctx *format.RestoreCtx) error {
 	}
 
 	if err := n.Pattern.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore PatternLikeOrIlikeExpr.Pattern")
+		return annotate(err, "An error occurred while restore PatternLikeOrIlikeExpr.Pattern")
 	}
 
 	if n.EscapeExplicit && n.Escape != '\\' {
@@ -1013,7 +1013,7 @@ type ParenthesesExpr struct {
 func (n *ParenthesesExpr) Restore(ctx *format.RestoreCtx) error {
 	ctx.WritePlain("(")
 	if err := n.Expr.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred when restore ParenthesesExpr.Expr")
+		return annotate(err, "An error occurred when restore ParenthesesExpr.Expr")
 	}
 	ctx.WritePlain(")")
 	return nil
@@ -1101,7 +1101,7 @@ type PatternRegexpExpr struct {
 // Restore implements Node interface.
 func (n *PatternRegexpExpr) Restore(ctx *format.RestoreCtx) error {
 	if err := n.Expr.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore PatternRegexpExpr.Expr")
+		return annotate(err, "An error occurred while restore PatternRegexpExpr.Expr")
 	}
 
 	if n.Not {
@@ -1111,7 +1111,7 @@ func (n *PatternRegexpExpr) Restore(ctx *format.RestoreCtx) error {
 	}
 
 	if err := n.Pattern.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore PatternRegexpExpr.Pattern")
+		return annotate(err, "An error occurred while restore PatternRegexpExpr.Pattern")
 	}
 
 	return nil
@@ -1165,7 +1165,7 @@ func (n *RowExpr) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(",")
 		}
 		if err := v.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred when restore RowExpr.Values[%v]", i)
+			return annotatef(err, "An error occurred when restore RowExpr.Values[%v]", i)
 		}
 	}
 	ctx.WritePlain(")")
@@ -1206,10 +1206,10 @@ type UnaryOperationExpr struct {
 // Restore implements Node interface.
 func (n *UnaryOperationExpr) Restore(ctx *format.RestoreCtx) error {
 	if err := n.Op.Restore(ctx); err != nil {
-		return errors.Trace(err)
+		return err
 	}
 	if err := n.V.Restore(ctx); err != nil {
-		return errors.Trace(err)
+		return err
 	}
 	return nil
 }
@@ -1247,7 +1247,7 @@ func (n *ValuesExpr) Restore(ctx *format.RestoreCtx) error {
 	ctx.WriteKeyWord("VALUES")
 	ctx.WritePlain("(")
 	if err := n.Column.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore ValuesExpr.Column")
+		return annotate(err, "An error occurred while restore ValuesExpr.Column")
 	}
 	ctx.WritePlain(")")
 
@@ -1315,7 +1315,7 @@ func (n *VariableExpr) Restore(ctx *format.RestoreCtx) error {
 	if n.Value != nil {
 		ctx.WritePlain(":=")
 		if err := n.Value.Restore(ctx); err != nil {
-			return errors.Annotate(err, "An error occurred while restore VariableExpr.Value")
+			return annotate(err, "An error occurred while restore VariableExpr.Value")
 		}
 	}
 
@@ -1390,14 +1390,14 @@ func (n *MatchAgainst) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(",")
 		}
 		if err := v.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore MatchAgainst.ColumnNames[%d]", i)
+			return annotatef(err, "An error occurred while restore MatchAgainst.ColumnNames[%d]", i)
 		}
 	}
 	ctx.WritePlain(") ")
 	ctx.WriteKeyWord("AGAINST")
 	ctx.WritePlain(" (")
 	if err := n.Against.Restore(ctx); err != nil {
-		return errors.Annotate(err, "An error occurred while restore MatchAgainst.Against")
+		return annotate(err, "An error occurred while restore MatchAgainst.Against")
 	}
 	if n.Modifier.IsBooleanMode() {
 		ctx.WritePlain(" IN BOOLEAN MODE")
@@ -1463,7 +1463,7 @@ type SetCollationExpr struct {
 // Restore implements Node interface.
 func (n *SetCollationExpr) Restore(ctx *format.RestoreCtx) error {
 	if err := n.Expr.Restore(ctx); err != nil {
-		return errors.Trace(err)
+		return err
 	}
 	ctx.WriteKeyWord(" COLLATE ")
 	ctx.WritePlain(n.Collate)

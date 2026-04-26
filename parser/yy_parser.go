@@ -21,7 +21,6 @@ import (
 	"strconv"
 	"unicode"
 
-	"github.com/pingcap/errors"
 	"github.com/sqlc-dev/marino/ast"
 	"github.com/sqlc-dev/marino/auth"
 	"github.com/sqlc-dev/marino/charset"
@@ -198,7 +197,7 @@ func (parser *Parser) ParseSQL(sql string, params ...ParseParam) (stmt []ast.Stm
 		warns = nil
 	}
 	if len(errs) != 0 {
-		return nil, warns, errors.Trace(errs[0])
+		return nil, warns, errs[0]
 	}
 	for _, stmt := range parser.result {
 		ast.SetFlag(stmt)
@@ -221,7 +220,7 @@ func (parser *Parser) lastErrorAsWarn() {
 func (parser *Parser) ParseOneStmt(sql, charset, collation string) (ast.StmtNode, error) {
 	stmts, _, err := parser.ParseSQL(sql, CharsetConnection(charset), CollationConnection(collation))
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	if len(stmts) != 1 {
 		return nil, ErrSyntax

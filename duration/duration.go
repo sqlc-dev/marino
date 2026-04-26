@@ -15,11 +15,11 @@
 package duration
 
 import (
+	"errors"
+	"fmt"
 	"strconv"
 	"time"
 	"unicode"
-
-	"github.com/pingcap/errors"
 )
 
 func readFloat(s string) (float64, string, error) {
@@ -63,7 +63,7 @@ func ParseDuration(s string) (time.Duration, error) {
 		case 'm':
 			duration += time.Duration(i * float64(time.Minute))
 		default:
-			return 0, errors.Errorf("unknown unit %c", s[0])
+			return 0, fmt.Errorf("unknown unit %c", s[0])
 		}
 
 		s = s[1:]

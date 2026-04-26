@@ -18,7 +18,6 @@ import (
 	"strings"
 
 	"github.com/coreos/go-semver/semver"
-	"github.com/pingcap/errors"
 	"github.com/sqlc-dev/marino/format"
 )
 
@@ -76,16 +75,16 @@ func NormalizeTiDBReleaseVersionForNextGen(releaseVersion string) string {
 // version format `CLOUD.<4-digit-year-2-digit-month>.<fix-version><optional-pre-release>`.
 func BuildTiDBXReleaseVersion(releaseVersion string) (string, error) {
 	if !strings.HasPrefix(releaseVersion, "v") {
-		return "", errors.Errorf("invalid TiDB release version %q, should start with 'v'", releaseVersion)
+		return "", fmt.Errorf("invalid TiDB release version %q, should start with 'v'", releaseVersion)
 	}
 	rawVer := strings.TrimPrefix(releaseVersion, "v")
 	ver, err := semver.NewVersion(rawVer)
 	if err != nil {
-		return "", errors.Errorf("invalid TiDB release version %q, expect a semantic version", releaseVersion)
+		return "", fmt.Errorf("invalid TiDB release version %q, expect a semantic version", releaseVersion)
 	}
 	year := 2000 + ver.Major
 	if year < TiDBXVerMinYear || year > TiDBXVerMaxYear || ver.Minor < 1 || ver.Minor > 12 {
-		return "", errors.Errorf("invalid TiDB release version %q, the semantic version part should be in [2-digit-year].[month].[fix-version]-[xxx] format", releaseVersion)
+		return "", fmt.Errorf("invalid TiDB release version %q, the semantic version part should be in [2-digit-year].[month].[fix-version]-[xxx] format", releaseVersion)
 	}
 	preRelease := string(ver.PreRelease)
 	if preRelease != "" {
@@ -690,7 +689,7 @@ func (n *PriorityEnum) Restore(ctx *format.RestoreCtx) error {
 	case DelayedPriority:
 		ctx.WriteKeyWord("DELAYED")
 	default:
-		return errors.Errorf("undefined PriorityEnum Type[%d]", *n)
+		return fmt.Errorf("undefined PriorityEnum Type[%d]", *n)
 	}
 	return nil
 }

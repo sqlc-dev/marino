@@ -19,7 +19,6 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/pingcap/errors"
 	"github.com/sqlc-dev/marino/terror"
 )
 
@@ -43,9 +42,9 @@ func CheckScrambledPassword(salt, hpwd, auth []byte) bool {
 	//nolint: gosec
 	crypt := sha1.New()
 	_, err := crypt.Write(salt)
-	terror.Log(errors.Trace(err))
+	terror.Log(err)
 	_, err = crypt.Write(hpwd)
-	terror.Log(errors.Trace(err))
+	terror.Log(err)
 	hash := crypt.Sum(nil)
 	// token = scrambleHash XOR stage1Hash
 	if len(auth) != len(hash) {
@@ -63,7 +62,7 @@ func Sha1Hash(bs []byte) []byte {
 	//nolint: gosec
 	crypt := sha1.New()
 	_, err := crypt.Write(bs)
-	terror.Log(errors.Trace(err))
+	terror.Log(err)
 	return crypt.Sum(nil)
 }
 
@@ -93,7 +92,7 @@ func EncodePasswordBytes(pwd []byte) string {
 func DecodePassword(pwd string) ([]byte, error) {
 	x, err := hex.DecodeString(pwd[1:])
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	return x, nil
 }
