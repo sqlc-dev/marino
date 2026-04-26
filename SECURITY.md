@@ -1,8 +1,8 @@
 # Security Vulnerability Disclosure and Response Process
 
-The primary goal of this process is to reduce the total exposure time of users to publicly known vulnerabilities. TiDB security team is responsible for the entire vulnerability management process, including internal communication and external disclosure.
-
-If you find a vulnerability or encounter a security incident involving vulnerabilities of this repository, please report it as soon as possible to the TiDB security team (security@tidb.io).
+If you find a vulnerability or encounter a security incident involving this
+repository, please report it privately via GitHub's "Report a vulnerability"
+feature on the repository's Security tab.
 
 Please kindly help provide as much vulnerability information as possible in the following format:
 
@@ -22,7 +22,8 @@ The asterisk (*) indicates the required field.
 
 # Response Time
 
-The TiDB security team will confirm the vulnerabilities and contact you within 2 working days after your submission.
+We will confirm the vulnerabilities and contact you within a reasonable time
+after your submission.
 
 We will publicly thank you after fixing the security vulnerability. To avoid negative impact, please keep the vulnerability confidential until we fix it. We would appreciate it if you could obey the following code of conduct:
 
