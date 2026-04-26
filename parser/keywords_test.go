@@ -16,7 +16,7 @@ package parser_test
 import (
 	"testing"
 
-	"github.com/sqlc-dev/marino"
+	"github.com/sqlc-dev/marino/parser"
 	"github.com/stretchr/testify/require"
 )
 

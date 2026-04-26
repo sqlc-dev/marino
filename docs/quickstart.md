@@ -52,8 +52,8 @@ Now, open `main.go` with your favorite editor, and start coding!
 ## Parse SQL text
 
 To convert a SQL text to an AST tree, you need to:
-1. Use the [`parser.New()`](https://pkg.go.dev/github.com/sqlc-dev/marino?tab=doc#New) function to instantiate a parser, and
-2. Invoke the method [`Parse(sql, charset, collation)`](https://pkg.go.dev/github.com/sqlc-dev/marino?tab=doc#Parser.Parse) on the parser.
+1. Use the [`parser.New()`](https://pkg.go.dev/github.com/sqlc-dev/marino/parser?tab=doc#New) function to instantiate a parser, and
+2. Invoke the method [`Parse(sql, charset, collation)`](https://pkg.go.dev/github.com/sqlc-dev/marino/parser?tab=doc#Parser.Parse) on the parser.
 
 ```go
 package main
@@ -61,7 +61,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/sqlc-dev/marino"
+	"github.com/sqlc-dev/marino/parser"
 	"github.com/sqlc-dev/marino/ast"
 	_ "github.com/sqlc-dev/marino/test_driver"
 )

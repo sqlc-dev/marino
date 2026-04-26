@@ -17,7 +17,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sqlc-dev/marino"
+	"github.com/sqlc-dev/marino/parser"
 	"github.com/sqlc-dev/marino/ast"
 	"github.com/sqlc-dev/marino/format"
 	"github.com/stretchr/testify/require"

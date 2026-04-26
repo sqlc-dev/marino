@@ -18,7 +18,7 @@ go_library(
         "parser.go",
         "yy_parser.go",
     ],
-    importpath = "github.com/sqlc-dev/marino",
+    importpath = "github.com/sqlc-dev/marino/parser",
     visibility = ["//visibility:public"],
     deps = [
         "//pkg/parser/ast",

@@ -16,7 +16,7 @@ package ast_test
 import (
 	"testing"
 
-	"github.com/sqlc-dev/marino"
+	"github.com/sqlc-dev/marino/parser"
 	"github.com/sqlc-dev/marino/ast"
 	"github.com/stretchr/testify/require"
 )
