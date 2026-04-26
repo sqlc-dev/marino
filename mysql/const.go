@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pingcap/errors"
 	"github.com/sqlc-dev/marino/format"
 )
 
@@ -629,7 +628,7 @@ func (n *PriorityEnum) Restore(ctx *format.RestoreCtx) error {
 	case DelayedPriority:
 		ctx.WriteKeyWord("DELAYED")
 	default:
-		return errors.Errorf("undefined PriorityEnum Type[%d]", *n)
+		return fmt.Errorf("undefined PriorityEnum Type[%d]", *n)
 	}
 	return nil
 }

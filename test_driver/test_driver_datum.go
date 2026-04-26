@@ -23,7 +23,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pingcap/errors"
 	"github.com/sqlc-dev/marino/charset"
 	"github.com/sqlc-dev/marino/mysql"
 	"github.com/sqlc-dev/marino/types"
@@ -320,7 +319,7 @@ func (b BinaryLiteral) ToBitLiteralString(trimLeadingZero bool) string {
 // See https://dev.mysql.com/doc/refman/5.7/en/bit-value-literals.html
 func ParseBitStr(s string) (BinaryLiteral, error) {
 	if len(s) == 0 {
-		return nil, errors.Errorf("invalid empty string for parsing bit type")
+		return nil, fmt.Errorf("invalid empty string for parsing bit type")
 	}
 
 	if s[0] == 'b' || s[0] == 'B' {
@@ -330,7 +329,7 @@ func ParseBitStr(s string) (BinaryLiteral, error) {
 		s = s[2:]
 	} else {
 		// here means format is not b'val', B'val' or 0bval.
-		return nil, errors.Errorf("invalid bit type format %s", s)
+		return nil, fmt.Errorf("invalid bit type format %s", s)
 	}
 
 	if len(s) == 0 {
@@ -346,7 +345,7 @@ func ParseBitStr(s string) (BinaryLiteral, error) {
 		strPosition := i << 3
 		val, err := strconv.ParseUint(s[strPosition:strPosition+8], 2, 8)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, err
 		}
 		buf[i] = byte(val)
 	}
@@ -372,20 +371,20 @@ func (b BitLiteral) ToString() string {
 // See https://dev.mysql.com/doc/refman/5.7/en/hexadecimal-literals.html
 func ParseHexStr(s string) (BinaryLiteral, error) {
 	if len(s) == 0 {
-		return nil, errors.Errorf("invalid empty string for parsing hexadecimal literal")
+		return nil, fmt.Errorf("invalid empty string for parsing hexadecimal literal")
 	}
 
 	if s[0] == 'x' || s[0] == 'X' {
 		// format is x'val' or X'val'
 		s = strings.Trim(s[1:], "'")
 		if len(s)%2 != 0 {
-			return nil, errors.Errorf("invalid hexadecimal format, must even numbers, but %d", len(s))
+			return nil, fmt.Errorf("invalid hexadecimal format, must even numbers, but %d", len(s))
 		}
 	} else if strings.HasPrefix(s, "0x") {
 		s = s[2:]
 	} else {
 		// here means format is not x'val', X'val' or 0xval.
-		return nil, errors.Errorf("invalid hexadecimal format %s", s)
+		return nil, fmt.Errorf("invalid hexadecimal format %s", s)
 	}
 
 	if len(s) == 0 {
@@ -397,7 +396,7 @@ func ParseHexStr(s string) (BinaryLiteral, error) {
 	}
 	buf, err := hex.DecodeString(s)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	return buf, nil
 }

@@ -15,14 +15,15 @@ package parser_test
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"reflect"
 	"regexp"
 	"runtime"
 	"slices"
 	"strings"
 	"testing"
 
-	"github.com/pingcap/errors"
 	"github.com/sqlc-dev/marino/ast"
 	"github.com/sqlc-dev/marino/charset"
 	. "github.com/sqlc-dev/marino/format"
@@ -31,8 +32,6 @@ import (
 	"github.com/sqlc-dev/marino/parser"
 	"github.com/sqlc-dev/marino/terror"
 	"github.com/sqlc-dev/marino/test_driver"
-
-	"reflect"
 )
 
 func TestSimple(t *testing.T) {
@@ -541,12 +540,12 @@ func RunTest(t *testing.T, table []testCase, enableWindowFunc bool, MariaDB bool
 		_, _, err := p.Parse(tbl.src, "", "")
 		if !tbl.ok {
 			if err == nil {
-				t.Fatalf("source %v, error %v", tbl.src, errors.Trace(err))
+				t.Fatalf("source %v, error %v", tbl.src, err)
 			}
 			continue
 		}
 		if err != nil {
-			t.Fatalf("%s: %v", fmt.Sprintf("source:\n%v\nerror:\n%v", tbl.src, errors.Trace(err)), err)
+			t.Fatalf("%s: %v", fmt.Sprintf("source:\n%v\nerror:\n%v", tbl.src, err), err)
 		}
 		// restore correctness test
 		if tbl.ok {

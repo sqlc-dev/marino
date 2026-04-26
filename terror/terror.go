@@ -23,7 +23,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/pingcap/errors"
 	"github.com/sqlc-dev/marino/mysql"
 )
 
@@ -52,9 +51,6 @@ const (
 
 // ErrClass represents a class of errors.
 type ErrClass int
-
-// Error implements error interface.
-type Error = errors.Error
 
 // Error classes.
 var (
@@ -145,7 +141,7 @@ func (ec ErrClass) String() string {
 
 // EqualClass returns true if err is *Error with the same class.
 func (ec ErrClass) EqualClass(err error) bool {
-	e := errors.Cause(err)
+	e := cause(err)
 	if e == nil {
 		return false
 	}
@@ -191,19 +187,14 @@ func (ec ErrClass) initError(code ErrCode) string {
 // Deprecated: use NewStd or NewStdErr instead.
 func (ec ErrClass) New(code ErrCode, message string) *Error {
 	rfcCode := ec.initError(code)
-	err := errors.Normalize(message, errors.MySQLErrorCode(int(code)), errors.RFCCodeText(rfcCode))
-	return err
+	return Normalize(message, MySQLErrorCode(int(code)), RFCCodeText(rfcCode))
 }
 
 // NewStdErr defines an *Error with an error code, an error
 // message and workaround to create standard error.
 func (ec ErrClass) NewStdErr(code ErrCode, message *mysql.ErrMessage) *Error {
 	rfcCode := ec.initError(code)
-	err := errors.Normalize(
-		message.Raw, errors.RedactArgs(message.RedactArgPos),
-		errors.MySQLErrorCode(int(code)), errors.RFCCodeText(rfcCode),
-	)
-	return err
+	return Normalize(message.Raw, MySQLErrorCode(int(code)), RFCCodeText(rfcCode))
 }
 
 // NewStd calls New using the standard message for the error code
@@ -219,9 +210,9 @@ func (ec ErrClass) NewStd(code ErrCode) *Error {
 // so it's goroutine-safe
 // and often be used to create Error came from other systems like TiKV.
 func (ec ErrClass) Synthesize(code ErrCode, message string) *Error {
-	return errors.Normalize(
-		message, errors.MySQLErrorCode(int(code)),
-		errors.RFCCodeText(fmt.Sprintf("%s:%d", errClass2Desc[ec], code)),
+	return Normalize(
+		message, MySQLErrorCode(int(code)),
+		RFCCodeText(fmt.Sprintf("%s:%d", errClass2Desc[ec], code)),
 	)
 }
 
@@ -275,8 +266,8 @@ func init() {
 
 // ErrorEqual returns a boolean indicating whether err1 is equal to err2.
 func ErrorEqual(err1, err2 error) bool {
-	e1 := errors.Cause(err1)
-	e2 := errors.Cause(err2)
+	e1 := cause(err1)
+	e2 := cause(err2)
 
 	if e1 == e2 {
 		return true

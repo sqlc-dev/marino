@@ -14,16 +14,10 @@
 package terror
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
-	"os"
-	"runtime"
-	"strings"
-	"testing"
-
-	"github.com/pingcap/errors"
-
 	"reflect"
+	"testing"
 )
 
 func TestErrCode(t *testing.T) {
@@ -92,7 +86,7 @@ func TestTError(t *testing.T) {
 	if !reflect.DeepEqual("[kv:1062]Duplicate entry '1' for key 'PRIMARY'", e.Error()) {
 		t.Fatalf("got %v, want %v", e.Error(), "[kv:1062]Duplicate entry '1' for key 'PRIMARY'")
 	}
-	sqlErr := ToSQLError(errors.Cause(e).(*Error))
+	sqlErr := ToSQLError(cause(e).(*Error))
 	if !reflect.DeepEqual("Duplicate entry '1' for key 'PRIMARY'", sqlErr.Message) {
 		t.Fatalf("got %v, want %v", sqlErr.Message, "Duplicate entry '1' for key 'PRIMARY'")
 	}
@@ -100,43 +94,14 @@ func TestTError(t *testing.T) {
 		t.Fatalf("got %v, want %v", sqlErr.Code, uint16(1062))
 	}
 
-	err := errors.Trace(ErrCritical.GenWithStackByArgs("test"))
+	err := ErrCritical.GenWithStackByArgs("test")
 	if !(ErrCritical.Equal(err)) {
 		t.Fatal("expected true")
 	}
 
-	err = errors.Trace(ErrCritical)
-	if !(ErrCritical.Equal(err)) {
+	if !(ErrCritical.Equal(ErrCritical)) {
 		t.Fatal("expected true")
 	}
-}
-
-func TestJson(t *testing.T) {
-	prevTErr := errors.Normalize("json test", errors.MySQLErrorCode(int(CodeExecResultIsEmpty)))
-	buf, err := json.Marshal(prevTErr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var curTErr errors.Error
-	err = json.Unmarshal(buf, &curTErr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	isEqual := prevTErr.Equal(&curTErr)
-	if !(isEqual) {
-		t.Fatal("expected true")
-	}
-}
-
-var predefinedErr = ClassExecutor.New(ErrCode(123), "predefiend error")
-
-func example() error {
-	err := call()
-	return errors.Trace(err)
-}
-
-func call() error {
-	return predefinedErr.GenWithStack("error message:%s", "abc")
 }
 
 func TestErrorEqual(t *testing.T) {
@@ -145,45 +110,15 @@ func TestErrorEqual(t *testing.T) {
 		t.Fatal("expected non-nil")
 	}
 
-	e2 := errors.Trace(e1)
-	if e2 == nil {
-		t.Fatal("expected non-nil")
-	}
-
-	e3 := errors.Trace(e2)
-	if e3 == nil {
-		t.Fatal("expected non-nil")
-	}
-
-	if !reflect.DeepEqual(e1, errors.Cause(e2)) {
-		t.Fatalf("got %v, want %v", errors.Cause(e2), e1)
-	}
-	if !reflect.DeepEqual(e1, errors.Cause(e3)) {
-		t.Fatalf("got %v, want %v", errors.Cause(e3), e1)
-	}
-	if !reflect.DeepEqual(errors.Cause(e3), errors.Cause(e2)) {
-		t.Fatalf("got %v, want %v", errors.Cause(e2), errors.Cause(e3))
+	if !reflect.DeepEqual(e1, cause(e1)) {
+		t.Fatalf("got %v, want %v", cause(e1), e1)
 	}
 
 	e4 := errors.New("test error")
-	if reflect.DeepEqual(e1, errors.Cause(e4)) {
-		t.Fatalf("expected values to differ, both are %v", errors.Cause(e4))
-	}
-
-	e5 := errors.Errorf("test error")
-	if reflect.DeepEqual(e1, errors.Cause(e5)) {
-		t.Fatalf("expected values to differ, both are %v", errors.Cause(e5))
-	}
-
-	if !(ErrorEqual(e1, e2)) {
-		t.Fatal("expected true")
-	}
-	if !(ErrorEqual(e1, e3)) {
-		t.Fatal("expected true")
-	}
 	if !(ErrorEqual(e1, e4)) {
 		t.Fatal("expected true")
 	}
+	e5 := fmt.Errorf("test error")
 	if !(ErrorEqual(e1, e5)) {
 		t.Fatal("expected true")
 	}
@@ -212,49 +147,4 @@ func TestErrorEqual(t *testing.T) {
 func TestLog(t *testing.T) {
 	err := fmt.Errorf("xxx")
 	Log(err)
-}
-
-func TestTraceAndLocation(t *testing.T) {
-	err := example()
-	stack := errors.ErrorStack(err)
-	lines := strings.Split(stack, "\n")
-	goroot := strings.ReplaceAll(runtime.GOROOT(), string(os.PathSeparator), "/")
-	var sysStack = 0
-	for _, line := range lines {
-		// When you run test case in the bazel. you will find the difference stack. It looks like this:
-		//
-		// ```go
-		// testing.tRunner
-		//   GOROOT/src/testing/testing.go:1576
-		// runtime.goexit
-		//   src/runtime/asm_arm64.s:1172
-		// ```
-		//
-		// but run with ```go test```. It looks like this:
-		//
-		// ```go
-		// testing.tRunner
-		//   /Users/pingcap/.gvm/gos/go1.20.1/src/testing/testing.go:1576
-		// runtime.goexit
-		//	 /Users/pingcap/.gvm/gos/go1.20.1/src/runtime/asm_arm64.s:1172
-		// ```
-		//
-		// So we have to deal with these boundary conditions.
-		if strings.Contains(line, goroot) || strings.Contains(line, "src/runtime") {
-			sysStack++
-		}
-	}
-	if !reflect.DeepEqual(9, len(lines)-(2*sysStack)) {
-		t.Fatalf("%s: got %v, want %v", fmt.Sprintf("stack =\n%s", stack), len(lines)-(2*sysStack), 9)
-	}
-	var containTerr bool
-	for _, v := range lines {
-		if strings.Contains(v, "terror_test.go") {
-			containTerr = true
-			break
-		}
-	}
-	if !(containTerr) {
-		t.Fatal("expected true")
-	}
 }

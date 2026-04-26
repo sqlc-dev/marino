@@ -18,7 +18,6 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/pingcap/errors"
 	"github.com/sqlc-dev/marino/util"
 )
 
@@ -316,7 +315,7 @@ func (cis *CIStr) UnmarshalJSON(b []byte) error {
 	// Unmarshal CIStr from a single string.
 	err := json.Unmarshal(b, &cis.O)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 	cis.L = strings.ToLower(cis.O)
 	return nil

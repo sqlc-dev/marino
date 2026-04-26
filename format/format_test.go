@@ -15,14 +15,12 @@ package format
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/pingcap/errors"
-
-	"reflect"
 )
 
 func checkFormat(t *testing.T, f Formatter, buf *bytes.Buffer, str, expect string) {
