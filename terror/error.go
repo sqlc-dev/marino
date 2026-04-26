@@ -38,10 +38,8 @@ type Error struct {
 	args     []any
 }
 
-// Code returns the numeric code of this error.
 func (e *Error) Code() ErrCode { return e.code }
 
-// RFCCode returns the textual {Class}:{Code} identifier.
 func (e *Error) RFCCode() RFCErrorCode { return RFCErrorCode(e.ID()) }
 
 // ID returns the unique identifier of this error.
@@ -52,7 +50,6 @@ func (e *Error) ID() ErrorID {
 	return ErrorID(strconv.Itoa(int(e.code)))
 }
 
-// Error implements the error interface.
 func (e *Error) Error() string {
 	if e == nil {
 		return "<nil>"
@@ -60,7 +57,6 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("[%s]%s", e.RFCCode(), e.GetMsg())
 }
 
-// GetMsg returns the formatted message of this error.
 func (e *Error) GetMsg() string {
 	if len(e.args) > 0 {
 		return fmt.Sprintf(e.message, e.args...)
