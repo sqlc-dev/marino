@@ -19,7 +19,8 @@ import (
 	"unicode"
 
 	"github.com/sqlc-dev/marino/mysql"
-	requires "github.com/stretchr/testify/require"
+
+	"reflect"
 )
 
 func TestTokenID(t *testing.T) {
@@ -27,7 +28,9 @@ func TestTokenID(t *testing.T) {
 		l := NewScanner(str)
 		var v yySymType
 		tok1 := l.Lex(&v)
-		requires.Equal(t, tok1, tok)
+		if !reflect.DeepEqual(tok1, tok) {
+			t.Fatalf("got %v, want %v", tok, tok1)
+		}
 	}
 }
 
@@ -37,7 +40,9 @@ func TestSingleChar(t *testing.T) {
 		l := NewScanner(string(tok))
 		var v yySymType
 		tok1 := l.Lex(&v)
-		requires.Equal(t, tok1, int(tok))
+		if !reflect.DeepEqual(tok1, int(tok)) {
+			t.Fatalf("got %v, want %v", int(tok), tok1)
+		}
 	}
 }
 
@@ -91,15 +96,23 @@ func TestUnderscoreCS(t *testing.T) {
 	var v yySymType
 	scanner := NewScanner(`_utf8"string"`)
 	tok := scanner.Lex(&v)
-	requires.Equal(t, underscoreCS, tok)
+	if !reflect.DeepEqual(underscoreCS, tok) {
+		t.Fatalf("got %v, want %v", tok, underscoreCS)
+	}
 	tok = scanner.Lex(&v)
-	requires.Equal(t, stringLit, tok)
+	if !reflect.DeepEqual(stringLit, tok) {
+		t.Fatalf("got %v, want %v", tok, stringLit)
+	}
 
 	scanner.reset("N'string'")
 	tok = scanner.Lex(&v)
-	requires.Equal(t, underscoreCS, tok)
+	if !reflect.DeepEqual(underscoreCS, tok) {
+		t.Fatalf("got %v, want %v", tok, underscoreCS)
+	}
 	tok = scanner.Lex(&v)
-	requires.Equal(t, stringLit, tok)
+	if !reflect.DeepEqual(stringLit, tok) {
+		t.Fatalf("got %v, want %v", tok, stringLit)
+	}
 }
 
 func TestLiteral(t *testing.T) {
@@ -203,7 +216,9 @@ func runTest(t *testing.T, table []testCaseItem) {
 	for _, v := range table {
 		l := NewScanner(v.str)
 		tok := l.Lex(&val)
-		requires.Equal(t, v.tok, tok, v.str)
+		if !reflect.DeepEqual(v.tok, tok) {
+			t.Fatalf("%v: got %v, want %v", v.str, tok, v.tok)
+		}
 	}
 }
 
@@ -213,13 +228,21 @@ func runLiteralTest(t *testing.T, table []testLiteralValue) {
 		val := l.LexLiteral()
 		switch val.(type) {
 		case int64:
-			requires.Equal(t, v.val, val, v.str)
+			if !reflect.DeepEqual(v.val, val) {
+				t.Fatalf("%v: got %v, want %v", v.str, val, v.val)
+			}
 		case float64:
-			requires.Equal(t, v.val, val, v.str)
+			if !reflect.DeepEqual(v.val, val) {
+				t.Fatalf("%v: got %v, want %v", v.str, val, v.val)
+			}
 		case string:
-			requires.Equal(t, v.val, val, v.str)
+			if !reflect.DeepEqual(v.val, val) {
+				t.Fatalf("%v: got %v, want %v", v.str, val, v.val)
+			}
 		default:
-			requires.Equal(t, v.val, fmt.Sprint(val), v.str)
+			if !reflect.DeepEqual(v.val, fmt.Sprint(val)) {
+				t.Fatalf("%v: got %v, want %v", v.str, fmt.Sprint(val), v.val)
+			}
 		}
 	}
 }
@@ -253,9 +276,15 @@ func TestScanQuotedIdent(t *testing.T) {
 	l := NewScanner("`fk`")
 	l.r.peek()
 	tok, pos, lit := scanQuotedIdent(l)
-	requires.Zero(t, pos.Offset)
-	requires.Equal(t, quotedIdentifier, tok)
-	requires.Equal(t, "fk", lit)
+	if pos.Offset != 0 {
+		t.Fatalf("expected zero, got %v", pos.Offset)
+	}
+	if !reflect.DeepEqual(quotedIdentifier, tok) {
+		t.Fatalf("got %v, want %v", tok, quotedIdentifier)
+	}
+	if !reflect.DeepEqual("fk", lit) {
+		t.Fatalf("got %v, want %v", lit, "fk")
+	}
 }
 
 func TestScanString(t *testing.T) {
@@ -287,9 +316,15 @@ func TestScanString(t *testing.T) {
 	for _, v := range table {
 		l := NewScanner(v.raw)
 		tok, pos, lit := l.scan()
-		requires.Zero(t, pos.Offset)
-		requires.Equal(t, stringLit, tok)
-		requires.Equal(t, v.expect, lit)
+		if pos.Offset != 0 {
+			t.Fatalf("expected zero, got %v", pos.Offset)
+		}
+		if !reflect.DeepEqual(stringLit, tok) {
+			t.Fatalf("got %v, want %v", tok, stringLit)
+		}
+		if !reflect.DeepEqual(v.expect, lit) {
+			t.Fatalf("got %v, want %v", lit, v.expect)
+		}
 	}
 }
 
@@ -320,9 +355,15 @@ func TestScanStringWithNoBackslashEscapesMode(t *testing.T) {
 	for _, v := range table {
 		l.reset(v.raw)
 		tok, pos, lit := l.scan()
-		requires.Zero(t, pos.Offset)
-		requires.Equal(t, stringLit, tok)
-		requires.Equal(t, v.expect, lit)
+		if pos.Offset != 0 {
+			t.Fatalf("expected zero, got %v", pos.Offset)
+		}
+		if !reflect.DeepEqual(stringLit, tok) {
+			t.Fatalf("got %v, want %v", tok, stringLit)
+		}
+		if !reflect.DeepEqual(v.expect, lit) {
+			t.Fatalf("got %v, want %v", lit, v.expect)
+		}
 	}
 }
 
@@ -351,41 +392,73 @@ func TestIdentifier(t *testing.T) {
 		l.reset(item[0])
 		var v yySymType
 		tok := l.Lex(&v)
-		requires.Equal(t, identifier, tok, item)
-		requires.Equal(t, item[1], v.ident, item)
+		if !reflect.DeepEqual(identifier, tok) {
+			t.Fatalf("%v: got %v, want %v", item, tok, identifier)
+		}
+		if !reflect.DeepEqual(item[1], v.ident) {
+			t.Fatalf("%v: got %v, want %v", item, v.ident, item[1])
+		}
 	}
 }
 
 func TestSpecialComment(t *testing.T) {
 	l := NewScanner("/*!40101 select\n5*/")
 	tok, pos, lit := l.scan()
-	requires.Equal(t, identifier, tok)
-	requires.Equal(t, "select", lit)
-	requires.Equal(t, Pos{1, 9, 9}, pos)
+	if !reflect.DeepEqual(identifier, tok) {
+		t.Fatalf("got %v, want %v", tok, identifier)
+	}
+	if !reflect.DeepEqual("select", lit) {
+		t.Fatalf("got %v, want %v", lit, "select")
+	}
+	if !reflect.DeepEqual(Pos{1, 9, 9}, pos) {
+		t.Fatalf("got %v, want %v", pos, Pos{1, 9, 9})
+	}
 
 	tok, pos, lit = l.scan()
-	requires.Equal(t, intLit, tok)
-	requires.Equal(t, "5", lit)
-	requires.Equal(t, Pos{2, 1, 16}, pos)
+	if !reflect.DeepEqual(intLit, tok) {
+		t.Fatalf("got %v, want %v", tok, intLit)
+	}
+	if !reflect.DeepEqual("5", lit) {
+		t.Fatalf("got %v, want %v", lit, "5")
+	}
+	if !reflect.DeepEqual(Pos{2, 1, 16}, pos) {
+		t.Fatalf("got %v, want %v", pos, Pos{2, 1, 16})
+	}
 }
 
 func TestFeatureIDsComment(t *testing.T) {
 	l := NewScanner("/*T![auto_rand] auto_random(5) */")
 	tok, pos, lit := l.scan()
-	requires.Equal(t, identifier, tok)
-	requires.Equal(t, "auto_random", lit)
-	requires.Equal(t, Pos{1, 16, 16}, pos)
+	if !reflect.DeepEqual(identifier, tok) {
+		t.Fatalf("got %v, want %v", tok, identifier)
+	}
+	if !reflect.DeepEqual("auto_random", lit) {
+		t.Fatalf("got %v, want %v", lit, "auto_random")
+	}
+	if !reflect.DeepEqual(Pos{1, 16, 16}, pos) {
+		t.Fatalf("got %v, want %v", pos, Pos{1, 16, 16})
+	}
 	tok, _, _ = l.scan()
-	requires.Equal(t, int('('), tok)
+	if !reflect.DeepEqual(int('('), tok) {
+		t.Fatalf("got %v, want %v", tok, int('('))
+	}
 	_, pos, lit = l.scan()
-	requires.Equal(t, "5", lit)
-	requires.Equal(t, Pos{1, 28, 28}, pos)
+	if !reflect.DeepEqual("5", lit) {
+		t.Fatalf("got %v, want %v", lit, "5")
+	}
+	if !reflect.DeepEqual(Pos{1, 28, 28}, pos) {
+		t.Fatalf("got %v, want %v", pos, Pos{1, 28, 28})
+	}
 	tok, _, _ = l.scan()
-	requires.Equal(t, int(')'), tok)
+	if !reflect.DeepEqual(int(')'), tok) {
+		t.Fatalf("got %v, want %v", tok, int(')'))
+	}
 
 	l = NewScanner("/*T![unsupported_feature] unsupported(123) */")
 	tok, _, _ = l.scan()
-	requires.Equal(t, 0, tok)
+	if !reflect.DeepEqual(0, tok) {
+		t.Fatalf("got %v, want %v", tok, 0)
+	}
 }
 
 func TestOptimizerHint(t *testing.T) {
@@ -406,9 +479,15 @@ func TestOptimizerHint(t *testing.T) {
 		if tok == 0 {
 			return
 		}
-		requires.Equal(t, tokens[i].tok, tok, i)
-		requires.Equal(t, tokens[i].ident, sym.ident, i)
-		requires.Equal(t, tokens[i].pos, sym.offset, i)
+		if !reflect.DeepEqual(tokens[i].tok, tok) {
+			t.Fatalf("%v: got %v, want %v", i, tok, tokens[i].tok)
+		}
+		if !reflect.DeepEqual(tokens[i].ident, sym.ident) {
+			t.Fatalf("%v: got %v, want %v", i, sym.ident, tokens[i].ident)
+		}
+		if !reflect.DeepEqual(tokens[i].pos, sym.offset) {
+			t.Fatalf("%v: got %v, want %v", i, sym.offset, tokens[i].pos)
+		}
 	}
 }
 
@@ -484,7 +563,9 @@ func TestOptimizerHintAfterCertainKeywordOnly(t *testing.T) {
 		var sym yySymType
 		for i := 0; ; i++ {
 			tok := scanner.Lex(&sym)
-			requires.Equalf(t, tc.tokens[i], tok, "input = [%s], i = %d", tc.input, i)
+			if !reflect.DeepEqual(tc.tokens[i], tok) {
+				t.Fatalf("%s: got %v, want %v", fmt.Sprintf("input = [%s], i = %d", tc.input, i), tok, tc.tokens[i])
+			}
 			if tok == 0 {
 				break
 			}
@@ -509,12 +590,18 @@ func TestInt(t *testing.T) {
 		var v yySymType
 		scanner.reset(test.input)
 		tok := scanner.Lex(&v)
-		requires.Equal(t, intLit, tok)
+		if !reflect.DeepEqual(intLit, tok) {
+			t.Fatalf("got %v, want %v", tok, intLit)
+		}
 		switch i := v.item.(type) {
 		case int64:
-			requires.Equal(t, test.expect, uint64(i))
+			if !reflect.DeepEqual(test.expect, uint64(i)) {
+				t.Fatalf("got %v, want %v", uint64(i), test.expect)
+			}
 		case uint64:
-			requires.Equal(t, test.expect, i)
+			if !reflect.DeepEqual(test.expect, i) {
+				t.Fatalf("got %v, want %v", i, test.expect)
+			}
 		default:
 			t.Fail()
 		}
@@ -540,17 +627,29 @@ func TestSQLModeANSIQuotes(t *testing.T) {
 		var v yySymType
 		scanner.reset(test.input)
 		tok := scanner.Lex(&v)
-		requires.Equal(t, test.tok, tok)
-		requires.Equal(t, test.ident, v.ident)
+		if !reflect.DeepEqual(test.tok, tok) {
+			t.Fatalf("got %v, want %v", tok, test.tok)
+		}
+		if !reflect.DeepEqual(test.ident, v.ident) {
+			t.Fatalf("got %v, want %v", v.ident, test.ident)
+		}
 	}
 	scanner.reset(`'string' 'string'`)
 	var v yySymType
 	tok := scanner.Lex(&v)
-	requires.Equal(t, stringLit, tok)
-	requires.Equal(t, "string", v.ident)
+	if !reflect.DeepEqual(stringLit, tok) {
+		t.Fatalf("got %v, want %v", tok, stringLit)
+	}
+	if !reflect.DeepEqual("string", v.ident) {
+		t.Fatalf("got %v, want %v", v.ident, "string")
+	}
 	tok = scanner.Lex(&v)
-	requires.Equal(t, stringLit, tok)
-	requires.Equal(t, "string", v.ident)
+	if !reflect.DeepEqual(stringLit, tok) {
+		t.Fatalf("got %v, want %v", tok, stringLit)
+	}
+	if !reflect.DeepEqual("string", v.ident) {
+		t.Fatalf("got %v, want %v", v.ident, "string")
+	}
 }
 
 func TestIllegal(t *testing.T) {
@@ -645,7 +744,9 @@ func TestVersionDigits(t *testing.T) {
 		scanner.reset(test.input)
 		scanner.scanVersionDigits(test.min, test.max)
 		nextChar := scanner.r.readByte()
-		requires.Equalf(t, test.nextChar, nextChar, "input = %s", test.input)
+		if !reflect.DeepEqual(test.nextChar, nextChar) {
+			t.Fatalf("%s: got %v, want %v", fmt.Sprintf("input = %s", test.input), nextChar, test.nextChar)
+		}
 	}
 }
 
@@ -715,8 +816,12 @@ func TestFeatureIDs(t *testing.T) {
 	for _, test := range tests {
 		scanner.reset(test.input)
 		featureIDs := scanner.scanFeatureIDs()
-		requires.Equalf(t, test.featureIDs, featureIDs, "input = %s", test.input)
+		if !reflect.DeepEqual(test.featureIDs, featureIDs) {
+			t.Fatalf("%s: got %v, want %v", fmt.Sprintf("input = %s", test.input), featureIDs, test.featureIDs)
+		}
 		nextChar := scanner.r.readByte()
-		requires.Equalf(t, test.nextChar, nextChar, "input = %s", test.input)
+		if !reflect.DeepEqual(test.nextChar, nextChar) {
+			t.Fatalf("%s: got %v, want %v", fmt.Sprintf("input = %s", test.input), nextChar, test.nextChar)
+		}
 	}
 }

@@ -16,7 +16,7 @@ package mysql
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"reflect"
 )
 
 func TestPrivString(t *testing.T) {
@@ -25,70 +25,118 @@ func TestPrivString(t *testing.T) {
 		if p > AllPriv {
 			break
 		}
-		require.NotEqualf(t, "", p.String(), "%d-th", i)
+		if reflect.DeepEqual("", p.String()) {
+			t.Fatalf("expected values to differ, both are %v", p.String())
+		}
 	}
 }
 
 func TestPrivColumn(t *testing.T) {
 	for _, p := range AllGlobalPrivs {
-		require.NotEmptyf(t, p.ColumnString(), "%s", p)
+		if len(p.ColumnString()) == 0 {
+			t.Fatalf("%s", p)
+		}
 		np, ok := NewPrivFromColumn(p.ColumnString())
-		require.Truef(t, ok, "%s", p)
-		require.Equal(t, p, np)
+		if !(ok) {
+			t.Fatalf("%s", p)
+		}
+		if !reflect.DeepEqual(p, np) {
+			t.Fatalf("got %v, want %v", np, p)
+		}
 	}
 	for _, p := range StaticGlobalOnlyPrivs {
-		require.NotEmptyf(t, p.ColumnString(), "%s", p)
+		if len(p.ColumnString()) == 0 {
+			t.Fatalf("%s", p)
+		}
 		np, ok := NewPrivFromColumn(p.ColumnString())
-		require.Truef(t, ok, "%s", p)
-		require.Equal(t, p, np)
+		if !(ok) {
+			t.Fatalf("%s", p)
+		}
+		if !reflect.DeepEqual(p, np) {
+			t.Fatalf("got %v, want %v", np, p)
+		}
 	}
 	for _, p := range AllDBPrivs {
-		require.NotEmptyf(t, p.ColumnString(), "%s", p)
+		if len(p.ColumnString()) == 0 {
+			t.Fatalf("%s", p)
+		}
 		np, ok := NewPrivFromColumn(p.ColumnString())
-		require.Truef(t, ok, "%s", p)
-		require.Equal(t, p, np)
+		if !(ok) {
+			t.Fatalf("%s", p)
+		}
+		if !reflect.DeepEqual(p, np) {
+			t.Fatalf("got %v, want %v", np, p)
+		}
 	}
 }
 
 func TestPrivSetString(t *testing.T) {
 	for _, p := range AllTablePrivs {
-		require.NotEmptyf(t, p.SetString(), "%s", p)
+		if len(p.SetString()) == 0 {
+			t.Fatalf("%s", p)
+		}
 		np, ok := NewPrivFromSetEnum(p.SetString())
-		require.Truef(t, ok, "%s", p)
-		require.Equal(t, p, np)
+		if !(ok) {
+			t.Fatalf("%s", p)
+		}
+		if !reflect.DeepEqual(p, np) {
+			t.Fatalf("got %v, want %v", np, p)
+		}
 	}
 	for _, p := range AllColumnPrivs {
-		require.NotEmptyf(t, p.SetString(), "%s", p)
+		if len(p.SetString()) == 0 {
+			t.Fatalf("%s", p)
+		}
 		np, ok := NewPrivFromSetEnum(p.SetString())
-		require.Truef(t, ok, "%s", p)
-		require.Equal(t, p, np)
+		if !(ok) {
+			t.Fatalf("%s", p)
+		}
+		if !reflect.DeepEqual(p, np) {
+			t.Fatalf("got %v, want %v", np, p)
+		}
 	}
 }
 
 func TestPrivsHas(t *testing.T) {
 	// it is a simple helper, does not handle all&dynamic privs
 	privs := Privileges{AllPriv}
-	require.True(t, privs.Has(AllPriv))
-	require.False(t, privs.Has(InsertPriv))
+	if !(privs.Has(AllPriv)) {
+		t.Fatal("expected true")
+	}
+	if privs.Has(InsertPriv) {
+		t.Fatal("expected false")
+	}
 
 	// multiple privs
 	privs = Privileges{InsertPriv, SelectPriv}
-	require.True(t, privs.Has(SelectPriv))
-	require.True(t, privs.Has(InsertPriv))
-	require.False(t, privs.Has(DropPriv))
+	if !(privs.Has(SelectPriv)) {
+		t.Fatal("expected true")
+	}
+	if !(privs.Has(InsertPriv)) {
+		t.Fatal("expected true")
+	}
+	if privs.Has(DropPriv) {
+		t.Fatal("expected false")
+	}
 }
 
 func TestPrivAllConsistency(t *testing.T) {
 	// AllPriv in mysql.user columns.
 	for priv := CreatePriv; priv != AllPriv; priv = priv << 1 {
 		_, ok := Priv2UserCol[priv]
-		require.Truef(t, ok, "priv fail %d", priv)
+		if !(ok) {
+			t.Fatalf("priv fail %d", priv)
+		}
 	}
 
-	require.Equal(t, len(AllGlobalPrivs)+1, len(Priv2UserCol))
+	if !reflect.DeepEqual(len(AllGlobalPrivs)+1, len(Priv2UserCol)) {
+		t.Fatalf("got %v, want %v", len(Priv2UserCol), len(AllGlobalPrivs)+1)
+	}
 
 	// USAGE privilege doesn't have a column in Priv2UserCol
 	// ALL privilege doesn't have a column in Priv2UserCol
 	// so it's +2
-	require.Equal(t, len(Priv2UserCol)+2, len(Priv2Str))
+	if !reflect.DeepEqual(len(Priv2UserCol)+2, len(Priv2Str)) {
+		t.Fatalf("got %v, want %v", len(Priv2Str), len(Priv2UserCol)+2)
+	}
 }

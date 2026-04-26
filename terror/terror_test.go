@@ -22,59 +22,110 @@ import (
 	"testing"
 
 	"github.com/pingcap/errors"
-	"github.com/stretchr/testify/require"
+
+	"reflect"
 )
 
 func TestErrCode(t *testing.T) {
-	require.Equal(t, ErrCode(1), CodeMissConnectionID)
-	require.Equal(t, ErrCode(2), CodeResultUndetermined)
+	if !reflect.DeepEqual(ErrCode(1), CodeMissConnectionID) {
+		t.Fatalf("got %v, want %v", CodeMissConnectionID, ErrCode(1))
+	}
+	if !reflect.DeepEqual(ErrCode(2), CodeResultUndetermined) {
+		t.Fatalf("got %v, want %v", CodeResultUndetermined, ErrCode(2))
+	}
 }
 
 func TestTError(t *testing.T) {
-	require.NotEmpty(t, ClassParser.String())
-	require.NotEmpty(t, ClassOptimizer.String())
-	require.NotEmpty(t, ClassKV.String())
-	require.NotEmpty(t, ClassServer.String())
+	if len(ClassParser.String()) == 0 {
+		t.Fatal("expected non-empty")
+	}
+	if len(ClassOptimizer.String()) == 0 {
+		t.Fatal("expected non-empty")
+	}
+	if len(ClassKV.String()) == 0 {
+		t.Fatal("expected non-empty")
+	}
+	if len(ClassServer.String()) == 0 {
+		t.Fatal("expected non-empty")
+	}
 
 	parserErr := ClassParser.New(ErrCode(100), "error 100")
-	require.NotEmpty(t, parserErr.Error())
-	require.True(t, ClassParser.EqualClass(parserErr))
-	require.False(t, ClassParser.NotEqualClass(parserErr))
+	if len(parserErr.Error()) == 0 {
+		t.Fatal("expected non-empty")
+	}
+	if !(ClassParser.EqualClass(parserErr)) {
+		t.Fatal("expected true")
+	}
+	if ClassParser.NotEqualClass(parserErr) {
+		t.Fatal("expected false")
+	}
 
-	require.False(t, ClassOptimizer.EqualClass(parserErr))
+	if ClassOptimizer.EqualClass(parserErr) {
+		t.Fatal("expected false")
+	}
 	optimizerErr := ClassOptimizer.New(ErrCode(2), "abc")
-	require.False(t, ClassOptimizer.EqualClass(errors.New("abc")))
-	require.False(t, ClassOptimizer.EqualClass(nil))
-	require.True(t, optimizerErr.Equal(optimizerErr.GenWithStack("def")))
-	require.False(t, optimizerErr.Equal(nil))
-	require.False(t, optimizerErr.Equal(errors.New("abc")))
+	if ClassOptimizer.EqualClass(errors.New("abc")) {
+		t.Fatal("expected false")
+	}
+	if ClassOptimizer.EqualClass(nil) {
+		t.Fatal("expected false")
+	}
+	if !(optimizerErr.Equal(optimizerErr.GenWithStack("def"))) {
+		t.Fatal("expected true")
+	}
+	if optimizerErr.Equal(nil) {
+		t.Fatal("expected false")
+	}
+	if optimizerErr.Equal(errors.New("abc")) {
+		t.Fatal("expected false")
+	}
 
 	// Test case for FastGen.
-	require.True(t, optimizerErr.Equal(optimizerErr.FastGen("def")))
-	require.True(t, optimizerErr.Equal(optimizerErr.FastGen("def: %s", "def")))
+	if !(optimizerErr.Equal(optimizerErr.FastGen("def"))) {
+		t.Fatal("expected true")
+	}
+	if !(optimizerErr.Equal(optimizerErr.FastGen("def: %s", "def"))) {
+		t.Fatal("expected true")
+	}
 	kvErr := ClassKV.New(1062, "key already exist")
 	e := kvErr.FastGen("Duplicate entry '%d' for key 'PRIMARY'", 1)
-	require.Equal(t, "[kv:1062]Duplicate entry '1' for key 'PRIMARY'", e.Error())
+	if !reflect.DeepEqual("[kv:1062]Duplicate entry '1' for key 'PRIMARY'", e.Error()) {
+		t.Fatalf("got %v, want %v", e.Error(), "[kv:1062]Duplicate entry '1' for key 'PRIMARY'")
+	}
 	sqlErr := ToSQLError(errors.Cause(e).(*Error))
-	require.Equal(t, "Duplicate entry '1' for key 'PRIMARY'", sqlErr.Message)
-	require.Equal(t, uint16(1062), sqlErr.Code)
+	if !reflect.DeepEqual("Duplicate entry '1' for key 'PRIMARY'", sqlErr.Message) {
+		t.Fatalf("got %v, want %v", sqlErr.Message, "Duplicate entry '1' for key 'PRIMARY'")
+	}
+	if !reflect.DeepEqual(uint16(1062), sqlErr.Code) {
+		t.Fatalf("got %v, want %v", sqlErr.Code, uint16(1062))
+	}
 
 	err := errors.Trace(ErrCritical.GenWithStackByArgs("test"))
-	require.True(t, ErrCritical.Equal(err))
+	if !(ErrCritical.Equal(err)) {
+		t.Fatal("expected true")
+	}
 
 	err = errors.Trace(ErrCritical)
-	require.True(t, ErrCritical.Equal(err))
+	if !(ErrCritical.Equal(err)) {
+		t.Fatal("expected true")
+	}
 }
 
 func TestJson(t *testing.T) {
 	prevTErr := errors.Normalize("json test", errors.MySQLErrorCode(int(CodeExecResultIsEmpty)))
 	buf, err := json.Marshal(prevTErr)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var curTErr errors.Error
 	err = json.Unmarshal(buf, &curTErr)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	isEqual := prevTErr.Equal(&curTErr)
-	require.True(t, isEqual)
+	if !(isEqual) {
+		t.Fatal("expected true")
+	}
 }
 
 var predefinedErr = ClassExecutor.New(ErrCode(123), "predefiend error")
@@ -90,40 +141,72 @@ func call() error {
 
 func TestErrorEqual(t *testing.T) {
 	e1 := errors.New("test error")
-	require.NotNil(t, e1)
+	if e1 == nil {
+		t.Fatal("expected non-nil")
+	}
 
 	e2 := errors.Trace(e1)
-	require.NotNil(t, e2)
+	if e2 == nil {
+		t.Fatal("expected non-nil")
+	}
 
 	e3 := errors.Trace(e2)
-	require.NotNil(t, e3)
+	if e3 == nil {
+		t.Fatal("expected non-nil")
+	}
 
-	require.Equal(t, e1, errors.Cause(e2))
-	require.Equal(t, e1, errors.Cause(e3))
-	require.Equal(t, errors.Cause(e3), errors.Cause(e2))
+	if !reflect.DeepEqual(e1, errors.Cause(e2)) {
+		t.Fatalf("got %v, want %v", errors.Cause(e2), e1)
+	}
+	if !reflect.DeepEqual(e1, errors.Cause(e3)) {
+		t.Fatalf("got %v, want %v", errors.Cause(e3), e1)
+	}
+	if !reflect.DeepEqual(errors.Cause(e3), errors.Cause(e2)) {
+		t.Fatalf("got %v, want %v", errors.Cause(e2), errors.Cause(e3))
+	}
 
 	e4 := errors.New("test error")
-	require.NotEqual(t, e1, errors.Cause(e4))
+	if reflect.DeepEqual(e1, errors.Cause(e4)) {
+		t.Fatalf("expected values to differ, both are %v", errors.Cause(e4))
+	}
 
 	e5 := errors.Errorf("test error")
-	require.NotEqual(t, e1, errors.Cause(e5))
+	if reflect.DeepEqual(e1, errors.Cause(e5)) {
+		t.Fatalf("expected values to differ, both are %v", errors.Cause(e5))
+	}
 
-	require.True(t, ErrorEqual(e1, e2))
-	require.True(t, ErrorEqual(e1, e3))
-	require.True(t, ErrorEqual(e1, e4))
-	require.True(t, ErrorEqual(e1, e5))
+	if !(ErrorEqual(e1, e2)) {
+		t.Fatal("expected true")
+	}
+	if !(ErrorEqual(e1, e3)) {
+		t.Fatal("expected true")
+	}
+	if !(ErrorEqual(e1, e4)) {
+		t.Fatal("expected true")
+	}
+	if !(ErrorEqual(e1, e5)) {
+		t.Fatal("expected true")
+	}
 
 	var e6 error
 
-	require.True(t, ErrorEqual(nil, nil))
-	require.True(t, ErrorNotEqual(e1, e6))
+	if !(ErrorEqual(nil, nil)) {
+		t.Fatal("expected true")
+	}
+	if !(ErrorNotEqual(e1, e6)) {
+		t.Fatal("expected true")
+	}
 	code1 := ErrCode(9001)
 	code2 := ErrCode(9002)
 	te1 := ClassParser.Synthesize(code1, "abc")
 	te3 := ClassKV.New(code1, "abc")
 	te4 := ClassKV.New(code2, "abc")
-	require.False(t, ErrorEqual(te1, te3))
-	require.False(t, ErrorEqual(te3, te4))
+	if ErrorEqual(te1, te3) {
+		t.Fatal("expected false")
+	}
+	if ErrorEqual(te3, te4) {
+		t.Fatal("expected false")
+	}
 }
 
 func TestLog(t *testing.T) {
@@ -161,7 +244,9 @@ func TestTraceAndLocation(t *testing.T) {
 			sysStack++
 		}
 	}
-	require.Equalf(t, 9, len(lines)-(2*sysStack), "stack =\n%s", stack)
+	if !reflect.DeepEqual(9, len(lines)-(2*sysStack)) {
+		t.Fatalf("%s: got %v, want %v", fmt.Sprintf("stack =\n%s", stack), len(lines)-(2*sysStack), 9)
+	}
 	var containTerr bool
 	for _, v := range lines {
 		if strings.Contains(v, "terror_test.go") {
@@ -169,5 +254,7 @@ func TestTraceAndLocation(t *testing.T) {
 			break
 		}
 	}
-	require.True(t, containTerr)
+	if !(containTerr) {
+		t.Fatal("expected true")
+	}
 }

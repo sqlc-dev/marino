@@ -17,18 +17,25 @@ import (
 	"testing"
 
 	"github.com/sqlc-dev/marino/mysql"
-	"github.com/stretchr/testify/require"
+
+	"reflect"
 )
 
 func TestStrToType(t *testing.T) {
 	for tp, str := range type2Str {
 		a := StrToType(str)
-		require.Equal(t, tp, a)
+		if !reflect.DeepEqual(tp, a) {
+			t.Fatalf("got %v, want %v", a, tp)
+		}
 	}
 
 	tp := StrToType("blob")
-	require.Equal(t, tp, mysql.TypeBlob)
+	if !reflect.DeepEqual(tp, mysql.TypeBlob) {
+		t.Fatalf("got %v, want %v", mysql.TypeBlob, tp)
+	}
 
 	tp = StrToType("binary")
-	require.Equal(t, tp, mysql.TypeString)
+	if !reflect.DeepEqual(tp, mysql.TypeString) {
+		t.Fatalf("got %v, want %v", mysql.TypeString, tp)
+	}
 }

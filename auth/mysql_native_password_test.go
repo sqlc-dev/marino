@@ -16,19 +16,27 @@ package auth
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"reflect"
 )
 
 func TestEncodePassword(t *testing.T) {
 	pwd := "123"
-	require.Equal(t, "*23AE809DDACAF96AF0FD78ED04B6A265E05AA257", EncodePassword(pwd))
-	require.Equal(t, EncodePasswordBytes([]byte(pwd)), EncodePassword(pwd))
+	if !reflect.DeepEqual("*23AE809DDACAF96AF0FD78ED04B6A265E05AA257", EncodePassword(pwd)) {
+		t.Fatalf("got %v, want %v", EncodePassword(pwd), "*23AE809DDACAF96AF0FD78ED04B6A265E05AA257")
+	}
+	if !reflect.DeepEqual(EncodePasswordBytes([]byte(pwd)), EncodePassword(pwd)) {
+		t.Fatalf("got %v, want %v", EncodePassword(pwd), EncodePasswordBytes([]byte(pwd)))
+	}
 }
 
 func TestDecodePassword(t *testing.T) {
 	x, err := DecodePassword(EncodePassword("123"))
-	require.NoError(t, err)
-	require.Equal(t, Sha1Hash(Sha1Hash([]byte("123"))), x)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(Sha1Hash(Sha1Hash([]byte("123"))), x) {
+		t.Fatalf("got %v, want %v", x, Sha1Hash(Sha1Hash([]byte("123"))))
+	}
 }
 
 func TestCheckScramble(t *testing.T) {
@@ -37,12 +45,18 @@ func TestCheckScramble(t *testing.T) {
 	auth := []byte{24, 180, 183, 225, 166, 6, 81, 102, 70, 248, 199, 143, 91, 204, 169, 9, 161, 171, 203, 33}
 	encodepwd := EncodePassword(pwd)
 	hpwd, err := DecodePassword(encodepwd)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	res := CheckScrambledPassword(salt, hpwd, auth)
-	require.True(t, res)
+	if !(res) {
+		t.Fatal("expected true")
+	}
 
 	// Do not panic for invalid input.
 	res = CheckScrambledPassword(salt, hpwd, []byte("xxyyzz"))
-	require.False(t, res)
+	if res {
+		t.Fatal("expected false")
+	}
 }

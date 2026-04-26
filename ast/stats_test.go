@@ -17,10 +17,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sqlc-dev/marino/parser"
 	"github.com/sqlc-dev/marino/ast"
 	"github.com/sqlc-dev/marino/format"
-	"github.com/stretchr/testify/require"
+	"github.com/sqlc-dev/marino/parser"
+
+	"reflect"
 )
 
 func TestRefreshStatsStmt(t *testing.T) {
@@ -79,18 +80,30 @@ func TestRefreshStatsStmt(t *testing.T) {
 	p := parser.New()
 	for _, test := range tests {
 		stmt, err := p.ParseOneStmt(test.sql, "", "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 		rs := stmt.(*ast.RefreshStatsStmt)
 		if test.modeSet {
-			require.NotNil(t, rs.RefreshMode)
-			require.Equal(t, test.mode, *rs.RefreshMode)
+			if rs.RefreshMode == nil {
+				t.Fatal("expected non-nil")
+			}
+			if !reflect.DeepEqual(test.mode, *rs.RefreshMode) {
+				t.Fatalf("got %v, want %v", *rs.RefreshMode, test.mode)
+			}
 		} else {
-			require.Nil(t, rs.RefreshMode)
+			if rs.RefreshMode != nil {
+				t.Fatalf("expected nil, got %v", rs.RefreshMode)
+			}
 		}
 		var sb strings.Builder
 		err = stmt.Restore(format.NewRestoreCtx(format.DefaultRestoreFlags, &sb))
-		require.NoError(t, err)
-		require.Equal(t, test.want, sb.String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(test.want, sb.String()) {
+			t.Fatalf("got %v, want %v", sb.String(), test.want)
+		}
 	}
 }
 
@@ -150,15 +163,27 @@ func TestFlushStatsDeltaScoped(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.sql, func(t *testing.T) {
 			stmt, err := p.ParseOneStmt(test.sql, "", "")
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatal(err)
+			}
 			fs := stmt.(*ast.FlushStmt)
-			require.Equal(t, ast.FlushStatsDelta, fs.Tp)
-			require.Len(t, fs.FlushObjects, test.objects)
-			require.Equal(t, test.cluster, fs.IsCluster)
+			if !reflect.DeepEqual(ast.FlushStatsDelta, fs.Tp) {
+				t.Fatalf("got %v, want %v", fs.Tp, ast.FlushStatsDelta)
+			}
+			if got := len(fs.FlushObjects); got != test.objects {
+				t.Fatalf("expected length %d, got %d", test.objects, got)
+			}
+			if !reflect.DeepEqual(test.cluster, fs.IsCluster) {
+				t.Fatalf("got %v, want %v", fs.IsCluster, test.cluster)
+			}
 			var sb strings.Builder
 			err = stmt.Restore(format.NewRestoreCtx(format.DefaultRestoreFlags, &sb))
-			require.NoError(t, err)
-			require.Equal(t, test.want, sb.String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(test.want, sb.String()) {
+				t.Fatalf("got %v, want %v", sb.String(), test.want)
+			}
 		})
 	}
 
@@ -186,13 +211,19 @@ func TestFlushStatsDeltaScoped(t *testing.T) {
 	for _, test := range dedupTests {
 		t.Run(test.name, func(t *testing.T) {
 			stmt, err := p.ParseOneStmt(test.sql, "", "")
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatal(err)
+			}
 			fs := stmt.(*ast.FlushStmt)
 			fs.DedupFlushObjects()
 			var sb strings.Builder
 			err = fs.Restore(format.NewRestoreCtx(format.DefaultRestoreFlags, &sb))
-			require.NoError(t, err)
-			require.Equal(t, test.want, sb.String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(test.want, sb.String()) {
+				t.Fatalf("got %v, want %v", sb.String(), test.want)
+			}
 		})
 	}
 }
@@ -234,13 +265,19 @@ func TestRefreshStatsStmtDedup(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			stmt, err := p.ParseOneStmt(test.sql, "", "")
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatal(err)
+			}
 			rs := stmt.(*ast.RefreshStatsStmt)
 			rs.Dedup()
 			var sb strings.Builder
 			err = rs.Restore(format.NewRestoreCtx(format.DefaultRestoreFlags, &sb))
-			require.NoError(t, err)
-			require.Equal(t, test.want, sb.String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(test.want, sb.String()) {
+				t.Fatalf("got %v, want %v", sb.String(), test.want)
+			}
 		})
 	}
 }

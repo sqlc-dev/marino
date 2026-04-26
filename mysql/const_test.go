@@ -16,7 +16,8 @@ package mysql
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"reflect"
+	"strings"
 )
 
 func TestSQLMode(t *testing.T) {
@@ -91,39 +92,65 @@ func TestSQLMode(t *testing.T) {
 	}}
 
 	for _, ca := range hardCode {
-		require.Equal(t, ca.value, int(ca.code))
+		if !reflect.DeepEqual(ca.value, int(ca.code)) {
+			t.Fatalf("got %v, want %v", int(ca.code), ca.value)
+		}
 	}
 }
 
 func TestVersionSeparator(t *testing.T) {
 	// DO NOT change the value of VersionSeparator.
-	require.Equal(t, "-TiDB-", VersionSeparator)
+	if !reflect.DeepEqual("-TiDB-", VersionSeparator) {
+		t.Fatalf("got %v, want %v", VersionSeparator, "-TiDB-")
+	}
 }
 
 func TestBuildTiDBXReleaseVersion(t *testing.T) {
 	tidbXVersion, err := BuildTiDBXReleaseVersion("v26.3.0")
-	require.NoError(t, err)
-	require.Equal(t, "CLOUD.202603.0", tidbXVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual("CLOUD.202603.0", tidbXVersion) {
+		t.Fatalf("got %v, want %v", tidbXVersion, "CLOUD.202603.0")
+	}
 
 	tidbXVersion, err = BuildTiDBXReleaseVersion("v26.3.0-xxx")
-	require.NoError(t, err)
-	require.Equal(t, "CLOUD.202603.0-xxx", tidbXVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual("CLOUD.202603.0-xxx", tidbXVersion) {
+		t.Fatalf("got %v, want %v", tidbXVersion, "CLOUD.202603.0-xxx")
+	}
 
 	serverVersion, err := BuildTiDBXServerVersion("v26.3.0")
-	require.NoError(t, err)
-	require.Equal(t, "8.0.11-TiDB-CLOUD.202603.0", serverVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual("8.0.11-TiDB-CLOUD.202603.0", serverVersion) {
+		t.Fatalf("got %v, want %v", serverVersion, "8.0.11-TiDB-CLOUD.202603.0")
+	}
 
 	serverVersion, err = BuildTiDBXServerVersion("v26.3.0-xxx")
-	require.NoError(t, err)
-	require.Equal(t, "8.0.11-TiDB-CLOUD.202603.0-xxx", serverVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual("8.0.11-TiDB-CLOUD.202603.0-xxx", serverVersion) {
+		t.Fatalf("got %v, want %v", serverVersion, "8.0.11-TiDB-CLOUD.202603.0-xxx")
+	}
 
 	for _, ver := range []string{"26.1.1", "v26xxxx", "v24.1.1", "v26.0.1", "v26.13.1"} {
 		_, err = BuildTiDBXReleaseVersion(ver)
-		require.ErrorContains(t, err, "invalid TiDB release version")
+		if err == nil || !strings.Contains(err.Error(), "invalid TiDB release version") {
+			t.Fatalf("expected error containing %q, got %v", "invalid TiDB release version", err)
+		}
 	}
 }
 
 func TestNormalizeTiDBReleaseVersionForNextGen(t *testing.T) {
-	require.Equal(t, tidbXPlaceholderReleaseVersion, NormalizeTiDBReleaseVersionForNextGen(legacyTiDBReleaseVersionPlaceholder))
-	require.Equal(t, "v26.3.0", NormalizeTiDBReleaseVersionForNextGen("v26.3.0"))
+	if !reflect.DeepEqual(tidbXPlaceholderReleaseVersion, NormalizeTiDBReleaseVersionForNextGen(legacyTiDBReleaseVersionPlaceholder)) {
+		t.Fatalf("got %v, want %v", NormalizeTiDBReleaseVersionForNextGen(legacyTiDBReleaseVersionPlaceholder), tidbXPlaceholderReleaseVersion)
+	}
+	if !reflect.DeepEqual("v26.3.0", NormalizeTiDBReleaseVersionForNextGen("v26.3.0")) {
+		t.Fatalf("got %v, want %v", NormalizeTiDBReleaseVersionForNextGen("v26.3.0"), "v26.3.0")
+	}
 }

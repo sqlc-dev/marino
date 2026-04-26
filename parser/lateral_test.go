@@ -18,10 +18,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sqlc-dev/marino/parser"
 	"github.com/sqlc-dev/marino/ast"
 	"github.com/sqlc-dev/marino/format"
-	"github.com/stretchr/testify/require"
+	"github.com/sqlc-dev/marino/parser"
+
+	"fmt"
+	"reflect"
 )
 
 func TestLateralParsing(t *testing.T) {
@@ -127,29 +129,43 @@ func TestLateralParsing(t *testing.T) {
 			stmt, err := p.ParseOneStmt(tc.sql, "", "")
 
 			if tc.expectError {
-				require.Error(t, err, "Expected parsing to fail for: %s", tc.sql)
+				if err == nil {
+					t.Fatalf("Expected parsing to fail for: %s", tc.sql)
+				}
 				return
 			}
 
-			require.NoError(t, err, "Failed to parse: %s", tc.sql)
-			require.NotNil(t, stmt)
+			if err != nil {
+				t.Fatalf("%s: %v", fmt.Sprintf("Failed to parse: %s", tc.sql), err)
+			}
+			if stmt == nil {
+				t.Fatal("expected non-nil")
+			}
 
 			// Test round-trip: parse -> restore -> parse again
 			var sb strings.Builder
 			restoreCtx := format.NewRestoreCtx(format.RestoreStringSingleQuotes, &sb)
 			err = stmt.Restore(restoreCtx)
-			require.NoError(t, err, "Failed to restore statement")
+			if err != nil {
+				t.Fatalf("%v: %v", "Failed to restore statement", err)
+			}
 
 			restored := sb.String()
 			if tc.checkLateral {
 				// Verify LATERAL keyword is preserved in restoration
-				require.Contains(t, restored, "LATERAL", "LATERAL keyword missing in restored SQL: %s", restored)
+				if !strings.Contains(restored, "LATERAL") {
+					t.Fatalf("%s: expected %q to contain %q", fmt.Sprintf("LATERAL keyword missing in restored SQL: %s", restored), restored, "LATERAL")
+				}
 			}
 
 			// Parse the restored SQL to ensure it's valid (round-trip test)
 			stmt2, err := p.ParseOneStmt(restored, "", "")
-			require.NoError(t, err, "Failed to parse restored SQL: %s", restored)
-			require.NotNil(t, stmt2)
+			if err != nil {
+				t.Fatalf("%s: %v", fmt.Sprintf("Failed to parse restored SQL: %s", restored), err)
+			}
+			if stmt2 == nil {
+				t.Fatal("expected non-nil")
+			}
 
 			// Verify AST flags on both original and round-tripped statements.
 			for _, stmtToCheck := range []struct {
@@ -160,25 +176,34 @@ func TestLateralParsing(t *testing.T) {
 				{"round-trip", stmt2},
 			} {
 				selectStmt, ok := stmtToCheck.node.(*ast.SelectStmt)
-				require.True(t, ok, "[%s] Statement should be SelectStmt", stmtToCheck.label)
-				require.NotNil(t, selectStmt.From, "[%s] FROM clause should not be nil", stmtToCheck.label)
+				if !(ok) {
+					t.Fatalf("[%s] Statement should be SelectStmt", stmtToCheck.label)
+				}
+				if selectStmt.From == nil {
+					t.Fatalf("[%s] FROM clause should not be nil", stmtToCheck.label)
+				}
 
 				if tc.checkLateral {
 					lateralTS := findLateralTableSource(selectStmt.From.TableRefs)
-					require.NotNil(t, lateralTS, "[%s] LATERAL TableSource not found for: %s", stmtToCheck.label, tc.sql)
+					if lateralTS == nil {
+						t.Fatalf("[%s] LATERAL TableSource not found for: %s", stmtToCheck.label, tc.sql)
+					}
 
 					if len(tc.columnNames) > 0 {
-						require.Len(t, lateralTS.ColumnNames, len(tc.columnNames),
-							"[%s] column name count mismatch", stmtToCheck.label)
+						if got := len(lateralTS.ColumnNames); got != len(tc.columnNames) {
+							t.Fatalf("%s: expected length %d, got %d", fmt.Sprintf("[%s] column name count mismatch", stmtToCheck.label), len(tc.columnNames), got)
+						}
 						for i, expected := range tc.columnNames {
-							require.Equal(t, expected, lateralTS.ColumnNames[i].L,
-								"[%s] column name mismatch at index %d", stmtToCheck.label, i)
+							if !reflect.DeepEqual(expected, lateralTS.ColumnNames[i].L) {
+								t.Fatalf("%s: got %v, want %v", fmt.Sprintf("[%s] column name mismatch at index %d", stmtToCheck.label, i), lateralTS.ColumnNames[i].L, expected)
+							}
 						}
 					}
 				} else {
 					lateralTS := findLateralTableSource(selectStmt.From.TableRefs)
-					require.Nil(t, lateralTS, "[%s] Lateral should be false for non-LATERAL query: %s",
-						stmtToCheck.label, tc.sql)
+					if lateralTS != nil {
+						t.Fatalf("[%s] Lateral should be false for non-LATERAL query: %s", stmtToCheck.label, tc.sql)
+					}
 				}
 			}
 		})

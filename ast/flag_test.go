@@ -14,11 +14,13 @@
 package ast_test
 
 import (
+	"fmt"
 	"testing"
 
-	"github.com/sqlc-dev/marino/parser"
 	"github.com/sqlc-dev/marino/ast"
-	"github.com/stretchr/testify/require"
+	"github.com/sqlc-dev/marino/parser"
+
+	"reflect"
 )
 
 func TestHasAggFlag(t *testing.T) {
@@ -33,7 +35,9 @@ func TestHasAggFlag(t *testing.T) {
 	}
 	for _, tt := range flagTests {
 		expr.SetFlag(tt.flag)
-		require.Equal(t, tt.hasAgg, ast.HasAggFlag(expr))
+		if !reflect.DeepEqual(tt.hasAgg, ast.HasAggFlag(expr)) {
+			t.Fatalf("got %v, want %v", ast.HasAggFlag(expr), tt.hasAgg)
+		}
 	}
 }
 
@@ -130,10 +134,14 @@ func TestFlag(t *testing.T) {
 	p := parser.New()
 	for _, tt := range flagTests {
 		stmt, err := p.ParseOneStmt("select "+tt.expr, "", "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 		selectStmt := stmt.(*ast.SelectStmt)
 		ast.SetFlag(selectStmt)
 		expr := selectStmt.Fields.Fields[0].Expr
-		require.Equalf(t, tt.flag, expr.GetFlag(), "For %s", tt.expr)
+		if !reflect.DeepEqual(tt.flag, expr.GetFlag()) {
+			t.Fatalf("%s: got %v, want %v", fmt.Sprintf("For %s", tt.expr), expr.GetFlag(), tt.flag)
+		}
 	}
 }

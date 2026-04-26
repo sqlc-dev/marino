@@ -17,13 +17,18 @@ import (
 	"testing"
 
 	"github.com/sqlc-dev/marino/parser"
-	"github.com/stretchr/testify/require"
+
+	"reflect"
 )
 
 func TestKeywords(t *testing.T) {
 	// Test for the first keyword
-	require.Equal(t, "ADD", parser.Keywords[0].Word)
-	require.Equal(t, true, parser.Keywords[0].Reserved)
+	if !reflect.DeepEqual("ADD", parser.Keywords[0].Word) {
+		t.Fatalf("got %v, want %v", parser.Keywords[0].Word, "ADD")
+	}
+	if !reflect.DeepEqual(true, parser.Keywords[0].Reserved) {
+		t.Fatalf("got %v, want %v", parser.Keywords[0].Reserved, true)
+	}
 
 	// Make sure TiDBKeywords are included.
 	found := false
@@ -32,11 +37,15 @@ func TestKeywords(t *testing.T) {
 			found = true
 		}
 	}
-	require.Equal(t, found, true, "TiDBKeyword ADMIN is part of the list")
+	if !reflect.DeepEqual(found, true) {
+		t.Fatalf("%v: got %v, want %v", "TiDBKeyword ADMIN is part of the list", true, found)
+	}
 }
 
 func TestKeywordsLength(t *testing.T) {
-	require.Equal(t, 679, len(parser.Keywords))
+	if !reflect.DeepEqual(679, len(parser.Keywords)) {
+		t.Fatalf("got %v, want %v", len(parser.Keywords), 679)
+	}
 
 	reservedNr := 0
 	for _, kw := range parser.Keywords {
@@ -44,7 +53,9 @@ func TestKeywordsLength(t *testing.T) {
 			reservedNr += 1
 		}
 	}
-	require.Equal(t, 233, reservedNr)
+	if !reflect.DeepEqual(233, reservedNr) {
+		t.Fatalf("got %v, want %v", reservedNr, 233)
+	}
 }
 
 func TestKeywordsSorting(t *testing.T) {

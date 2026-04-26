@@ -20,7 +20,8 @@ import (
 	"testing"
 
 	"github.com/sqlc-dev/marino/parser"
-	"github.com/stretchr/testify/require"
+
+	"reflect"
 )
 
 func TestNormalize(t *testing.T) {
@@ -75,11 +76,17 @@ func TestNormalize(t *testing.T) {
 	for _, test := range tests_for_generic_normalization_rules {
 		normalized := parser.Normalize(test.input, "ON")
 		digest := parser.DigestNormalized(normalized)
-		require.Equal(t, test.expect, normalized)
+		if !reflect.DeepEqual(test.expect, normalized) {
+			t.Fatalf("got %v, want %v", normalized, test.expect)
+		}
 
 		normalized2, digest2 := parser.NormalizeDigest(test.input)
-		require.Equal(t, normalized, normalized2)
-		require.Equalf(t, digest.String(), digest2.String(), "%+v", test)
+		if !reflect.DeepEqual(normalized, normalized2) {
+			t.Fatalf("got %v, want %v", normalized2, normalized)
+		}
+		if !reflect.DeepEqual(digest.String(), digest2.String()) {
+			t.Fatalf("%s: got %v, want %v", fmt.Sprintf("%+v", test), digest2.String(), digest.String())
+		}
 	}
 
 	tests_for_binding_specific_rules := []struct {
@@ -97,11 +104,17 @@ func TestNormalize(t *testing.T) {
 	for _, test := range tests_for_binding_specific_rules {
 		normalized := parser.NormalizeForBinding(test.input, false)
 		digest := parser.DigestNormalized(normalized)
-		require.Equal(t, test.expect, normalized)
+		if !reflect.DeepEqual(test.expect, normalized) {
+			t.Fatalf("got %v, want %v", normalized, test.expect)
+		}
 
 		normalized2, digest2 := parser.NormalizeDigestForBinding(test.input)
-		require.Equal(t, normalized, normalized2)
-		require.Equalf(t, digest.String(), digest2.String(), "%+v", test)
+		if !reflect.DeepEqual(normalized, normalized2) {
+			t.Fatalf("got %v, want %v", normalized2, normalized)
+		}
+		if !reflect.DeepEqual(digest.String(), digest2.String()) {
+			t.Fatalf("%s: got %v, want %v", fmt.Sprintf("%+v", test), digest2.String(), digest.String())
+		}
 	}
 }
 
@@ -122,7 +135,9 @@ func TestNormalizeRedact(t *testing.T) {
 
 	for _, c := range cases {
 		normalized := parser.Normalize(c.input, "MARKER")
-		require.Equal(t, c.expect, normalized)
+		if !reflect.DeepEqual(c.expect, normalized) {
+			t.Fatalf("got %v, want %v", normalized, c.expect)
+		}
 	}
 }
 
@@ -169,7 +184,9 @@ func TestNormalizeKeepHint(t *testing.T) {
 	}
 	for _, test := range tests {
 		normalized := parser.NormalizeKeepHint(test.input)
-		require.Equal(t, test.expect, normalized)
+		if !reflect.DeepEqual(test.expect, normalized) {
+			t.Fatalf("got %v, want %v", normalized, test.expect)
+		}
 	}
 }
 
@@ -183,13 +200,21 @@ func TestNormalizeDigest(t *testing.T) {
 	}
 	for _, test := range tests {
 		normalized, digest := parser.NormalizeDigest(test.sql)
-		require.Equal(t, test.normalized, normalized)
-		require.Equal(t, test.digest, digest.String())
+		if !reflect.DeepEqual(test.normalized, normalized) {
+			t.Fatalf("got %v, want %v", normalized, test.normalized)
+		}
+		if !reflect.DeepEqual(test.digest, digest.String()) {
+			t.Fatalf("got %v, want %v", digest.String(), test.digest)
+		}
 
 		normalized = parser.Normalize(test.sql, "ON")
 		digest = parser.DigestNormalized(normalized)
-		require.Equal(t, test.normalized, normalized)
-		require.Equal(t, test.digest, digest.String())
+		if !reflect.DeepEqual(test.normalized, normalized) {
+			t.Fatalf("got %v, want %v", normalized, test.normalized)
+		}
+		if !reflect.DeepEqual(test.digest, digest.String()) {
+			t.Fatalf("got %v, want %v", digest.String(), test.digest)
+		}
 	}
 }
 
@@ -209,7 +234,9 @@ func TestDigestHashEqForSimpleSQL(t *testing.T) {
 				d = dig.String()
 				continue
 			}
-			require.Equal(t, dig.String(), d)
+			if !reflect.DeepEqual(dig.String(), d) {
+				t.Fatalf("got %v, want %v", d, dig.String())
+			}
 		}
 	}
 }
@@ -226,7 +253,9 @@ func TestDigestHashNotEqForSimpleSQL(t *testing.T) {
 				d = dig.String()
 				continue
 			}
-			require.NotEqual(t, dig.String(), d)
+			if reflect.DeepEqual(dig.String(), d) {
+				t.Fatalf("expected values to differ, both are %v", d)
+			}
 		}
 	}
 }
@@ -234,11 +263,19 @@ func TestDigestHashNotEqForSimpleSQL(t *testing.T) {
 func TestGenDigest(t *testing.T) {
 	hash := genRandDigest("abc")
 	digest := parser.NewDigest(hash)
-	require.Equal(t, fmt.Sprintf("%x", hash), digest.String())
-	require.Equal(t, hash, digest.Bytes())
+	if !reflect.DeepEqual(fmt.Sprintf("%x", hash), digest.String()) {
+		t.Fatalf("got %v, want %v", digest.String(), fmt.Sprintf("%x", hash))
+	}
+	if !reflect.DeepEqual(hash, digest.Bytes()) {
+		t.Fatalf("got %v, want %v", digest.Bytes(), hash)
+	}
 	digest = parser.NewDigest(nil)
-	require.Equal(t, "", digest.String())
-	require.Nil(t, digest.Bytes())
+	if !reflect.DeepEqual("", digest.String()) {
+		t.Fatalf("got %v, want %v", digest.String(), "")
+	}
+	if digest.Bytes() != nil {
+		t.Fatalf("expected nil, got %v", digest.Bytes())
+	}
 }
 
 func genRandDigest(str string) []byte {

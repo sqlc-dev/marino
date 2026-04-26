@@ -17,12 +17,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sqlc-dev/marino/parser"
 	. "github.com/sqlc-dev/marino/ast"
 	"github.com/sqlc-dev/marino/format"
 	"github.com/sqlc-dev/marino/mysql"
+	"github.com/sqlc-dev/marino/parser"
 	"github.com/sqlc-dev/marino/test_driver"
-	"github.com/stretchr/testify/require"
+
+	"reflect"
 )
 
 func TestFunctionsVisitorCover(t *testing.T) {
@@ -170,15 +171,21 @@ func TestConvert(t *testing.T) {
 	for _, testCase := range cases {
 		stmt, err := parser.New().ParseOneStmt(testCase.SQL, "", "")
 		if testCase.ErrorMessage != "" {
-			require.EqualError(t, err, testCase.ErrorMessage)
+			if err == nil || err.Error() != testCase.ErrorMessage {
+				t.Fatalf("expected error %q, got %v", testCase.ErrorMessage, err)
+			}
 			continue
 		}
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		st := stmt.(*SelectStmt)
 		expr := st.Fields.Fields[0].Expr.(*FuncCallExpr)
 		charsetArg := expr.Args[1].(*test_driver.ValueExpr)
-		require.Equal(t, testCase.CharsetName, charsetArg.GetString())
+		if !reflect.DeepEqual(testCase.CharsetName, charsetArg.GetString()) {
+			t.Fatalf("got %v, want %v", charsetArg.GetString(), testCase.CharsetName)
+		}
 	}
 }
 
@@ -199,15 +206,21 @@ func TestChar(t *testing.T) {
 	for _, testCase := range cases {
 		stmt, err := parser.New().ParseOneStmt(testCase.SQL, "", "")
 		if testCase.ErrorMessage != "" {
-			require.EqualError(t, err, testCase.ErrorMessage)
+			if err == nil || err.Error() != testCase.ErrorMessage {
+				t.Fatalf("expected error %q, got %v", testCase.ErrorMessage, err)
+			}
 			continue
 		}
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		st := stmt.(*SelectStmt)
 		expr := st.Fields.Fields[0].Expr.(*FuncCallExpr)
 		charsetArg := expr.Args[1].(*test_driver.ValueExpr)
-		require.Equal(t, testCase.CharsetName, charsetArg.GetString())
+		if !reflect.DeepEqual(testCase.CharsetName, charsetArg.GetString()) {
+			t.Fatalf("got %v, want %v", charsetArg.GetString(), testCase.CharsetName)
+		}
 	}
 }
 
@@ -259,8 +272,12 @@ func TestRestoreWithError(t *testing.T) {
 		sql := "select " + c
 		p := parser.New()
 		stmt, err := p.ParseOneStmt(sql, "", "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 		var sb strings.Builder
-		require.Error(t, extractNodeFunc(stmt).Restore(format.NewRestoreCtx(format.DefaultRestoreFlags, &sb)))
+		if extractNodeFunc(stmt).Restore(format.NewRestoreCtx(format.DefaultRestoreFlags, &sb)) == nil {
+			t.Fatal("expected error")
+		}
 	}
 }

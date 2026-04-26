@@ -20,15 +20,19 @@ import (
 	"strings"
 	"testing"
 
-	requires "github.com/stretchr/testify/require"
+	"reflect"
 )
 
 func TestKeywordConsistent(t *testing.T) {
 	parserFilename := "parser.y"
 	parserFile, err := os.Open(parserFilename)
-	requires.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	data, err := gio.ReadAll(parserFile)
-	requires.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	content := string(data)
 
 	reservedKeywordStartMarker := "\t/* The following tokens belong to ReservedKeyword. Notice: make sure these tokens are contained in ReservedKeyword. */"
@@ -43,20 +47,32 @@ func TestKeywordConsistent(t *testing.T) {
 	tidbKeywords := extractKeywords(content, tidbKeywordStartMarker, identTokenEndMarker)
 
 	for k, v := range aliases {
-		requires.NotEqual(t, k, v)
-		requires.Equal(t, tokenMap[v], tokenMap[k])
+		if reflect.DeepEqual(k, v) {
+			t.Fatalf("expected values to differ, both are %v", v)
+		}
+		if !reflect.DeepEqual(tokenMap[v], tokenMap[k]) {
+			t.Fatalf("got %v, want %v", tokenMap[k], tokenMap[v])
+		}
 	}
 	keywordCount := len(reservedKeywords) + len(unreservedKeywords) + len(notKeywordTokens) + len(tidbKeywords)
-	requires.Equal(t, keywordCount-len(windowFuncTokenMap), len(tokenMap)-len(aliases))
+	if !reflect.DeepEqual(keywordCount-len(windowFuncTokenMap), len(tokenMap)-len(aliases)) {
+		t.Fatalf("got %v, want %v", len(tokenMap)-len(aliases), keywordCount-len(windowFuncTokenMap))
+	}
 
 	unreservedCollectionDef := extractKeywordsFromCollectionDef(content, "\nUnReservedKeyword:")
-	requires.Equal(t, unreservedCollectionDef, unreservedKeywords, "UnReservedKeyword")
+	if !reflect.DeepEqual(unreservedCollectionDef, unreservedKeywords) {
+		t.Fatalf("%v: got %v, want %v", "UnReservedKeyword", unreservedKeywords, unreservedCollectionDef)
+	}
 
 	notKeywordTokensCollectionDef := extractKeywordsFromCollectionDef(content, "\nNotKeywordToken:")
-	requires.Equal(t, notKeywordTokensCollectionDef, notKeywordTokens, "NotKeywordToken")
+	if !reflect.DeepEqual(notKeywordTokensCollectionDef, notKeywordTokens) {
+		t.Fatalf("%v: got %v, want %v", "NotKeywordToken", notKeywordTokens, notKeywordTokensCollectionDef)
+	}
 
 	tidbKeywordsCollectionDef := extractKeywordsFromCollectionDef(content, "\nTiDBKeyword:")
-	requires.Equal(t, tidbKeywordsCollectionDef, tidbKeywords, "TiDBKeyword")
+	if !reflect.DeepEqual(tidbKeywordsCollectionDef, tidbKeywords) {
+		t.Fatalf("%v: got %v, want %v", "TiDBKeyword", tidbKeywords, tidbKeywordsCollectionDef)
+	}
 }
 
 func extractMiddle(str, startMarker, endMarker string) string {

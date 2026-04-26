@@ -17,181 +17,301 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/sqlc-dev/marino/parser"
 	"github.com/sqlc-dev/marino/ast"
 	"github.com/sqlc-dev/marino/charset"
 	"github.com/sqlc-dev/marino/mysql"
+	"github.com/sqlc-dev/marino/parser"
+
 	// import parser_driver
 	_ "github.com/sqlc-dev/marino/test_driver"
 	. "github.com/sqlc-dev/marino/types"
-	"github.com/stretchr/testify/require"
+
+	"reflect"
 )
 
 func TestFieldType(t *testing.T) {
 	ft := NewFieldType(mysql.TypeDuration)
-	require.Equal(t, UnspecifiedLength, ft.GetFlen())
-	require.Equal(t, UnspecifiedLength, ft.GetDecimal())
+	if !reflect.DeepEqual(UnspecifiedLength, ft.GetFlen()) {
+		t.Fatalf("got %v, want %v", ft.GetFlen(), UnspecifiedLength)
+	}
+	if !reflect.DeepEqual(UnspecifiedLength, ft.GetDecimal()) {
+		t.Fatalf("got %v, want %v", ft.GetDecimal(), UnspecifiedLength)
+	}
 	ft.SetDecimal(5)
-	require.Equal(t, "time(5)", ft.String())
-	require.False(t, HasCharset(ft))
+	if !reflect.DeepEqual("time(5)", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "time(5)")
+	}
+	if HasCharset(ft) {
+		t.Fatal("expected false")
+	}
 
 	ft = NewFieldType(mysql.TypeLong)
 	ft.SetFlen(5)
 	ft.SetFlag(mysql.UnsignedFlag | mysql.ZerofillFlag)
-	require.Equal(t, "int(5) UNSIGNED ZEROFILL", ft.String())
-	require.Equal(t, "int(5) unsigned", ft.InfoSchemaStr())
-	require.False(t, HasCharset(ft))
+	if !reflect.DeepEqual("int(5) UNSIGNED ZEROFILL", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "int(5) UNSIGNED ZEROFILL")
+	}
+	if !reflect.DeepEqual("int(5) unsigned", ft.InfoSchemaStr()) {
+		t.Fatalf("got %v, want %v", ft.InfoSchemaStr(), "int(5) unsigned")
+	}
+	if HasCharset(ft) {
+		t.Fatal("expected false")
+	}
 
 	ft = NewFieldType(mysql.TypeFloat)
 	ft.SetFlen(12)   // Default
 	ft.SetDecimal(3) // Not Default
-	require.Equal(t, "float(12,3)", ft.String())
+	if !reflect.DeepEqual("float(12,3)", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "float(12,3)")
+	}
 	ft = NewFieldType(mysql.TypeFloat)
 	ft.SetFlen(12)    // Default
 	ft.SetDecimal(-1) // Default
-	require.Equal(t, "float", ft.String())
+	if !reflect.DeepEqual("float", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "float")
+	}
 	ft = NewFieldType(mysql.TypeFloat)
 	ft.SetFlen(5)     // Not Default
 	ft.SetDecimal(-1) // Default
-	require.Equal(t, "float", ft.String())
+	if !reflect.DeepEqual("float", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "float")
+	}
 	ft = NewFieldType(mysql.TypeFloat)
 	ft.SetFlen(7)    // Not Default
 	ft.SetDecimal(3) // Not Default
-	require.Equal(t, "float(7,3)", ft.String())
-	require.False(t, HasCharset(ft))
+	if !reflect.DeepEqual("float(7,3)", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "float(7,3)")
+	}
+	if HasCharset(ft) {
+		t.Fatal("expected false")
+	}
 
 	ft = NewFieldType(mysql.TypeDouble)
 	ft.SetFlen(22)   // Default
 	ft.SetDecimal(3) // Not Default
-	require.Equal(t, "double(22,3)", ft.String())
+	if !reflect.DeepEqual("double(22,3)", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "double(22,3)")
+	}
 	ft = NewFieldType(mysql.TypeDouble)
 	ft.SetFlen(22)    // Default
 	ft.SetDecimal(-1) // Default
-	require.Equal(t, "double", ft.String())
+	if !reflect.DeepEqual("double", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "double")
+	}
 	ft = NewFieldType(mysql.TypeDouble)
 	ft.SetFlen(5)     // Not Default
 	ft.SetDecimal(-1) // Default
-	require.Equal(t, "double", ft.String())
+	if !reflect.DeepEqual("double", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "double")
+	}
 	ft = NewFieldType(mysql.TypeDouble)
 	ft.SetFlen(7)    // Not Default
 	ft.SetDecimal(3) // Not Default
-	require.Equal(t, "double(7,3)", ft.String())
-	require.False(t, HasCharset(ft))
+	if !reflect.DeepEqual("double(7,3)", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "double(7,3)")
+	}
+	if HasCharset(ft) {
+		t.Fatal("expected false")
+	}
 
 	ft = NewFieldType(mysql.TypeBlob)
 	ft.SetFlen(10)
 	ft.SetCharset("UTF8")
 	ft.SetCollate("UTF8_UNICODE_GI")
-	require.Equal(t, "text CHARACTER SET UTF8 COLLATE UTF8_UNICODE_GI", ft.String())
-	require.True(t, HasCharset(ft))
+	if !reflect.DeepEqual("text CHARACTER SET UTF8 COLLATE UTF8_UNICODE_GI", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "text CHARACTER SET UTF8 COLLATE UTF8_UNICODE_GI")
+	}
+	if !(HasCharset(ft)) {
+		t.Fatal("expected true")
+	}
 
 	ft = NewFieldType(mysql.TypeVarchar)
 	ft.SetFlen(10)
 	ft.AddFlag(mysql.BinaryFlag)
-	require.Equal(t, "varchar(10) BINARY", ft.String())
-	require.False(t, HasCharset(ft))
+	if !reflect.DeepEqual("varchar(10) BINARY", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "varchar(10) BINARY")
+	}
+	if HasCharset(ft) {
+		t.Fatal("expected false")
+	}
 
 	ft = NewFieldType(mysql.TypeString)
 	ft.SetCharset(charset.CharsetBin)
 	ft.AddFlag(mysql.BinaryFlag)
-	require.Equal(t, "binary(1)", ft.String())
-	require.False(t, HasCharset(ft))
+	if !reflect.DeepEqual("binary(1)", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "binary(1)")
+	}
+	if HasCharset(ft) {
+		t.Fatal("expected false")
+	}
 
 	ft = NewFieldType(mysql.TypeEnum)
 	ft.SetElems([]string{"a", "b"})
-	require.Equal(t, "enum('a','b')", ft.String())
-	require.True(t, HasCharset(ft))
+	if !reflect.DeepEqual("enum('a','b')", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "enum('a','b')")
+	}
+	if !(HasCharset(ft)) {
+		t.Fatal("expected true")
+	}
 
 	ft = NewFieldType(mysql.TypeEnum)
 	ft.SetElems([]string{"'a'", "'b'"})
-	require.Equal(t, "enum('''a''','''b''')", ft.String())
-	require.True(t, HasCharset(ft))
+	if !reflect.DeepEqual("enum('''a''','''b''')", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "enum('''a''','''b''')")
+	}
+	if !(HasCharset(ft)) {
+		t.Fatal("expected true")
+	}
 
 	ft = NewFieldType(mysql.TypeEnum)
 	ft.SetElems([]string{"a\nb", "a\tb", "a\rb"})
-	require.Equal(t, "enum('a\\nb','a\tb','a\\rb')", ft.String())
-	require.True(t, HasCharset(ft))
+	if !reflect.DeepEqual("enum('a\\nb','a\tb','a\\rb')", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "enum('a\\nb','a\tb','a\\rb')")
+	}
+	if !(HasCharset(ft)) {
+		t.Fatal("expected true")
+	}
 
 	ft = NewFieldType(mysql.TypeEnum)
 	ft.SetElems([]string{"a\nb", "a'\t\r\nb", "a\rb"})
-	require.Equal(t, "enum('a\\nb','a''	\\r\\nb','a\\rb')", ft.String())
-	require.True(t, HasCharset(ft))
+	if !reflect.DeepEqual("enum('a\\nb','a''	\\r\\nb','a\\rb')", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "enum('a\\nb','a''	\\r\\nb','a\\rb')")
+	}
+	if !(HasCharset(ft)) {
+		t.Fatal("expected true")
+	}
 
 	ft = NewFieldType(mysql.TypeSet)
 	ft.SetElems([]string{"a", "b"})
-	require.Equal(t, "set('a','b')", ft.String())
-	require.True(t, HasCharset(ft))
+	if !reflect.DeepEqual("set('a','b')", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "set('a','b')")
+	}
+	if !(HasCharset(ft)) {
+		t.Fatal("expected true")
+	}
 
 	ft = NewFieldType(mysql.TypeSet)
 	ft.SetElems([]string{"'a'", "'b'"})
-	require.Equal(t, "set('''a''','''b''')", ft.String())
-	require.True(t, HasCharset(ft))
+	if !reflect.DeepEqual("set('''a''','''b''')", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "set('''a''','''b''')")
+	}
+	if !(HasCharset(ft)) {
+		t.Fatal("expected true")
+	}
 
 	ft = NewFieldType(mysql.TypeSet)
 	ft.SetElems([]string{"a\nb", "a'\t\r\nb", "a\rb"})
-	require.Equal(t, "set('a\\nb','a''	\\r\\nb','a\\rb')", ft.String())
-	require.True(t, HasCharset(ft))
+	if !reflect.DeepEqual("set('a\\nb','a''	\\r\\nb','a\\rb')", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "set('a\\nb','a''	\\r\\nb','a\\rb')")
+	}
+	if !(HasCharset(ft)) {
+		t.Fatal("expected true")
+	}
 
 	ft = NewFieldType(mysql.TypeSet)
 	ft.SetElems([]string{"a'\nb", "a'b\tc"})
-	require.Equal(t, "set('a''\\nb','a''b	c')", ft.String())
-	require.True(t, HasCharset(ft))
+	if !reflect.DeepEqual("set('a''\\nb','a''b	c')", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "set('a''\\nb','a''b	c')")
+	}
+	if !(HasCharset(ft)) {
+		t.Fatal("expected true")
+	}
 
 	ft = NewFieldType(mysql.TypeTimestamp)
 	ft.SetFlen(8)
 	ft.SetDecimal(2)
-	require.Equal(t, "timestamp(2)", ft.String())
-	require.False(t, HasCharset(ft))
+	if !reflect.DeepEqual("timestamp(2)", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "timestamp(2)")
+	}
+	if HasCharset(ft) {
+		t.Fatal("expected false")
+	}
 	ft = NewFieldType(mysql.TypeTimestamp)
 	ft.SetFlen(8)
 	ft.SetDecimal(0)
-	require.Equal(t, "timestamp", ft.String())
-	require.False(t, HasCharset(ft))
+	if !reflect.DeepEqual("timestamp", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "timestamp")
+	}
+	if HasCharset(ft) {
+		t.Fatal("expected false")
+	}
 
 	ft = NewFieldType(mysql.TypeDatetime)
 	ft.SetFlen(8)
 	ft.SetDecimal(2)
-	require.Equal(t, "datetime(2)", ft.String())
-	require.False(t, HasCharset(ft))
+	if !reflect.DeepEqual("datetime(2)", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "datetime(2)")
+	}
+	if HasCharset(ft) {
+		t.Fatal("expected false")
+	}
 	ft = NewFieldType(mysql.TypeDatetime)
 	ft.SetFlen(8)
 	ft.SetDecimal(0)
-	require.Equal(t, "datetime", ft.String())
-	require.False(t, HasCharset(ft))
+	if !reflect.DeepEqual("datetime", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "datetime")
+	}
+	if HasCharset(ft) {
+		t.Fatal("expected false")
+	}
 
 	ft = NewFieldType(mysql.TypeDate)
 	ft.SetFlen(8)
 	ft.SetDecimal(2)
-	require.Equal(t, "date", ft.String())
-	require.False(t, HasCharset(ft))
+	if !reflect.DeepEqual("date", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "date")
+	}
+	if HasCharset(ft) {
+		t.Fatal("expected false")
+	}
 	ft = NewFieldType(mysql.TypeDate)
 	ft.SetFlen(8)
 	ft.SetDecimal(0)
-	require.Equal(t, "date", ft.String())
-	require.False(t, HasCharset(ft))
+	if !reflect.DeepEqual("date", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "date")
+	}
+	if HasCharset(ft) {
+		t.Fatal("expected false")
+	}
 
 	ft = NewFieldType(mysql.TypeYear)
 	ft.SetFlen(4)
 	ft.SetDecimal(0)
-	require.Equal(t, "year(4)", ft.String())
-	require.False(t, HasCharset(ft))
+	if !reflect.DeepEqual("year(4)", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "year(4)")
+	}
+	if HasCharset(ft) {
+		t.Fatal("expected false")
+	}
 	ft = NewFieldType(mysql.TypeYear)
 	ft.SetFlen(2)
 	ft.SetDecimal(2)
-	require.Equal(t, "year(2)", ft.String())
-	require.False(t, HasCharset(ft))
+	if !reflect.DeepEqual("year(2)", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "year(2)")
+	}
+	if HasCharset(ft) {
+		t.Fatal("expected false")
+	}
 
 	ft = NewFieldType(mysql.TypeVarchar)
 	ft.SetFlen(0)
 	ft.SetDecimal(0)
-	require.Equal(t, "varchar(0)", ft.String())
-	require.True(t, HasCharset(ft))
+	if !reflect.DeepEqual("varchar(0)", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "varchar(0)")
+	}
+	if !(HasCharset(ft)) {
+		t.Fatal("expected true")
+	}
 
 	ft = NewFieldType(mysql.TypeString)
 	ft.SetFlen(0)
 	ft.SetDecimal(0)
-	require.Equal(t, "char(0)", ft.String())
-	require.True(t, HasCharset(ft))
+	if !reflect.DeepEqual("char(0)", ft.String()) {
+		t.Fatalf("got %v, want %v", ft.String(), "char(0)")
+	}
+	if !(HasCharset(ft)) {
+		t.Fatal("expected true")
+	}
 }
 
 func TestHasCharsetFromStmt(t *testing.T) {
@@ -235,10 +355,14 @@ func TestHasCharsetFromStmt(t *testing.T) {
 	for _, typ := range types {
 		sql := fmt.Sprintf(template, typ.strType)
 		stmt, err := p.ParseOneStmt(sql, "", "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		col := stmt.(*ast.CreateTableStmt).Cols[0]
-		require.Equal(t, typ.hasCharset, HasCharset(col.Tp))
+		if !reflect.DeepEqual(typ.hasCharset, HasCharset(col.Tp)) {
+			t.Fatalf("got %v, want %v", HasCharset(col.Tp), typ.hasCharset)
+		}
 	}
 }
 
@@ -267,9 +391,13 @@ func TestEnumSetFlen(t *testing.T) {
 
 	for _, ca := range cases {
 		stmt, err := p.ParseOneStmt(fmt.Sprintf("create table t (e %v)", ca.sql), "", "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 		col := stmt.(*ast.CreateTableStmt).Cols[0]
-		require.Equal(t, ca.ex, col.Tp.GetFlen())
+		if !reflect.DeepEqual(ca.ex, col.Tp.GetFlen()) {
+			t.Fatalf("got %v, want %v", col.Tp.GetFlen(), ca.ex)
+		}
 	}
 }
 
@@ -277,27 +405,37 @@ func TestFieldTypeEqual(t *testing.T) {
 	// tp not equal
 	ft1 := NewFieldType(mysql.TypeDouble)
 	ft2 := NewFieldType(mysql.TypeFloat)
-	require.Equal(t, false, ft1.Equal(ft2))
+	if !reflect.DeepEqual(false, ft1.Equal(ft2)) {
+		t.Fatalf("got %v, want %v", ft1.Equal(ft2), false)
+	}
 
 	// decimal not equal
 	ft2 = NewFieldType(mysql.TypeDouble)
 	ft2.SetDecimal(5)
-	require.Equal(t, false, ft1.Equal(ft2))
+	if !reflect.DeepEqual(false, ft1.Equal(ft2)) {
+		t.Fatalf("got %v, want %v", ft1.Equal(ft2), false)
+	}
 
 	// flen not equal and decimal not -1
 	ft1.SetDecimal(5)
 	ft1.SetFlen(22)
-	require.Equal(t, false, ft1.Equal(ft2))
+	if !reflect.DeepEqual(false, ft1.Equal(ft2)) {
+		t.Fatalf("got %v, want %v", ft1.Equal(ft2), false)
+	}
 
 	// flen equal
 	ft2.SetFlen(22)
-	require.Equal(t, true, ft1.Equal(ft2))
+	if !reflect.DeepEqual(true, ft1.Equal(ft2)) {
+		t.Fatalf("got %v, want %v", ft1.Equal(ft2), true)
+	}
 
 	// decimal is -1
 	ft1.SetDecimal(-1)
 	ft2.SetDecimal(-1)
 	ft1.SetFlen(23)
-	require.Equal(t, true, ft1.Equal(ft2))
+	if !reflect.DeepEqual(true, ft1.Equal(ft2)) {
+		t.Fatalf("got %v, want %v", ft1.Equal(ft2), true)
+	}
 }
 
 func TestCompactStr(t *testing.T) {
@@ -323,9 +461,13 @@ func TestCompactStr(t *testing.T) {
 		ft.SetFlag(cc.flags)
 
 		TiDBStrictIntegerDisplayWidth = false
-		require.Equal(t, cc.e1, ft.CompactStr())
+		if !reflect.DeepEqual(cc.e1, ft.CompactStr()) {
+			t.Fatalf("got %v, want %v", ft.CompactStr(), cc.e1)
+		}
 
 		TiDBStrictIntegerDisplayWidth = true
-		require.Equal(t, cc.e2, ft.CompactStr())
+		if !reflect.DeepEqual(cc.e2, ft.CompactStr()) {
+			t.Fatalf("got %v, want %v", ft.CompactStr(), cc.e2)
+		}
 	}
 }
