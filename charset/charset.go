@@ -14,14 +14,14 @@
 package charset
 
 import (
+	"log/slog"
+	"runtime/debug"
 	"slices"
 	"strings"
 
 	"github.com/pingcap/errors"
-	"github.com/pingcap/log"
 	"github.com/sqlc-dev/marino/mysql"
 	"github.com/sqlc-dev/marino/terror"
-	"go.uber.org/zap"
 )
 
 var (
@@ -185,10 +185,10 @@ func GetCharsetInfoByID(coID int) (charsetStr string, collateStr string, err err
 		return collation.CharsetName, collation.Name, nil
 	}
 
-	log.Warn(
+	slog.Warn(
 		"unable to get collation name from collation ID, return default charset and collation instead",
-		zap.Int("ID", coID),
-		zap.Stack("stack"))
+		slog.Int("ID", coID),
+		slog.String("stack", string(debug.Stack())))
 	return mysql.DefaultCharset, mysql.DefaultCollationName, errors.Errorf("Unknown collation id %d", coID)
 }
 
