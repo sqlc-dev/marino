@@ -18,7 +18,8 @@ import (
 
 	. "github.com/sqlc-dev/marino/ast"
 	"github.com/sqlc-dev/marino/format"
-	"github.com/stretchr/testify/require"
+
+	"reflect"
 )
 
 func TestDDLVisitorCover(t *testing.T) {
@@ -59,8 +60,12 @@ func TestDDLVisitorCover(t *testing.T) {
 	for _, v := range stmts {
 		ce.reset()
 		v.node.Accept(checkVisitor{})
-		require.Equal(t, v.expectedEnterCnt, ce.enterCnt)
-		require.Equal(t, v.expectedLeaveCnt, ce.leaveCnt)
+		if !reflect.DeepEqual(v.expectedEnterCnt, ce.enterCnt) {
+			t.Fatalf("got %v, want %v", ce.enterCnt, v.expectedEnterCnt)
+		}
+		if !reflect.DeepEqual(v.expectedLeaveCnt, ce.leaveCnt) {
+			t.Fatalf("got %v, want %v", ce.leaveCnt, v.expectedLeaveCnt)
+		}
 		v.node.Accept(visitor1{})
 	}
 }

@@ -17,10 +17,12 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/sqlc-dev/marino/parser"
 	"github.com/sqlc-dev/marino/ast"
 	"github.com/sqlc-dev/marino/mysql"
-	"github.com/stretchr/testify/require"
+	"github.com/sqlc-dev/marino/parser"
+
+	"reflect"
+	"regexp"
 )
 
 type visitor struct{}
@@ -106,7 +108,9 @@ constraint foreign key (jobabbr) references ffxi_jobtype (jobabbr) on delete cas
 `
 	parse := parser.New()
 	stmts, _, err := parse.Parse(sql, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, stmt := range stmts {
 		stmt.Accept(visitor{})
 		stmt.Accept(visitor1{})
@@ -126,7 +130,9 @@ import into t from '/file.csv'`
 
 	p := parser.New()
 	stmts, _, err := p.Parse(sql, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, stmt := range stmts {
 		stmt.Accept(visitor{})
 		stmt.Accept(visitor1{})
@@ -142,7 +148,9 @@ func TestSensitiveStatement(t *testing.T) {
 	}
 	for i, stmt := range positive {
 		_, ok := stmt.(ast.SensitiveStmtNode)
-		require.Truef(t, ok, "%d, %#v fail", i, stmt)
+		if !(ok) {
+			t.Fatalf("%d, %#v fail", i, stmt)
+		}
 	}
 
 	negative := []ast.StmtNode{
@@ -160,7 +168,9 @@ func TestSensitiveStatement(t *testing.T) {
 	}
 	for _, stmt := range negative {
 		_, ok := stmt.(ast.SensitiveStmtNode)
-		require.False(t, ok)
+		if ok {
+			t.Fatal("expected false")
+		}
 	}
 }
 
@@ -312,10 +322,16 @@ func TestBRIESecureText(t *testing.T) {
 	for _, tc := range testCases {
 		comment := fmt.Sprintf("input = %s", tc.input)
 		node, err := p.ParseOneStmt(tc.input, "", "")
-		require.NoError(t, err, comment)
+		if err != nil {
+			t.Fatalf("%v: %v", comment, err)
+		}
 		n, ok := node.(ast.SensitiveStmtNode)
-		require.True(t, ok, comment)
-		require.Regexp(t, tc.secured, n.SecureText(), comment)
+		if !(ok) {
+			t.Fatal(comment)
+		}
+		if !regexp.MustCompile(tc.secured).MatchString(n.SecureText()) {
+			t.Fatalf("%v: expected %q to match %q", comment, n.SecureText(), tc.secured)
+		}
 	}
 }
 
@@ -440,9 +456,15 @@ func TestRedactTrafficStmt(t *testing.T) {
 	p := parser.New()
 	for _, tc := range testCases {
 		node, err := p.ParseOneStmt(tc.input, "", "")
-		require.NoError(t, err, tc.input)
+		if err != nil {
+			t.Fatalf("%v: %v", tc.input, err)
+		}
 		n, ok := node.(ast.SensitiveStmtNode)
-		require.True(t, ok, tc.input)
-		require.Equal(t, tc.secured, n.SecureText(), tc.input)
+		if !(ok) {
+			t.Fatal(tc.input)
+		}
+		if !reflect.DeepEqual(tc.secured, n.SecureText()) {
+			t.Fatalf("%v: got %v, want %v", tc.input, n.SecureText(), tc.secured)
+		}
 	}
 }

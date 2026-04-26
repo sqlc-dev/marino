@@ -16,10 +16,13 @@ package parser_test
 import (
 	"testing"
 
-	"github.com/sqlc-dev/marino/parser"
 	"github.com/sqlc-dev/marino/ast"
 	"github.com/sqlc-dev/marino/mysql"
-	"github.com/stretchr/testify/require"
+	"github.com/sqlc-dev/marino/parser"
+
+	"fmt"
+	"reflect"
+	"strings"
 )
 
 func TestParseHint(t *testing.T) {
@@ -475,11 +478,19 @@ func TestParseHint(t *testing.T) {
 
 	for _, tc := range testCases {
 		output, errs := parser.ParseHint("/*+"+tc.input+"*/", tc.mode, parser.Pos{Line: 1})
-		require.Lenf(t, errs, len(tc.errs), "input = %s,\n... errs = %q", tc.input, errs)
-		for i, err := range errs {
-			require.Errorf(t, err, "input = %s, i = %d", tc.input, i)
-			require.Containsf(t, err.Error(), tc.errs[i], "input = %s, i = %d", tc.input, i)
+		if got := len(errs); got != len(tc.errs) {
+			t.Fatalf("%s: expected length %d, got %d", fmt.Sprintf("input = %s,\n... errs = %q", tc.input, errs), len(tc.errs), got)
 		}
-		require.Equalf(t, tc.output, output, "input = %s,\n... output = %q", tc.input, output)
+		for i, err := range errs {
+			if err == nil {
+				t.Fatalf("input = %s, i = %d", tc.input, i)
+			}
+			if !strings.Contains(err.Error(), tc.errs[i]) {
+				t.Fatalf("%s: expected %q to contain %q", fmt.Sprintf("input = %s, i = %d", tc.input, i), err.Error(), tc.errs[i])
+			}
+		}
+		if !reflect.DeepEqual(tc.output, output) {
+			t.Fatalf("input = %s,\n... got %v, want %v", tc.input, output, tc.output)
+		}
 	}
 }

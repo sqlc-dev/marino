@@ -33,15 +33,21 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/sqlc-dev/marino/ast"
-	requires "github.com/stretchr/testify/require"
+
+	"fmt"
+	"regexp"
 )
 
 func TestCompareReservedWordsWithMySQL(t *testing.T) {
 	parserFilename := "parser.y"
 	parserFile, err := os.Open(parserFilename)
-	requires.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	data, err := gio.ReadAll(parserFile)
-	requires.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	content := string(data)
 
 	reservedKeywordStartMarker := "\t/* The following tokens belong to ReservedKeyword. Notice: make sure these tokens are contained in ReservedKeyword. */"
@@ -57,9 +63,13 @@ func TestCompareReservedWordsWithMySQL(t *testing.T) {
 
 	p := New()
 	db, err := dbsql.Open("mysql", "root@tcp(127.0.0.1:3306)/")
-	requires.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer func() {
-		requires.NoError(t, db.Close())
+		if db.Close() != nil {
+			t.Fatal(db.Close())
+		}
 	}()
 
 	for _, kw := range reservedKeywords {
@@ -84,12 +94,20 @@ func TestCompareReservedWordsWithMySQL(t *testing.T) {
 		if _, ok := windowFuncTokenMap[kw]; !ok {
 			// for some reason the query does parse even then the keyword is reserved in TiDB.
 			_, _, err = p.Parse(query, "", "")
-			requires.Error(t, err)
-			requires.Regexp(t, errRegexp, err.Error())
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if !regexp.MustCompile(errRegexp).MatchString(err.Error()) {
+				t.Fatalf("expected %q to match %q", err.Error(), errRegexp)
+			}
 		}
 		_, err = db.Exec(query)
-		requires.Error(t, err, query)
-		requires.Regexp(t, errRegexp, err.Error(), "MySQL suggests that '%s' should *not* be reserved!", kw)
+		if err == nil {
+			t.Fatal(query)
+		}
+		if !regexp.MustCompile(errRegexp).MatchString(err.Error()) {
+			t.Fatalf("%s: expected %q to match %q", fmt.Sprintf("MySQL suggests that '%s' should *not* be reserved!", kw), err.Error(), errRegexp)
+		}
 	}
 
 	for _, kws := range [][]string{unreservedKeywords, notKeywordTokens, tidbKeywords} {
@@ -106,12 +124,20 @@ func TestCompareReservedWordsWithMySQL(t *testing.T) {
 			query := "do (select 1 as " + kw + ")"
 
 			stmts, _, err := p.Parse(query, "", "")
-			requires.NoError(t, err)
-			requires.Len(t, stmts, 1)
-			requires.IsType(t, &ast.DoStmt{}, stmts[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := len(stmts); got != 1 {
+				t.Fatalf("expected length %d, got %d", 1, got)
+			}
+			if _, ok := stmts[0].(*ast.DoStmt); !ok {
+				t.Fatalf("expected type %T, got %T", &ast.DoStmt{}, stmts[0])
+			}
 
 			_, err = db.Exec(query)
-			requires.NoErrorf(t, err, "MySQL suggests that '%s' should be reserved!", kw)
+			if err != nil {
+				t.Fatalf("%s: %v", fmt.Sprintf("MySQL suggests that '%s' should be reserved!", kw), err)
+			}
 		}
 	}
 }

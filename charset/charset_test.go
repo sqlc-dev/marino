@@ -17,12 +17,14 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"reflect"
 )
 
 func testValidCharset(t *testing.T, charset string, collation string, expect bool) {
 	b := ValidCharsetAndCollation(charset, collation)
-	require.Equal(t, expect, b)
+	if !reflect.DeepEqual(expect, b) {
+		t.Fatalf("got %v, want %v", b, expect)
+	}
 }
 
 func TestValidCharset(t *testing.T) {
@@ -57,10 +59,14 @@ func TestValidCharset(t *testing.T) {
 func testGetDefaultCollation(t *testing.T, charset string, expectCollation string, succ bool) {
 	b, err := GetDefaultCollation(charset)
 	if !succ {
-		require.Error(t, err)
+		if err == nil {
+			t.Fatal("expected error")
+		}
 		return
 	}
-	require.Equal(t, expectCollation, b)
+	if !reflect.DeepEqual(expectCollation, b) {
+		t.Fatalf("got %v, want %v", b, expectCollation)
+	}
 }
 
 func TestGetDefaultCollation(t *testing.T) {
@@ -87,12 +93,16 @@ func TestGetDefaultCollation(t *testing.T) {
 	for _, collate := range collations {
 		if collate.IsDefault {
 			if desc, ok := CharacterSetInfos[collate.CharsetName]; ok {
-				require.Equal(t, desc.DefaultCollation, collate.Name)
+				if !reflect.DeepEqual(desc.DefaultCollation, collate.Name) {
+					t.Fatalf("got %v, want %v", collate.Name, desc.DefaultCollation)
+				}
 				charsetNum++
 			}
 		}
 	}
-	require.Equal(t, len(CharacterSetInfos), charsetNum)
+	if !reflect.DeepEqual(len(CharacterSetInfos), charsetNum) {
+		t.Fatalf("got %v, want %v", charsetNum, len(CharacterSetInfos))
+	}
 }
 
 func TestGetCharsetDesc(t *testing.T) {
@@ -113,9 +123,13 @@ func TestGetCharsetDesc(t *testing.T) {
 	for _, tt := range tests {
 		desc, err := GetCharsetInfo(tt.cs)
 		if !tt.succ {
-			require.Error(t, err)
+			if err == nil {
+				t.Fatal("expected error")
+			}
 		} else {
-			require.Equal(t, tt.result, desc.Name)
+			if !reflect.DeepEqual(tt.result, desc.Name) {
+				t.Fatalf("got %v, want %v", desc.Name, tt.result)
+			}
 		}
 	}
 }
@@ -123,12 +137,18 @@ func TestGetCharsetDesc(t *testing.T) {
 func TestGetCollationByName(t *testing.T) {
 	for _, collation := range collations {
 		coll, err := GetCollationByName(collation.Name)
-		require.NoError(t, err)
-		require.Equal(t, collation, coll)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(collation, coll) {
+			t.Fatalf("got %v, want %v", coll, collation)
+		}
 	}
 
 	_, err := GetCollationByName("non_exist")
-	require.EqualError(t, err, "[ddl:1273]Unknown collation: 'non_exist'")
+	if err == nil || err.Error() != "[ddl:1273]Unknown collation: 'non_exist'" {
+		t.Fatalf("expected error %q, got %v", "[ddl:1273]Unknown collation: 'non_exist'", err)
+	}
 }
 
 func TestValidCustomCharset(t *testing.T) {
@@ -153,12 +173,20 @@ func TestValidCustomCharset(t *testing.T) {
 
 func TestUTF8MB3(t *testing.T) {
 	colname, err := GetDefaultCollationLegacy("utf8mb3")
-	require.NoError(t, err)
-	require.Equal(t, colname, "utf8_bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(colname, "utf8_bin") {
+		t.Fatalf("got %v, want %v", "utf8_bin", colname)
+	}
 
 	csinfo, err := GetCharsetInfo("utf8mb3")
-	require.NoError(t, err)
-	require.Equal(t, csinfo.Name, "utf8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(csinfo.Name, "utf8") {
+		t.Fatalf("got %v, want %v", "utf8", csinfo.Name)
+	}
 
 	tests := []struct {
 		cs    string
@@ -170,8 +198,12 @@ func TestUTF8MB3(t *testing.T) {
 	}
 	for _, tt := range tests {
 		col, err := GetCollationByName(tt.cs)
-		require.NoError(t, err)
-		require.Equal(t, col.Name, tt.alias)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(col.Name, tt.alias) {
+			t.Fatalf("got %v, want %v", tt.alias, col.Name)
+		}
 	}
 }
 

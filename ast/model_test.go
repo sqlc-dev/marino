@@ -17,14 +17,20 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"reflect"
 )
 
 func TestT(t *testing.T) {
 	abc := NewCIStr("aBC")
-	require.Equal(t, "aBC", abc.O)
-	require.Equal(t, "abc", abc.L)
-	require.Equal(t, "aBC", abc.String())
+	if !reflect.DeepEqual("aBC", abc.O) {
+		t.Fatalf("got %v, want %v", abc.O, "aBC")
+	}
+	if !reflect.DeepEqual("abc", abc.L) {
+		t.Fatalf("got %v, want %v", abc.L, "abc")
+	}
+	if !reflect.DeepEqual("aBC", abc.String()) {
+		t.Fatalf("got %v, want %v", abc.String(), "aBC")
+	}
 }
 
 func TestUnmarshalCIStr(t *testing.T) {
@@ -33,15 +39,33 @@ func TestUnmarshalCIStr(t *testing.T) {
 	// Test unmarshal CIStr from a single string.
 	str := "aaBB"
 	buf, err := json.Marshal(str)
-	require.NoError(t, err)
-	require.NoError(t, ci.UnmarshalJSON(buf))
-	require.Equal(t, str, ci.O)
-	require.Equal(t, "aabb", ci.L)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ci.UnmarshalJSON(buf) != nil {
+		t.Fatal(ci.UnmarshalJSON(buf))
+	}
+	if !reflect.DeepEqual(str, ci.O) {
+		t.Fatalf("got %v, want %v", ci.O, str)
+	}
+	if !reflect.DeepEqual("aabb", ci.L) {
+		t.Fatalf("got %v, want %v", ci.L, "aabb")
+	}
 
 	buf, err = json.Marshal(ci)
-	require.NoError(t, err)
-	require.Equal(t, `{"O":"aaBB","L":"aabb"}`, string(buf))
-	require.NoError(t, ci.UnmarshalJSON(buf))
-	require.Equal(t, str, ci.O)
-	require.Equal(t, "aabb", ci.L)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(`{"O":"aaBB","L":"aabb"}`, string(buf)) {
+		t.Fatalf("got %v, want %v", string(buf), `{"O":"aaBB","L":"aabb"}`)
+	}
+	if ci.UnmarshalJSON(buf) != nil {
+		t.Fatal(ci.UnmarshalJSON(buf))
+	}
+	if !reflect.DeepEqual(str, ci.O) {
+		t.Fatalf("got %v, want %v", ci.O, str)
+	}
+	if !reflect.DeepEqual("aabb", ci.L) {
+		t.Fatalf("got %v, want %v", ci.L, "aabb")
+	}
 }

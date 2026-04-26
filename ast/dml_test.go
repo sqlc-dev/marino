@@ -17,10 +17,13 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/sqlc-dev/marino/parser"
 	. "github.com/sqlc-dev/marino/ast"
 	"github.com/sqlc-dev/marino/format"
-	"github.com/stretchr/testify/require"
+	"github.com/sqlc-dev/marino/parser"
+
+	"reflect"
+	"regexp"
+	"strings"
 )
 
 func TestDMLVisitorCover(t *testing.T) {
@@ -68,8 +71,12 @@ func TestDMLVisitorCover(t *testing.T) {
 	for _, v := range stmts {
 		ce.reset()
 		v.node.Accept(checkVisitor{})
-		require.Equal(t, v.expectedEnterCnt, ce.enterCnt)
-		require.Equal(t, v.expectedLeaveCnt, ce.leaveCnt)
+		if !reflect.DeepEqual(v.expectedEnterCnt, ce.enterCnt) {
+			t.Fatalf("got %v, want %v", ce.enterCnt, v.expectedEnterCnt)
+		}
+		if !reflect.DeepEqual(v.expectedLeaveCnt, ce.leaveCnt) {
+			t.Fatalf("got %v, want %v", ce.leaveCnt, v.expectedLeaveCnt)
+		}
 		v.node.Accept(visitor1{})
 	}
 }
@@ -630,9 +637,15 @@ func TestImportIntoRestore(t *testing.T) {
 }
 
 func TestFulltextSearchModifier(t *testing.T) {
-	require.False(t, FulltextSearchModifier(FulltextSearchModifierNaturalLanguageMode).IsBooleanMode())
-	require.True(t, FulltextSearchModifier(FulltextSearchModifierNaturalLanguageMode).IsNaturalLanguageMode())
-	require.False(t, FulltextSearchModifier(FulltextSearchModifierNaturalLanguageMode).WithQueryExpansion())
+	if FulltextSearchModifier(FulltextSearchModifierNaturalLanguageMode).IsBooleanMode() {
+		t.Fatal("expected false")
+	}
+	if !(FulltextSearchModifier(FulltextSearchModifierNaturalLanguageMode).IsNaturalLanguageMode()) {
+		t.Fatal("expected true")
+	}
+	if FulltextSearchModifier(FulltextSearchModifierNaturalLanguageMode).WithQueryExpansion() {
+		t.Fatal("expected false")
+	}
 }
 
 func TestImportIntoSecureText(t *testing.T) {
@@ -658,19 +671,31 @@ func TestImportIntoSecureText(t *testing.T) {
 	for _, tc := range testCases {
 		comment := fmt.Sprintf("input = %s", tc.input)
 		node, err := p.ParseOneStmt(tc.input, "", "")
-		require.NoError(t, err, comment)
+		if err != nil {
+			t.Fatalf("%v: %v", comment, err)
+		}
 		n, ok := node.(SensitiveStmtNode)
-		require.True(t, ok, comment)
-		require.Regexp(t, tc.secured, n.SecureText(), comment)
+		if !(ok) {
+			t.Fatal(comment)
+		}
+		if !regexp.MustCompile(tc.secured).MatchString(n.SecureText()) {
+			t.Fatalf("%v: expected %q to match %q", comment, n.SecureText(), tc.secured)
+		}
 	}
 }
 
 func TestImportIntoFromSelectInvalidStmt(t *testing.T) {
 	p := parser.New()
 	_, err := p.ParseOneStmt("IMPORT INTO t1(a, @1) FROM select * from t2;", "", "")
-	require.ErrorContains(t, err, "Cannot use user variable(1) in IMPORT INTO FROM SELECT statement")
+	if err == nil || !strings.Contains(err.Error(), "Cannot use user variable(1) in IMPORT INTO FROM SELECT statement") {
+		t.Fatalf("expected error containing %q, got %v", "Cannot use user variable(1) in IMPORT INTO FROM SELECT statement", err)
+	}
 	_, err = p.ParseOneStmt("IMPORT INTO t1(a, @b) FROM select * from t2;", "", "")
-	require.ErrorContains(t, err, "Cannot use user variable(b) in IMPORT INTO FROM SELECT statement")
+	if err == nil || !strings.Contains(err.Error(), "Cannot use user variable(b) in IMPORT INTO FROM SELECT statement") {
+		t.Fatalf("expected error containing %q, got %v", "Cannot use user variable(b) in IMPORT INTO FROM SELECT statement", err)
+	}
 	_, err = p.ParseOneStmt("IMPORT INTO t1(a) set a=1 FROM select a from t2;", "", "")
-	require.ErrorContains(t, err, "Cannot use SET clause in IMPORT INTO FROM SELECT statement.")
+	if err == nil || !strings.Contains(err.Error(), "Cannot use SET clause in IMPORT INTO FROM SELECT statement.") {
+		t.Fatalf("expected error containing %q, got %v", "Cannot use SET clause in IMPORT INTO FROM SELECT statement.", err)
+	}
 }

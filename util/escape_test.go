@@ -14,9 +14,10 @@
 package util
 
 import (
+	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"reflect"
 )
 
 func TestUnescapeChar(t *testing.T) {
@@ -49,6 +50,8 @@ func TestUnescapeChar(t *testing.T) {
 	}
 	for _, tt := range tests {
 		got := UnescapeChar(tt.input)
-		require.Equal(t, tt.want, got, "UnescapeChar(%q)", tt.input)
+		if !reflect.DeepEqual(tt.want, got) {
+			t.Fatalf("%s: got %v, want %v", fmt.Sprintf("UnescapeChar(%q)", tt.input), got, tt.want)
+		}
 	}
 }

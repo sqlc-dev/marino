@@ -15,20 +15,26 @@ package mysql
 
 import (
 	"testing"
-
-	"github.com/stretchr/testify/require"
 )
 
 func TestSQLError(t *testing.T) {
 	e := NewErrf(ErrNoDB, "no db error", nil)
-	require.Greater(t, len(e.Error()), 0)
+	if !(len(e.Error()) > 0) {
+		t.Fatalf("expected %v > %v", len(e.Error()), 0)
+	}
 
 	e = NewErrf(0, "customized error", nil)
-	require.Greater(t, len(e.Error()), 0)
+	if !(len(e.Error()) > 0) {
+		t.Fatalf("expected %v > %v", len(e.Error()), 0)
+	}
 
 	e = NewErr(ErrNoDB)
-	require.Greater(t, len(e.Error()), 0)
+	if !(len(e.Error()) > 0) {
+		t.Fatalf("expected %v > %v", len(e.Error()), 0)
+	}
 
 	e = NewErr(0, "customized error", nil)
-	require.Greater(t, len(e.Error()), 0)
+	if !(len(e.Error()) > 0) {
+		t.Fatalf("expected %v > %v", len(e.Error()), 0)
+	}
 }

@@ -15,21 +15,43 @@ package mysql
 
 import (
 	"testing"
-
-	"github.com/stretchr/testify/require"
 )
 
 func TestFlags(t *testing.T) {
-	require.True(t, HasNotNullFlag(NotNullFlag))
-	require.True(t, HasUniKeyFlag(UniqueKeyFlag))
-	require.True(t, HasNotNullFlag(NotNullFlag))
-	require.True(t, HasNoDefaultValueFlag(NoDefaultValueFlag))
-	require.True(t, HasAutoIncrementFlag(AutoIncrementFlag))
-	require.True(t, HasUnsignedFlag(UnsignedFlag))
-	require.True(t, HasZerofillFlag(ZerofillFlag))
-	require.True(t, HasBinaryFlag(BinaryFlag))
-	require.True(t, HasPriKeyFlag(PriKeyFlag))
-	require.True(t, HasMultipleKeyFlag(MultipleKeyFlag))
-	require.True(t, HasTimestampFlag(TimestampFlag))
-	require.True(t, HasOnUpdateNowFlag(OnUpdateNowFlag))
+	if !(HasNotNullFlag(NotNullFlag)) {
+		t.Fatal("expected true")
+	}
+	if !(HasUniKeyFlag(UniqueKeyFlag)) {
+		t.Fatal("expected true")
+	}
+	if !(HasNotNullFlag(NotNullFlag)) {
+		t.Fatal("expected true")
+	}
+	if !(HasNoDefaultValueFlag(NoDefaultValueFlag)) {
+		t.Fatal("expected true")
+	}
+	if !(HasAutoIncrementFlag(AutoIncrementFlag)) {
+		t.Fatal("expected true")
+	}
+	if !(HasUnsignedFlag(UnsignedFlag)) {
+		t.Fatal("expected true")
+	}
+	if !(HasZerofillFlag(ZerofillFlag)) {
+		t.Fatal("expected true")
+	}
+	if !(HasBinaryFlag(BinaryFlag)) {
+		t.Fatal("expected true")
+	}
+	if !(HasPriKeyFlag(PriKeyFlag)) {
+		t.Fatal("expected true")
+	}
+	if !(HasMultipleKeyFlag(MultipleKeyFlag)) {
+		t.Fatal("expected true")
+	}
+	if !(HasTimestampFlag(TimestampFlag)) {
+		t.Fatal("expected true")
+	}
+	if !(HasOnUpdateNowFlag(OnUpdateNowFlag)) {
+		t.Fatal("expected true")
+	}
 }

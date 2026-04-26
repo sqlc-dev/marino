@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/sqlc-dev/marino/parser"
 	"github.com/sqlc-dev/marino/ast"
-	"github.com/stretchr/testify/require"
+	"github.com/sqlc-dev/marino/parser"
+
+	"reflect"
 )
 
 func getDefaultCharsetAndCollate() (string, string) {
@@ -89,10 +90,14 @@ func TestAstFormat(t *testing.T) {
 		charset, collation := getDefaultCharsetAndCollate()
 		stmts, _, err := parser.New().Parse(expr, charset, collation)
 		node := stmts[0].(*ast.SelectStmt).Fields.Fields[0].Expr
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		writer := bytes.NewBufferString("")
 		node.Format(writer)
-		require.Equal(t, tt.output, writer.String())
+		if !reflect.DeepEqual(tt.output, writer.String()) {
+			t.Fatalf("got %v, want %v", writer.String(), tt.output)
+		}
 	}
 }

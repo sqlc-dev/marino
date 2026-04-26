@@ -18,7 +18,8 @@ import (
 	"testing"
 
 	"github.com/sqlc-dev/marino/mysql"
-	"github.com/stretchr/testify/require"
+
+	"reflect"
 )
 
 var foobarPwdSM3Hash, _ = hex.DecodeString("24412430303524031a69251c34295c4b35167c7f1e5a7b63091349536c72627066426a635061762e556e6c63533159414d7762317261324a5a3047756b4244664177434e3043")
@@ -34,64 +35,94 @@ func TestSM3(t *testing.T) {
 		text := testCase[0]
 		expect, _ = hex.DecodeString(testCase[1])
 		result := Sm3Hash([]byte(text))
-		require.Equal(t, expect, result)
+		if !reflect.DeepEqual(expect, result) {
+			t.Fatalf("got %v, want %v", result, expect)
+		}
 	}
 }
 
 func TestCheckSM3PasswordGood(t *testing.T) {
 	pwd := "foobar"
 	r, err := CheckHashingPassword(foobarPwdSM3Hash, pwd, mysql.AuthTiDBSM3Password)
-	require.NoError(t, err)
-	require.True(t, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !(r) {
+		t.Fatal("expected true")
+	}
 }
 
 func TestCheckSM3PasswordBad(t *testing.T) {
 	pwd := "not_foobar"
 	pwhash, _ := hex.DecodeString("24412430303524031a69251c34295c4b35167c7f1e5a7b6309134956387565426743446d3643446176712f6c4b63323667346e48624872776f39512e4342416a693656676f2f")
 	r, err := CheckHashingPassword(pwhash, pwd, mysql.AuthTiDBSM3Password)
-	require.NoError(t, err)
-	require.False(t, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r {
+		t.Fatal("expected false")
+	}
 }
 
 func TestCheckSM3PasswordShort(t *testing.T) {
 	pwd := "not_foobar"
 	pwhash, _ := hex.DecodeString("aaaaaaaa")
 	_, err := CheckHashingPassword(pwhash, pwd, mysql.AuthTiDBSM3Password)
-	require.Error(t, err)
+	if err == nil {
+		t.Fatal("expected error")
+	}
 }
 
 func TestCheckSM3PasswordDigestTypeIncompatible(t *testing.T) {
 	pwd := "not_foobar"
 	pwhash, _ := hex.DecodeString("24432430303524031A69251C34295C4B35167C7F1E5A7B63091349503974624D34504B5A424679354856336868686F52485A736E4A733368786E427575516C73446469496537")
 	_, err := CheckHashingPassword(pwhash, pwd, mysql.AuthTiDBSM3Password)
-	require.Error(t, err)
+	if err == nil {
+		t.Fatal("expected error")
+	}
 }
 
 func TestCheckSM3PasswordIterationsInvalid(t *testing.T) {
 	pwd := "not_foobar"
 	pwhash, _ := hex.DecodeString("24412430304724031A69251C34295C4B35167C7F1E5A7B63091349503974624D34504B5A424679354856336868686F52485A736E4A733368786E427575516C73446469496537")
 	_, err := CheckHashingPassword(pwhash, pwd, mysql.AuthTiDBSM3Password)
-	require.Error(t, err)
+	if err == nil {
+		t.Fatal("expected error")
+	}
 }
 
 func TestNewSM3Password(t *testing.T) {
 	pwd := "testpwd"
 	pwhash := NewHashPassword(pwd, mysql.AuthTiDBSM3Password)
 	r, err := CheckHashingPassword([]byte(pwhash), pwd, mysql.AuthTiDBSM3Password)
-	require.NoError(t, err)
-	require.True(t, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !(r) {
+		t.Fatal("expected true")
+	}
 
 	for r := range pwhash {
-		require.Less(t, pwhash[r], uint8(128))
-		require.NotEqual(t, pwhash[r], 0)  // NUL
-		require.NotEqual(t, pwhash[r], 36) // '$'
+		if !(pwhash[r] < uint8(128)) {
+			t.Fatalf("expected %v < %v", pwhash[r], uint8(128))
+		}
+		if reflect.DeepEqual(pwhash[r], 0) {
+			t.Fatalf("expected values to differ, both are %v", 0)
+		} // NUL
+		if reflect.DeepEqual(pwhash[r], 36) {
+			t.Fatalf("expected values to differ, both are %v", 36)
+		} // '$'
 	}
 }
 
 func BenchmarkSM3Password(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		m, err := CheckHashingPassword(foobarPwdSM3Hash, "foobar", mysql.AuthTiDBSM3Password)
-		require.Nil(b, err)
-		require.True(b, m)
+		if err != nil {
+			b.Fatalf("expected nil, got %v", err)
+		}
+		if !(m) {
+			b.Fatal("expected true")
+		}
 	}
 }

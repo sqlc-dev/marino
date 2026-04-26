@@ -16,7 +16,7 @@ package ast
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"reflect"
 )
 
 func TestShowCommand(t *testing.T) {
@@ -25,7 +25,9 @@ func TestShowCommand(t *testing.T) {
 			Tp: ShowStmtType(i),
 		}
 
-		require.NotEqual(t, stmt.SEMCommand(), UnknownCommand, "SEMCommand should not be UnknownCommand for ShowStmtType %d", i)
+		if reflect.DeepEqual(stmt.SEMCommand(), UnknownCommand) {
+			t.Fatalf("expected values to differ, both are %v", UnknownCommand)
+		}
 	}
 }
 
@@ -35,7 +37,9 @@ func TestAdminCommand(t *testing.T) {
 			Tp: AdminStmtType(i),
 		}
 
-		require.NotEqual(t, stmt.SEMCommand(), UnknownCommand, "SEMCommand should not be UnknownCommand for AdminStmtType %d", i)
+		if reflect.DeepEqual(stmt.SEMCommand(), UnknownCommand) {
+			t.Fatalf("expected values to differ, both are %v", UnknownCommand)
+		}
 	}
 }
 
@@ -45,6 +49,8 @@ func TestBRIECommand(t *testing.T) {
 			Kind: i,
 		}
 
-		require.NotEqual(t, stmt.SEMCommand(), UnknownCommand, "SEMCommand should not be UnknownCommand for BRIEKind %s", i)
+		if reflect.DeepEqual(stmt.SEMCommand(), UnknownCommand) {
+			t.Fatalf("expected values to differ, both are %v", UnknownCommand)
+		}
 	}
 }

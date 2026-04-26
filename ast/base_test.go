@@ -20,7 +20,8 @@ import (
 	"testing"
 
 	"github.com/sqlc-dev/marino/charset"
-	"github.com/stretchr/testify/require"
+
+	"reflect"
 )
 
 func TestNodeSetText(t *testing.T) {
@@ -37,8 +38,12 @@ func TestNodeSetText(t *testing.T) {
 	}
 	for _, tt := range tests {
 		n.SetText(tt.enc, tt.text)
-		require.Equal(t, tt.expectUTF8Text, n.Text())
-		require.Equal(t, tt.expectText, n.OriginalText())
+		if !reflect.DeepEqual(tt.expectUTF8Text, n.Text()) {
+			t.Fatalf("got %v, want %v", n.Text(), tt.expectUTF8Text)
+		}
+		if !reflect.DeepEqual(tt.expectText, n.OriginalText()) {
+			t.Fatalf("got %v, want %v", n.OriginalText(), tt.expectText)
+		}
 	}
 }
 
@@ -66,7 +71,9 @@ func TestBinaryStringLiteralConversion(t *testing.T) {
 	}
 	for _, tt := range printableTests {
 		n.SetText(charset.EncodingUTF8Impl, tt.text)
-		require.Equal(t, tt.want, n.Text(), tt.name)
+		if !reflect.DeepEqual(tt.want, n.Text()) {
+			t.Fatalf("%v: got %v, want %v", tt.name, n.Text(), tt.want)
+		}
 	}
 
 	// Binary (non-printable) strings — should convert to 0x hex literals
@@ -98,7 +105,9 @@ func TestBinaryStringLiteralConversion(t *testing.T) {
 	}
 	for _, tt := range binaryTests {
 		n.SetText(charset.EncodingUTF8Impl, tt.text)
-		require.Equal(t, tt.want, n.Text(), tt.name)
+		if !reflect.DeepEqual(tt.want, n.Text()) {
+			t.Fatalf("%v: got %v, want %v", tt.name, n.Text(), tt.want)
+		}
 	}
 }
 
@@ -206,7 +215,9 @@ func TestBinaryStringLiteralSkipsComments(t *testing.T) {
 	}
 	for _, tt := range tests {
 		n.SetText(charset.EncodingUTF8Impl, tt.text)
-		require.Equal(t, tt.want, n.Text(), tt.name)
+		if !reflect.DeepEqual(tt.want, n.Text()) {
+			t.Fatalf("%v: got %v, want %v", tt.name, n.Text(), tt.want)
+		}
 	}
 }
 
@@ -215,15 +226,21 @@ func TestBinaryStringLiteralNoBackslashEscapes(t *testing.T) {
 
 	n.SetText(charset.EncodingUTF8Impl, "SELECT '\\n'")
 	n.SetNoBackslashEscapes(true)
-	require.Equal(t, "SELECT '\\n'", n.Text(), "NO_BACKSLASH_ESCAPES literal \\n")
+	if !reflect.DeepEqual("SELECT '\\n'", n.Text()) {
+		t.Fatalf("%v: got %v, want %v", "NO_BACKSLASH_ESCAPES literal \\n", n.Text(), "SELECT '\\n'")
+	}
 
 	n.SetText(charset.EncodingUTF8Impl, "SELECT '\\' , 'after'")
 	n.SetNoBackslashEscapes(true)
-	require.Equal(t, "SELECT '\\' , 'after'", n.Text(), "NO_BACKSLASH_ESCAPES quote boundary")
+	if !reflect.DeepEqual("SELECT '\\' , 'after'", n.Text()) {
+		t.Fatalf("%v: got %v, want %v", "NO_BACKSLASH_ESCAPES quote boundary", n.Text(), "SELECT '\\' , 'after'")
+	}
 
 	n.SetText(charset.EncodingUTF8Impl, "SELECT '\xd2\xe4'")
 	n.SetNoBackslashEscapes(true)
-	require.Equal(t, "SELECT 0xd2e4", n.Text(), "NO_BACKSLASH_ESCAPES binary")
+	if !reflect.DeepEqual("SELECT 0xd2e4", n.Text()) {
+		t.Fatalf("%v: got %v, want %v", "NO_BACKSLASH_ESCAPES binary", n.Text(), "SELECT 0xd2e4")
+	}
 }
 
 func TestBinaryStringLiteralGBK(t *testing.T) {
@@ -233,23 +250,33 @@ func TestBinaryStringLiteralGBK(t *testing.T) {
 	// This should be decoded as valid GBK and left as a printable string,
 	// not converted to a hex literal.
 	n.SetText(charset.EncodingGBKImpl, "select '\xb1\xed\x31'")
-	require.Equal(t, "select '表1'", n.Text(), "GBK printable")
+	if !reflect.DeepEqual("select '表1'", n.Text()) {
+		t.Fatalf("%v: got %v, want %v", "GBK printable", n.Text(), "select '表1'")
+	}
 
 	// GBK with actual invalid bytes should still convert to hex
 	n.SetText(charset.EncodingGBKImpl, "select '\x80\xff'")
-	require.Equal(t, "select 0x80ff", n.Text(), "GBK binary")
+	if !reflect.DeepEqual("select 0x80ff", n.Text()) {
+		t.Fatalf("%v: got %v, want %v", "GBK binary", n.Text(), "select 0x80ff")
+	}
 
 	// 筡 = \xb9\x5c in GBK; trail byte 0x5c must not be mistaken for backslash
 	n.SetText(charset.EncodingGBKImpl, "select '\xb9\x5c'")
-	require.Equal(t, "select '筡'", n.Text(), "GBK 0x5c trail byte")
+	if !reflect.DeepEqual("select '筡'", n.Text()) {
+		t.Fatalf("%v: got %v, want %v", "GBK 0x5c trail byte", n.Text(), "select '筡'")
+	}
 
 	// Multiple GBK chars with 0x5c trail bytes: 筡 = \xb9\x5c, 臷 = \xc5\x5c
 	n.SetText(charset.EncodingGBKImpl, "select '\xb9\x5c\xc5\x5c'")
-	require.Equal(t, "select '筡臷'", n.Text(), "GBK multiple 0x5c trail bytes")
+	if !reflect.DeepEqual("select '筡臷'", n.Text()) {
+		t.Fatalf("%v: got %v, want %v", "GBK multiple 0x5c trail bytes", n.Text(), "select '筡臷'")
+	}
 
 	// 0x5c trail byte right before closing quote must not escape the quote
 	n.SetText(charset.EncodingGBKImpl, "select '\xb9\x5c', 'after'")
-	require.Equal(t, "select '筡', 'after'", n.Text(), "GBK 0x5c before quote")
+	if !reflect.DeepEqual("select '筡', 'after'", n.Text()) {
+		t.Fatalf("%v: got %v, want %v", "GBK 0x5c before quote", n.Text(), "select '筡', 'after'")
+	}
 }
 
 func buildBinaryClause() string {

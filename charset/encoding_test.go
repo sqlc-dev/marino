@@ -19,28 +19,45 @@ import (
 	"unicode/utf8"
 
 	"github.com/sqlc-dev/marino/charset"
-	"github.com/stretchr/testify/require"
 	"golang.org/x/text/transform"
+
+	"reflect"
 )
 
 func TestEncoding(t *testing.T) {
 	enc := charset.FindEncoding(charset.CharsetGBK)
-	require.Equal(t, charset.CharsetGBK, enc.Name())
+	if !reflect.DeepEqual(charset.CharsetGBK, enc.Name()) {
+		t.Fatalf("got %v, want %v", enc.Name(), charset.CharsetGBK)
+	}
 
 	txt := []byte("一二三四")
 	e, _ := charset.Lookup("gbk")
 	gbkEncodedTxt, _, err := transform.Bytes(e.NewEncoder(), txt)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	result, err := enc.Transform(nil, gbkEncodedTxt, charset.OpDecode)
-	require.NoError(t, err)
-	require.Equal(t, txt, result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(txt, result) {
+		t.Fatalf("got %v, want %v", result, txt)
+	}
 
 	gbkEncodedTxt2, err := enc.Transform(nil, txt, charset.OpEncode)
-	require.NoError(t, err)
-	require.Equal(t, gbkEncodedTxt2, gbkEncodedTxt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(gbkEncodedTxt2, gbkEncodedTxt) {
+		t.Fatalf("got %v, want %v", gbkEncodedTxt, gbkEncodedTxt2)
+	}
 	result, err = enc.Transform(nil, gbkEncodedTxt2, charset.OpDecode)
-	require.NoError(t, err)
-	require.Equal(t, txt, result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(txt, result) {
+		t.Fatalf("got %v, want %v", result, txt)
+	}
 
 	GBKCases := []struct {
 		utf8Str string
@@ -67,11 +84,17 @@ func TestEncoding(t *testing.T) {
 		cmt := fmt.Sprintf("%v", tc)
 		result, err := enc.Transform(nil, []byte(tc.utf8Str), charset.OpDecodeReplace)
 		if tc.isValid {
-			require.NoError(t, err, cmt)
+			if err != nil {
+				t.Fatalf("%v: %v", cmt, err)
+			}
 		} else {
-			require.Error(t, err, cmt)
+			if err == nil {
+				t.Fatal(cmt)
+			}
 		}
-		require.Equal(t, tc.result, string(result), cmt)
+		if !reflect.DeepEqual(tc.result, string(result)) {
+			t.Fatalf("%v: got %v, want %v", cmt, string(result), tc.result)
+		}
 	}
 
 	utf8Cases := []struct {
@@ -91,11 +114,17 @@ func TestEncoding(t *testing.T) {
 		cmt := fmt.Sprintf("%v", tc)
 		result, err := enc.Transform(nil, []byte(tc.utf8Str), charset.OpEncodeReplace)
 		if tc.isValid {
-			require.NoError(t, err, cmt)
+			if err != nil {
+				t.Fatalf("%v: %v", cmt, err)
+			}
 		} else {
-			require.Error(t, err, cmt)
+			if err == nil {
+				t.Fatal(cmt)
+			}
 		}
-		require.Equal(t, tc.result, string(result), cmt)
+		if !reflect.DeepEqual(tc.result, string(result)) {
+			t.Fatalf("%v: got %v, want %v", cmt, string(result), tc.result)
+		}
 	}
 }
 
@@ -151,30 +180,50 @@ func TestEncodingValidate(t *testing.T) {
 			enc = charset.EncodingUTF8MB3StrictImpl
 		}
 		strBytes := []byte(tc.str)
-		require.Equal(t, tc.ok, enc.IsValid(strBytes), msg)
+		if !reflect.DeepEqual(tc.ok, enc.IsValid(strBytes)) {
+			t.Fatalf("%v: got %v, want %v", msg, enc.IsValid(strBytes), tc.ok)
+		}
 		replace, _ := enc.Transform(nil, strBytes, charset.OpReplaceNoErr)
-		require.Equal(t, tc.expected, string(replace), msg)
+		if !reflect.DeepEqual(tc.expected, string(replace)) {
+			t.Fatalf("%v: got %v, want %v", msg, string(replace), tc.expected)
+		}
 	}
 }
 
 func TestEncodingGB18030(t *testing.T) {
 	enc := charset.FindEncoding(charset.CharsetGB18030)
-	require.Equal(t, charset.CharsetGB18030, enc.Name())
+	if !reflect.DeepEqual(charset.CharsetGB18030, enc.Name()) {
+		t.Fatalf("got %v, want %v", enc.Name(), charset.CharsetGB18030)
+	}
 
 	txt := []byte("一二三四")
 	e, _ := charset.Lookup("gb18030")
 	gb18030EncodedTxt, _, err := transform.Bytes(e.NewEncoder(), txt)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	result, err := enc.Transform(nil, gb18030EncodedTxt, charset.OpDecode)
-	require.NoError(t, err)
-	require.Equal(t, txt, result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(txt, result) {
+		t.Fatalf("got %v, want %v", result, txt)
+	}
 
 	gb18030EncodedTxt2, err := enc.Transform(nil, txt, charset.OpEncode)
-	require.NoError(t, err)
-	require.Equal(t, gb18030EncodedTxt2, gb18030EncodedTxt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(gb18030EncodedTxt2, gb18030EncodedTxt) {
+		t.Fatalf("got %v, want %v", gb18030EncodedTxt, gb18030EncodedTxt2)
+	}
 	result, err = enc.Transform(nil, gb18030EncodedTxt2, charset.OpDecode)
-	require.NoError(t, err)
-	require.Equal(t, txt, result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(txt, result) {
+		t.Fatalf("got %v, want %v", result, txt)
+	}
 
 	GB18030Cases := []struct {
 		utf8Str string
@@ -211,11 +260,17 @@ func TestEncodingGB18030(t *testing.T) {
 		cmt := fmt.Sprintf("utf8Str: %s, result: %s, isValid: %t", tc.utf8Str, tc.result, tc.isValid)
 		result, err := enc.Transform(nil, []byte(tc.utf8Str), charset.OpDecodeReplace)
 		if tc.isValid {
-			require.NoError(t, err, cmt)
+			if err != nil {
+				t.Fatalf("%v: %v", cmt, err)
+			}
 		} else {
-			require.Error(t, err, cmt)
+			if err == nil {
+				t.Fatal(cmt)
+			}
 		}
-		require.Equal(t, tc.result, string(result), cmt)
+		if !reflect.DeepEqual(tc.result, string(result)) {
+			t.Fatalf("%v: got %v, want %v", cmt, string(result), tc.result)
+		}
 	}
 
 	utf8Cases := []struct {
@@ -235,10 +290,16 @@ func TestEncodingGB18030(t *testing.T) {
 		cmt := fmt.Sprintf("%v", tc)
 		result, err := enc.Transform(nil, []byte(tc.utf8Str), charset.OpEncodeReplace)
 		if tc.isValid {
-			require.NoError(t, err, cmt)
+			if err != nil {
+				t.Fatalf("%v: %v", cmt, err)
+			}
 		} else {
-			require.Error(t, err, cmt)
+			if err == nil {
+				t.Fatal(cmt)
+			}
 		}
-		require.Equal(t, tc.result, string(result), cmt)
+		if !reflect.DeepEqual(tc.result, string(result)) {
+			t.Fatalf("%v: got %v, want %v", cmt, string(result), tc.result)
+		}
 	}
 }

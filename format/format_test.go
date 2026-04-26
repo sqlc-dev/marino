@@ -15,20 +15,28 @@ package format
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
 
 	"github.com/pingcap/errors"
-	"github.com/stretchr/testify/require"
+
+	"reflect"
 )
 
 func checkFormat(t *testing.T, f Formatter, buf *bytes.Buffer, str, expect string) {
 	_, err := f.Format(str, 3)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	b, err := io.ReadAll(buf)
-	require.NoError(t, err)
-	require.Equal(t, expect, string(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(expect, string(b)) {
+		t.Fatalf("got %v, want %v", string(b), expect)
+	}
 }
 
 func TestFormat(t *testing.T) {
@@ -79,7 +87,9 @@ func TestRestoreCtx(t *testing.T) {
 		ctx.WriteString("str`.'\"ing\\")
 		ctx.WritePlain(" ")
 		ctx.WriteName("na`.'\"Me\\")
-		require.Equalf(t, testCase.expect, sb.String(), "case: %#v", testCase)
+		if !reflect.DeepEqual(testCase.expect, sb.String()) {
+			t.Fatalf("%s: got %v, want %v", fmt.Sprintf("case: %#v", testCase), sb.String(), testCase.expect)
+		}
 	}
 }
 
@@ -87,23 +97,39 @@ func TestRestoreSpecialComment(t *testing.T) {
 	var sb strings.Builder
 	sb.Reset()
 	ctx := NewRestoreCtx(RestoreTiDBSpecialComment, &sb)
-	require.NoError(t, ctx.WriteWithSpecialComments("fea_id", func() error {
+	if ctx.WriteWithSpecialComments("fea_id", func() error {
 		ctx.WritePlain("content")
 		return nil
-	}))
-	require.Equal(t, "/*T![fea_id] content */", sb.String())
+	}) != nil {
+		t.Fatal(ctx.WriteWithSpecialComments("fea_id", func() error {
+			ctx.WritePlain("content")
+			return nil
+		}))
+	}
+	if !reflect.DeepEqual("/*T![fea_id] content */", sb.String()) {
+		t.Fatalf("got %v, want %v", sb.String(), "/*T![fea_id] content */")
+	}
 
 	sb.Reset()
-	require.NoError(t, ctx.WriteWithSpecialComments("", func() error {
+	if ctx.WriteWithSpecialComments("", func() error {
 		ctx.WritePlain("shard_row_id_bits")
 		return nil
-	}))
-	require.Equal(t, "/*T! shard_row_id_bits */", sb.String())
+	}) != nil {
+		t.Fatal(ctx.WriteWithSpecialComments("", func() error {
+			ctx.WritePlain("shard_row_id_bits")
+			return nil
+		}))
+	}
+	if !reflect.DeepEqual("/*T! shard_row_id_bits */", sb.String()) {
+		t.Fatalf("got %v, want %v", sb.String(), "/*T! shard_row_id_bits */")
+	}
 
 	sb.Reset()
 	err := errors.New("xxxx")
 	got := ctx.WriteWithSpecialComments("", func() error {
 		return err
 	})
-	require.Same(t, err, got)
+	if err != got {
+		t.Fatalf("expected pointer equality, got %p vs %p", err, got)
+	}
 }

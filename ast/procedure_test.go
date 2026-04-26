@@ -17,9 +17,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/sqlc-dev/marino/parser"
 	"github.com/sqlc-dev/marino/ast"
-	"github.com/stretchr/testify/require"
+	"github.com/sqlc-dev/marino/parser"
 )
 
 func TestProcedureVisitorCover(t *testing.T) {
@@ -105,22 +104,34 @@ func TestProcedure(t *testing.T) {
 		if err != nil {
 			fmt.Println(testcase)
 		}
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 		_, ok := stmt[0].(*ast.ProcedureInfo)
-		require.True(t, ok, testcase)
+		if !(ok) {
+			t.Fatal(testcase)
+		}
 	}
 }
 
 func TestShowCreateProcedure(t *testing.T) {
 	p := parser.New()
 	stmt, _, err := p.Parse("show create procedure proc_2", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, ok := stmt[0].(*ast.ShowStmt)
-	require.True(t, ok)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
 	stmt, _, err = p.Parse("drop procedure proc_2", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, ok = stmt[0].(*ast.DropProcedureStmt)
-	require.True(t, ok)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
 }
 
 func TestProcedureVisitor(t *testing.T) {
@@ -132,7 +143,9 @@ func TestProcedureVisitor(t *testing.T) {
 	parse := parser.New()
 	for _, sql := range sqls {
 		stmts, _, err := parse.Parse(sql, "", "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 		for _, stmt := range stmts {
 			stmt.Accept(visitor{})
 			stmt.Accept(visitor1{})

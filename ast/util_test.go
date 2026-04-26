@@ -18,71 +18,100 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sqlc-dev/marino/parser"
 	. "github.com/sqlc-dev/marino/ast"
 	. "github.com/sqlc-dev/marino/format"
 	"github.com/sqlc-dev/marino/mysql"
+	"github.com/sqlc-dev/marino/parser"
 	"github.com/sqlc-dev/marino/test_driver"
-	"github.com/stretchr/testify/require"
+
+	"reflect"
 )
 
 func TestCacheable(t *testing.T) {
 	// test non-SelectStmt
 	var stmt Node = &DeleteStmt{}
-	require.False(t, IsReadOnly(stmt, true))
+	if IsReadOnly(stmt, true) {
+		t.Fatal("expected false")
+	}
 
 	stmt = &InsertStmt{}
-	require.False(t, IsReadOnly(stmt, true))
+	if IsReadOnly(stmt, true) {
+		t.Fatal("expected false")
+	}
 
 	stmt = &UpdateStmt{}
-	require.False(t, IsReadOnly(stmt, true))
+	if IsReadOnly(stmt, true) {
+		t.Fatal("expected false")
+	}
 
 	stmt = &ExplainStmt{}
-	require.True(t, IsReadOnly(stmt, true))
+	if !(IsReadOnly(stmt, true)) {
+		t.Fatal("expected true")
+	}
 
 	stmt = &ExplainStmt{}
-	require.True(t, IsReadOnly(stmt, true))
+	if !(IsReadOnly(stmt, true)) {
+		t.Fatal("expected true")
+	}
 
 	stmt = &DoStmt{}
-	require.True(t, IsReadOnly(stmt, true))
+	if !(IsReadOnly(stmt, true)) {
+		t.Fatal("expected true")
+	}
 
 	stmt = &ExplainStmt{
 		Stmt: &InsertStmt{},
 	}
-	require.True(t, IsReadOnly(stmt, true))
+	if !(IsReadOnly(stmt, true)) {
+		t.Fatal("expected true")
+	}
 
 	stmt = &ExplainStmt{
 		Analyze: true,
 		Stmt:    &InsertStmt{},
 	}
-	require.False(t, IsReadOnly(stmt, true))
+	if IsReadOnly(stmt, true) {
+		t.Fatal("expected false")
+	}
 
 	stmt = &ExplainStmt{
 		Stmt: &SelectStmt{},
 	}
-	require.True(t, IsReadOnly(stmt, true))
+	if !(IsReadOnly(stmt, true)) {
+		t.Fatal("expected true")
+	}
 
 	stmt = &ExplainStmt{
 		Analyze: true,
 		Stmt:    &SelectStmt{},
 	}
-	require.True(t, IsReadOnly(stmt, true))
+	if !(IsReadOnly(stmt, true)) {
+		t.Fatal("expected true")
+	}
 
 	stmt = &ShowStmt{}
-	require.True(t, IsReadOnly(stmt, true))
+	if !(IsReadOnly(stmt, true)) {
+		t.Fatal("expected true")
+	}
 
 	stmt = &ShowStmt{}
-	require.True(t, IsReadOnly(stmt, true))
+	if !(IsReadOnly(stmt, true)) {
+		t.Fatal("expected true")
+	}
 
 	stmt = &TraceStmt{
 		Stmt: &SelectStmt{},
 	}
-	require.True(t, IsReadOnly(stmt, true))
+	if !(IsReadOnly(stmt, true)) {
+		t.Fatal("expected true")
+	}
 
 	stmt = &TraceStmt{
 		Stmt: &DeleteStmt{},
 	}
-	require.False(t, IsReadOnly(stmt, true))
+	if IsReadOnly(stmt, true) {
+		t.Fatal("expected false")
+	}
 }
 
 func TestUnionReadOnly(t *testing.T) {
@@ -99,22 +128,34 @@ func TestUnionReadOnly(t *testing.T) {
 			Selects: []Node{selectReadOnly, selectReadOnly},
 		},
 	}
-	require.True(t, IsReadOnly(setOprStmt, true))
+	if !(IsReadOnly(setOprStmt, true)) {
+		t.Fatal("expected true")
+	}
 
 	setOprStmt.SelectList.Selects = []Node{selectReadOnly, selectReadOnly, selectReadOnly}
-	require.True(t, IsReadOnly(setOprStmt, true))
+	if !(IsReadOnly(setOprStmt, true)) {
+		t.Fatal("expected true")
+	}
 
 	setOprStmt.SelectList.Selects = []Node{selectReadOnly, selectForUpdate}
-	require.False(t, IsReadOnly(setOprStmt, true))
+	if IsReadOnly(setOprStmt, true) {
+		t.Fatal("expected false")
+	}
 
 	setOprStmt.SelectList.Selects = []Node{selectReadOnly, selectForUpdateNoWait}
-	require.False(t, IsReadOnly(setOprStmt, true))
+	if IsReadOnly(setOprStmt, true) {
+		t.Fatal("expected false")
+	}
 
 	setOprStmt.SelectList.Selects = []Node{selectForUpdate, selectForUpdateNoWait}
-	require.False(t, IsReadOnly(setOprStmt, true))
+	if IsReadOnly(setOprStmt, true) {
+		t.Fatal("expected false")
+	}
 
 	setOprStmt.SelectList.Selects = []Node{selectReadOnly, selectForUpdate, selectForUpdateNoWait}
-	require.False(t, IsReadOnly(setOprStmt, true))
+	if IsReadOnly(setOprStmt, true) {
+		t.Fatal("expected false")
+	}
 }
 
 // CleanNodeText set the text of node and all child node empty.
@@ -195,18 +236,28 @@ func runNodeRestoreTestWithFlags(t *testing.T, nodeTestCases []NodeRestoreTestCa
 		expectSQL := fmt.Sprintf(template, testCase.expectSQL)
 		stmt, err := p.ParseOneStmt(sourceSQL, "", "")
 		comment := fmt.Sprintf("source %#v", testCase)
-		require.NoError(t, err, comment)
+		if err != nil {
+			t.Fatalf("%v: %v", comment, err)
+		}
 		var sb strings.Builder
 		err = extractNodeFunc(stmt).Restore(NewRestoreCtx(flags, &sb))
-		require.NoError(t, err, comment)
+		if err != nil {
+			t.Fatalf("%v: %v", comment, err)
+		}
 		restoreSql := fmt.Sprintf(template, sb.String())
 		comment = fmt.Sprintf("source %#v; restore %v", testCase, restoreSql)
-		require.Equal(t, expectSQL, restoreSql, comment)
+		if !reflect.DeepEqual(expectSQL, restoreSql) {
+			t.Fatalf("%v: got %v, want %v", comment, restoreSql, expectSQL)
+		}
 		stmt2, err := p.ParseOneStmt(restoreSql, "", "")
-		require.NoError(t, err, comment)
+		if err != nil {
+			t.Fatalf("%v: %v", comment, err)
+		}
 		CleanNodeText(stmt)
 		CleanNodeText(stmt2)
-		require.Equal(t, stmt, stmt2, comment)
+		if !reflect.DeepEqual(stmt, stmt2) {
+			t.Fatalf("%v: got %v, want %v", comment, stmt2, stmt)
+		}
 	}
 }
 
@@ -220,12 +271,18 @@ func runNodeRestoreTestWithFlagsStmtChange(t *testing.T, nodeTestCases []NodeRes
 		expectSQL := fmt.Sprintf(template, testCase.expectSQL)
 		stmt, err := p.ParseOneStmt(sourceSQL, "", "")
 		comment := fmt.Sprintf("source %#v", testCase)
-		require.NoError(t, err, comment)
+		if err != nil {
+			t.Fatalf("%v: %v", comment, err)
+		}
 		var sb strings.Builder
 		err = extractNodeFunc(stmt).Restore(NewRestoreCtx(flags, &sb))
-		require.NoError(t, err, comment)
+		if err != nil {
+			t.Fatalf("%v: %v", comment, err)
+		}
 		restoreSql := fmt.Sprintf(template, sb.String())
 		comment = fmt.Sprintf("source %#v; restore %v", testCase, restoreSql)
-		require.Equal(t, expectSQL, restoreSql, comment)
+		if !reflect.DeepEqual(expectSQL, restoreSql) {
+			t.Fatalf("%v: got %v, want %v", comment, restoreSql, expectSQL)
+		}
 	}
 }

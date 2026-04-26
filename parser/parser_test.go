@@ -16,21 +16,23 @@ package parser_test
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	"runtime"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/pingcap/errors"
-	"github.com/sqlc-dev/marino/parser"
 	"github.com/sqlc-dev/marino/ast"
 	"github.com/sqlc-dev/marino/charset"
 	. "github.com/sqlc-dev/marino/format"
 	"github.com/sqlc-dev/marino/mysql"
 	"github.com/sqlc-dev/marino/opcode"
+	"github.com/sqlc-dev/marino/parser"
 	"github.com/sqlc-dev/marino/terror"
 	"github.com/sqlc-dev/marino/test_driver"
-	"github.com/stretchr/testify/require"
+
+	"reflect"
 )
 
 func TestSimple(t *testing.T) {
@@ -68,15 +70,21 @@ func TestSimple(t *testing.T) {
 		src := fmt.Sprintf("SELECT * FROM db.%s;", kw)
 		_, err := p.ParseOneStmt(src, "", "")
 
-		require.NoErrorf(t, err, "source %s", src)
+		if err != nil {
+			t.Fatalf("%s: %v", fmt.Sprintf("source %s", src), err)
+		}
 
 		src = fmt.Sprintf("SELECT * FROM %s.desc", kw)
 		_, err = p.ParseOneStmt(src, "", "")
-		require.NoErrorf(t, err, "source %s", src)
+		if err != nil {
+			t.Fatalf("%s: %v", fmt.Sprintf("source %s", src), err)
+		}
 
 		src = fmt.Sprintf("SELECT t.%s FROM t", kw)
 		_, err = p.ParseOneStmt(src, "", "")
-		require.NoErrorf(t, err, "source %s", src)
+		if err != nil {
+			t.Fatalf("%s: %v", fmt.Sprintf("source %s", src), err)
+		}
 	}
 
 	// Testcase for unreserved keywords
@@ -104,51 +112,85 @@ func TestSimple(t *testing.T) {
 	for _, kw := range unreservedKws {
 		src := fmt.Sprintf("SELECT %s FROM tbl;", kw)
 		_, err := p.ParseOneStmt(src, "", "")
-		require.NoErrorf(t, err, "source %s", src)
+		if err != nil {
+			t.Fatalf("%s: %v", fmt.Sprintf("source %s", src), err)
+		}
 	}
 
 	// Testcase for prepared statement
 	src := "SELECT id+?, id+? from t;"
 	_, err := p.ParseOneStmt(src, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Testcase for -- Comment and unary -- operator
 	src = "CREATE TABLE foo (a SMALLINT UNSIGNED, b INT UNSIGNED); -- foo\nSelect --1 from foo;"
 	stmts, _, err := p.Parse(src, "", "")
-	require.NoError(t, err)
-	require.Len(t, stmts, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(stmts); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
 
 	// Testcase for /*! xx */
 	// See http://dev.mysql.com/doc/refman/5.7/en/comments.html
 	// Fix: https://github.com/pingcap/tidb/issues/971
 	src = "/*!40101 SET character_set_client = utf8 */;"
 	stmts, _, err = p.Parse(src, "", "")
-	require.NoError(t, err)
-	require.Len(t, stmts, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(stmts); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
 	stmt := stmts[0]
 	_, ok := stmt.(*ast.SetStmt)
-	require.True(t, ok)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
 
 	// for issue #2017
 	src = "insert into blobtable (a) values ('/*! truncated */');"
 	stmt, err = p.ParseOneStmt(src, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	is, ok := stmt.(*ast.InsertStmt)
-	require.True(t, ok)
-	require.Len(t, is.Lists, 1)
-	require.Len(t, is.Lists[0], 1)
-	require.Equal(t, "/*! truncated */", is.Lists[0][0].(ast.ValueExpr).GetDatumString())
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if got := len(is.Lists); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if got := len(is.Lists[0]); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("/*! truncated */", is.Lists[0][0].(ast.ValueExpr).GetDatumString()) {
+		t.Fatalf("got %v, want %v", is.Lists[0][0].(ast.ValueExpr).GetDatumString(), "/*! truncated */")
+	}
 
 	// Testcase for CONVERT(expr,type)
 	src = "SELECT CONVERT('111', SIGNED);"
 	st, err := p.ParseOneStmt(src, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	ss, ok := st.(*ast.SelectStmt)
-	require.True(t, ok)
-	require.Len(t, ss.Fields.Fields, 1)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if got := len(ss.Fields.Fields); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
 	cv, ok := ss.Fields.Fields[0].Expr.(*ast.FuncCastExpr)
-	require.True(t, ok)
-	require.Equal(t, ast.CastConvertFunction, cv.FunctionType)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if !reflect.DeepEqual(ast.CastConvertFunction, cv.FunctionType) {
+		t.Fatalf("got %v, want %v", cv.FunctionType, ast.CastConvertFunction)
+	}
 
 	// for query start with comment
 	srcs := []string{
@@ -160,54 +202,80 @@ func TestSimple(t *testing.T) {
 	}
 	for _, src := range srcs {
 		st, err = p.ParseOneStmt(src, "", "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 		_, ok = st.(*ast.SelectStmt)
-		require.True(t, ok)
+		if !(ok) {
+			t.Fatal("expected true")
+		}
 	}
 
 	// for issue #961
 	src = "create table t (c int key);"
 	st, err = p.ParseOneStmt(src, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	cs, ok := st.(*ast.CreateTableStmt)
-	require.True(t, ok)
-	require.Len(t, cs.Cols, 1)
-	require.Len(t, cs.Cols[0].Options, 1)
-	require.Equal(t, ast.ColumnOptionPrimaryKey, cs.Cols[0].Options[0].Tp)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if got := len(cs.Cols); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if got := len(cs.Cols[0].Options); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual(ast.ColumnOptionPrimaryKey, cs.Cols[0].Options[0].Tp) {
+		t.Fatalf("got %v, want %v", cs.Cols[0].Options[0].Tp, ast.ColumnOptionPrimaryKey)
+	}
 
 	// for issue #4497
 	src = "create table t1(a NVARCHAR(100));"
 	_, err = p.ParseOneStmt(src, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// for issue 2803
 	src = "use quote;"
 	_, err = p.ParseOneStmt(src, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// issue #4354
 	src = "select b'';"
 	_, err = p.ParseOneStmt(src, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	src = "select B'';"
 	_, err = p.ParseOneStmt(src, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// src = "select 0b'';"
 	// _, err = p.ParseOneStmt(src, "", "")
-	// require.Error(t, err)
+	// if err == nil { t.Fatal("expected error") }
 
 	// for #4909, support numericType `signed` filedOpt.
 	src = "CREATE TABLE t(_sms smallint signed, _smu smallint unsigned);"
 	_, err = p.ParseOneStmt(src, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// for #7371, support NATIONAL CHARACTER
 	// reference link: https://dev.mysql.com/doc/refman/5.7/en/charset-national.html
 	src = "CREATE TABLE t(c1 NATIONAL CHARACTER(10));"
 	_, err = p.ParseOneStmt(src, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	src = `CREATE TABLE t(a tinyint signed,
 		b smallint signed,
@@ -225,95 +293,177 @@ func TestSimple(t *testing.T) {
 		);`
 
 	st, err = p.ParseOneStmt(src, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	ct, ok := st.(*ast.CreateTableStmt)
-	require.True(t, ok)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
 	for _, col := range ct.Cols {
-		require.Equal(t, uint(0), col.Tp.GetFlag()&mysql.UnsignedFlag)
+		if !reflect.DeepEqual(uint(0), col.Tp.GetFlag()&mysql.UnsignedFlag) {
+			t.Fatalf("got %v, want %v", col.Tp.GetFlag()&mysql.UnsignedFlag, uint(0))
+		}
 	}
 
 	// for issue #4006
 	src = `insert into tb(v) (select v from tb);`
 	_, err = p.ParseOneStmt(src, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// for issue #34642
 	src = `SELECT a as c having c = a;`
 	_, err = p.ParseOneStmt(src, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// for issue #9823
 	src = "SELECT 9223372036854775807;"
 	st, err = p.ParseOneStmt(src, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	sel, ok := st.(*ast.SelectStmt)
-	require.True(t, ok)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
 	expr := sel.Fields.Fields[0]
 	vExpr := expr.Expr.(*test_driver.ValueExpr)
-	require.Equal(t, test_driver.KindInt64, vExpr.Kind())
+	if !reflect.DeepEqual(test_driver.KindInt64, vExpr.Kind()) {
+		t.Fatalf("got %v, want %v", vExpr.Kind(), test_driver.KindInt64)
+	}
 	src = "SELECT 9223372036854775808;"
 	st, err = p.ParseOneStmt(src, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	sel, ok = st.(*ast.SelectStmt)
-	require.True(t, ok)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
 	expr = sel.Fields.Fields[0]
 	vExpr = expr.Expr.(*test_driver.ValueExpr)
-	require.Equal(t, test_driver.KindUint64, vExpr.Kind())
+	if !reflect.DeepEqual(test_driver.KindUint64, vExpr.Kind()) {
+		t.Fatalf("got %v, want %v", vExpr.Kind(), test_driver.KindUint64)
+	}
 
 	src = `select 99e+r10 from t1;`
 	st, err = p.ParseOneStmt(src, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	sel, ok = st.(*ast.SelectStmt)
-	require.True(t, ok)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
 	bExpr, ok := sel.Fields.Fields[0].Expr.(*ast.BinaryOperationExpr)
-	require.True(t, ok)
-	require.Equal(t, opcode.Plus, bExpr.Op)
-	require.Equal(t, "99e", bExpr.L.(*ast.ColumnNameExpr).Name.Name.O)
-	require.Equal(t, "r10", bExpr.R.(*ast.ColumnNameExpr).Name.Name.O)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if !reflect.DeepEqual(opcode.Plus, bExpr.Op) {
+		t.Fatalf("got %v, want %v", bExpr.Op, opcode.Plus)
+	}
+	if !reflect.DeepEqual("99e", bExpr.L.(*ast.ColumnNameExpr).Name.Name.O) {
+		t.Fatalf("got %v, want %v", bExpr.L.(*ast.ColumnNameExpr).Name.Name.O, "99e")
+	}
+	if !reflect.DeepEqual("r10", bExpr.R.(*ast.ColumnNameExpr).Name.Name.O) {
+		t.Fatalf("got %v, want %v", bExpr.R.(*ast.ColumnNameExpr).Name.Name.O, "r10")
+	}
 
 	src = `select t./*123*/*,@c3:=0 from t order by t.c1;`
 	st, err = p.ParseOneStmt(src, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	sel, ok = st.(*ast.SelectStmt)
-	require.True(t, ok)
-	require.Equal(t, "t", sel.Fields.Fields[0].WildCard.Table.O)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if !reflect.DeepEqual("t", sel.Fields.Fields[0].WildCard.Table.O) {
+		t.Fatalf("got %v, want %v", sel.Fields.Fields[0].WildCard.Table.O, "t")
+	}
 	varExpr, ok := sel.Fields.Fields[1].Expr.(*ast.VariableExpr)
-	require.True(t, ok)
-	require.Equal(t, "c3", varExpr.Name)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if !reflect.DeepEqual("c3", varExpr.Name) {
+		t.Fatalf("got %v, want %v", varExpr.Name, "c3")
+	}
 
 	src = `select t.1e from test.t;`
 	st, err = p.ParseOneStmt(src, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	sel, ok = st.(*ast.SelectStmt)
-	require.True(t, ok)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
 	colExpr, ok := sel.Fields.Fields[0].Expr.(*ast.ColumnNameExpr)
-	require.True(t, ok)
-	require.Equal(t, "t", colExpr.Name.Table.O)
-	require.Equal(t, "1e", colExpr.Name.Name.O)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if !reflect.DeepEqual("t", colExpr.Name.Table.O) {
+		t.Fatalf("got %v, want %v", colExpr.Name.Table.O, "t")
+	}
+	if !reflect.DeepEqual("1e", colExpr.Name.Name.O) {
+		t.Fatalf("got %v, want %v", colExpr.Name.Name.O, "1e")
+	}
 	tName := sel.From.TableRefs.Left.(*ast.TableSource).Source.(*ast.TableName)
-	require.Equal(t, "test", tName.Schema.O)
-	require.Equal(t, "t", tName.Name.O)
+	if !reflect.DeepEqual("test", tName.Schema.O) {
+		t.Fatalf("got %v, want %v", tName.Schema.O, "test")
+	}
+	if !reflect.DeepEqual("t", tName.Name.O) {
+		t.Fatalf("got %v, want %v", tName.Name.O, "t")
+	}
 
 	src = "select t. `a` > 10 from t;"
 	st, err = p.ParseOneStmt(src, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	bExpr, ok = st.(*ast.SelectStmt).Fields.Fields[0].Expr.(*ast.BinaryOperationExpr)
-	require.True(t, ok)
-	require.Equal(t, opcode.GT, bExpr.Op)
-	require.Equal(t, "a", bExpr.L.(*ast.ColumnNameExpr).Name.Name.O)
-	require.Equal(t, "t", bExpr.L.(*ast.ColumnNameExpr).Name.Table.O)
-	require.Equal(t, int64(10), bExpr.R.(ast.ValueExpr).GetValue().(int64))
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if !reflect.DeepEqual(opcode.GT, bExpr.Op) {
+		t.Fatalf("got %v, want %v", bExpr.Op, opcode.GT)
+	}
+	if !reflect.DeepEqual("a", bExpr.L.(*ast.ColumnNameExpr).Name.Name.O) {
+		t.Fatalf("got %v, want %v", bExpr.L.(*ast.ColumnNameExpr).Name.Name.O, "a")
+	}
+	if !reflect.DeepEqual("t", bExpr.L.(*ast.ColumnNameExpr).Name.Table.O) {
+		t.Fatalf("got %v, want %v", bExpr.L.(*ast.ColumnNameExpr).Name.Table.O, "t")
+	}
+	if !reflect.DeepEqual(int64(10), bExpr.R.(ast.ValueExpr).GetValue().(int64)) {
+		t.Fatalf("got %v, want %v", bExpr.R.(ast.ValueExpr).GetValue().(int64), int64(10))
+	}
 
 	p.SetSQLMode(mysql.ModeANSIQuotes)
 	src = `select t."dot"=10 from t;`
 	st, err = p.ParseOneStmt(src, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	bExpr, ok = st.(*ast.SelectStmt).Fields.Fields[0].Expr.(*ast.BinaryOperationExpr)
-	require.True(t, ok)
-	require.Equal(t, opcode.EQ, bExpr.Op)
-	require.Equal(t, "dot", bExpr.L.(*ast.ColumnNameExpr).Name.Name.O)
-	require.Equal(t, "t", bExpr.L.(*ast.ColumnNameExpr).Name.Table.O)
-	require.Equal(t, int64(10), bExpr.R.(ast.ValueExpr).GetValue().(int64))
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if !reflect.DeepEqual(opcode.EQ, bExpr.Op) {
+		t.Fatalf("got %v, want %v", bExpr.Op, opcode.EQ)
+	}
+	if !reflect.DeepEqual("dot", bExpr.L.(*ast.ColumnNameExpr).Name.Name.O) {
+		t.Fatalf("got %v, want %v", bExpr.L.(*ast.ColumnNameExpr).Name.Name.O, "dot")
+	}
+	if !reflect.DeepEqual("t", bExpr.L.(*ast.ColumnNameExpr).Name.Table.O) {
+		t.Fatalf("got %v, want %v", bExpr.L.(*ast.ColumnNameExpr).Name.Table.O, "t")
+	}
+	if !reflect.DeepEqual(int64(10), bExpr.R.(ast.ValueExpr).GetValue().(int64)) {
+		t.Fatalf("got %v, want %v", bExpr.R.(ast.ValueExpr).GetValue().(int64), int64(10))
+	}
 }
 
 func TestSpecialComments(t *testing.T) {
@@ -321,31 +471,55 @@ func TestSpecialComments(t *testing.T) {
 
 	// 1. Make sure /*! ... */ respects the same SQL mode.
 	_, err := p.ParseOneStmt(`SELECT /*! '\' */;`, "", "")
-	require.Error(t, err)
+	if err == nil {
+		t.Fatal("expected error")
+	}
 
 	p.SetSQLMode(mysql.ModeNoBackslashEscapes)
 	st, err := p.ParseOneStmt(`SELECT /*! '\' */;`, "", "")
-	require.NoError(t, err)
-	require.IsType(t, &ast.SelectStmt{}, st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := st.(*ast.SelectStmt); !ok {
+		t.Fatalf("expected type %T, got %T", &ast.SelectStmt{}, st)
+	}
 
 	// 2. Make sure multiple statements inside /*! ... */ will not crash
 	// (this is issue #330)
 	stmts, _, err := p.Parse("/*! SET x = 1; SELECT 2 */", "", "")
-	require.NoError(t, err)
-	require.Len(t, stmts, 2)
-	require.IsType(t, &ast.SetStmt{}, stmts[0])
-	require.Equal(t, "/*! SET x = 1;", stmts[0].Text())
-	require.IsType(t, &ast.SelectStmt{}, stmts[1])
-	require.Equal(t, " SELECT 2 */", stmts[1].Text())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(stmts); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if _, ok := stmts[0].(*ast.SetStmt); !ok {
+		t.Fatalf("expected type %T, got %T", &ast.SetStmt{}, stmts[0])
+	}
+	if !reflect.DeepEqual("/*! SET x = 1;", stmts[0].Text()) {
+		t.Fatalf("got %v, want %v", stmts[0].Text(), "/*! SET x = 1;")
+	}
+	if _, ok := stmts[1].(*ast.SelectStmt); !ok {
+		t.Fatalf("expected type %T, got %T", &ast.SelectStmt{}, stmts[1])
+	}
+	if !reflect.DeepEqual(" SELECT 2 */", stmts[1].Text()) {
+		t.Fatalf("got %v, want %v", stmts[1].Text(), " SELECT 2 */")
+	}
 	// ^ not sure if correct approach; having multiple statements in MySQL is a syntax error.
 
 	// 3. Make sure invalid text won't cause infinite loop
 	// (this is issue #336)
 	st, err = p.ParseOneStmt("SELECT /*+ 😅 */ SLEEP(1);", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	sel, ok := st.(*ast.SelectStmt)
-	require.True(t, ok)
-	require.Len(t, sel.TableHints, 0)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if got := len(sel.TableHints); got != 0 {
+		t.Fatalf("expected length %d, got %d", 0, got)
+	}
 }
 
 type testCase struct {
@@ -366,10 +540,14 @@ func RunTest(t *testing.T, table []testCase, enableWindowFunc bool, MariaDB bool
 	for _, tbl := range table {
 		_, _, err := p.Parse(tbl.src, "", "")
 		if !tbl.ok {
-			require.Errorf(t, err, "source %v, error %v", tbl.src, errors.Trace(err))
+			if err == nil {
+				t.Fatalf("source %v, error %v", tbl.src, errors.Trace(err))
+			}
 			continue
 		}
-		require.NoErrorf(t, err, "source:\n%v\nerror:\n%v", tbl.src, errors.Trace(err))
+		if err != nil {
+			t.Fatalf("%s: %v", fmt.Sprintf("source:\n%v\nerror:\n%v", tbl.src, errors.Trace(err)), err)
+		}
 		// restore correctness test
 		if tbl.ok {
 			RunRestoreTest(t, tbl.src, tbl.restore, enableWindowFunc, MariaDB)
@@ -384,25 +562,35 @@ func RunRestoreTest(t *testing.T, sourceSQLs, expectSQLs string, enableWindowFun
 	p.SetMariaDB(MariaDB)
 	comment := fmt.Sprintf("source %v", sourceSQLs)
 	stmts, _, err := p.Parse(sourceSQLs, "", "")
-	require.NoErrorf(t, err, "source %v", sourceSQLs)
+	if err != nil {
+		t.Fatalf("%s: %v", fmt.Sprintf("source %v", sourceSQLs), err)
+	}
 	restoreSQLs := ""
 	for _, stmt := range stmts {
 		sb.Reset()
 		err = stmt.Restore(NewRestoreCtx(DefaultRestoreFlags, &sb))
-		require.NoError(t, err, comment)
+		if err != nil {
+			t.Fatalf("%v: %v", comment, err)
+		}
 		restoreSQL := sb.String()
 		comment = fmt.Sprintf("source %v; restore %v", sourceSQLs, restoreSQL)
 		restoreStmt, err := p.ParseOneStmt(restoreSQL, "", "")
-		require.NoError(t, err, comment)
+		if err != nil {
+			t.Fatalf("%v: %v", comment, err)
+		}
 		CleanNodeText(stmt)
 		CleanNodeText(restoreStmt)
-		require.Equal(t, stmt, restoreStmt, comment)
+		if !reflect.DeepEqual(stmt, restoreStmt) {
+			t.Fatalf("%v: got %v, want %v", comment, restoreStmt, stmt)
+		}
 		if restoreSQLs != "" {
 			restoreSQLs += "; "
 		}
 		restoreSQLs += restoreSQL
 	}
-	require.Equalf(t, expectSQLs, restoreSQLs, "restore %v; expect %v", restoreSQLs, expectSQLs)
+	if !reflect.DeepEqual(expectSQLs, restoreSQLs) {
+		t.Fatalf("%s: got %v, want %v", fmt.Sprintf("restore %v; expect %v", restoreSQLs, expectSQLs), restoreSQLs, expectSQLs)
+	}
 }
 
 func RunTestInRealAsFloatMode(t *testing.T, table []testCase, enableWindowFunc bool) {
@@ -413,10 +601,14 @@ func RunTestInRealAsFloatMode(t *testing.T, table []testCase, enableWindowFunc b
 		_, _, err := p.Parse(tbl.src, "", "")
 		comment := fmt.Sprintf("source %v", tbl.src)
 		if !tbl.ok {
-			require.Error(t, err, comment)
+			if err == nil {
+				t.Fatal(comment)
+			}
 			continue
 		}
-		require.NoError(t, err, comment)
+		if err != nil {
+			t.Fatalf("%v: %v", comment, err)
+		}
 		// restore correctness test
 		if tbl.ok {
 			RunRestoreTestInRealAsFloatMode(t, tbl.src, tbl.restore, enableWindowFunc)
@@ -431,25 +623,35 @@ func RunRestoreTestInRealAsFloatMode(t *testing.T, sourceSQLs, expectSQLs string
 	p.SetSQLMode(mysql.ModeRealAsFloat)
 	comment := fmt.Sprintf("source %v", sourceSQLs)
 	stmts, _, err := p.Parse(sourceSQLs, "", "")
-	require.NoError(t, err, comment)
+	if err != nil {
+		t.Fatalf("%v: %v", comment, err)
+	}
 	restoreSQLs := ""
 	for _, stmt := range stmts {
 		sb.Reset()
 		err = stmt.Restore(NewRestoreCtx(DefaultRestoreFlags, &sb))
-		require.NoError(t, err, comment)
+		if err != nil {
+			t.Fatalf("%v: %v", comment, err)
+		}
 		restoreSQL := sb.String()
 		comment = fmt.Sprintf("source %v; restore %v", sourceSQLs, restoreSQL)
 		restoreStmt, err := p.ParseOneStmt(restoreSQL, "", "")
-		require.NoError(t, err, comment)
+		if err != nil {
+			t.Fatalf("%v: %v", comment, err)
+		}
 		CleanNodeText(stmt)
 		CleanNodeText(restoreStmt)
-		require.Equal(t, stmt, restoreStmt, comment)
+		if !reflect.DeepEqual(stmt, restoreStmt) {
+			t.Fatalf("%v: got %v, want %v", comment, restoreStmt, stmt)
+		}
 		if restoreSQLs != "" {
 			restoreSQLs += "; "
 		}
 		restoreSQLs += restoreSQL
 	}
-	require.Equal(t, expectSQLs, restoreSQLs, "restore %v; expect %v", restoreSQLs, expectSQLs)
+	if !reflect.DeepEqual(expectSQLs, restoreSQLs) {
+		t.Fatalf("%s: got %v, want %v", fmt.Sprintf("restore %v; expect %v", restoreSQLs, expectSQLs), restoreSQLs, expectSQLs)
+	}
 }
 
 func RunErrMsgTest(t *testing.T, table []testErrMsgCase) {
@@ -458,9 +660,13 @@ func RunErrMsgTest(t *testing.T, table []testErrMsgCase) {
 		_, _, err := p.Parse(tbl.src, "", "")
 		comment := fmt.Sprintf("source %v", tbl.src)
 		if tbl.err != nil {
-			require.True(t, terror.ErrorEqual(err, tbl.err), comment)
+			if !(terror.ErrorEqual(err, tbl.err)) {
+				t.Fatal(comment)
+			}
 		} else {
-			require.NoError(t, err, comment)
+			if err != nil {
+				t.Fatalf("%v: %v", comment, err)
+			}
 		}
 	}
 }
@@ -1523,41 +1729,73 @@ func TestSetVariable(t *testing.T) {
 	p := parser.New()
 	for _, tbl := range table {
 		stmt, err := p.ParseOneStmt(tbl.Input, "", "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		setStmt, ok := stmt.(*ast.SetStmt)
-		require.True(t, ok)
-		require.Len(t, setStmt.Variables, 1)
+		if !(ok) {
+			t.Fatal("expected true")
+		}
+		if got := len(setStmt.Variables); got != 1 {
+			t.Fatalf("expected length %d, got %d", 1, got)
+		}
 
 		v := setStmt.Variables[0]
-		require.Equal(t, tbl.Name, v.Name)
-		require.Equal(t, tbl.IsGlobal, v.IsGlobal)
-		require.Equal(t, tbl.IsInstance, v.IsInstance)
-		require.Equal(t, tbl.IsSystem, v.IsSystem)
+		if !reflect.DeepEqual(tbl.Name, v.Name) {
+			t.Fatalf("got %v, want %v", v.Name, tbl.Name)
+		}
+		if !reflect.DeepEqual(tbl.IsGlobal, v.IsGlobal) {
+			t.Fatalf("got %v, want %v", v.IsGlobal, tbl.IsGlobal)
+		}
+		if !reflect.DeepEqual(tbl.IsInstance, v.IsInstance) {
+			t.Fatalf("got %v, want %v", v.IsInstance, tbl.IsInstance)
+		}
+		if !reflect.DeepEqual(tbl.IsSystem, v.IsSystem) {
+			t.Fatalf("got %v, want %v", v.IsSystem, tbl.IsSystem)
+		}
 	}
 
 	_, err := p.ParseOneStmt("set xx.xx.xx = 666", "", "")
-	require.Error(t, err)
+	if err == nil {
+		t.Fatal("expected error")
+	}
 }
 
 func TestFlushTable(t *testing.T) {
 	p := parser.New()
 	stmt, _, err := p.Parse("flush local tables tbl1,tbl2 with read lock", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	flushTable := stmt[0].(*ast.FlushStmt)
-	require.Equal(t, ast.FlushTables, flushTable.Tp)
-	require.Equal(t, "tbl1", flushTable.Tables[0].Name.L)
-	require.Equal(t, "tbl2", flushTable.Tables[1].Name.L)
-	require.True(t, flushTable.NoWriteToBinLog)
-	require.True(t, flushTable.ReadLock)
+	if !reflect.DeepEqual(ast.FlushTables, flushTable.Tp) {
+		t.Fatalf("got %v, want %v", flushTable.Tp, ast.FlushTables)
+	}
+	if !reflect.DeepEqual("tbl1", flushTable.Tables[0].Name.L) {
+		t.Fatalf("got %v, want %v", flushTable.Tables[0].Name.L, "tbl1")
+	}
+	if !reflect.DeepEqual("tbl2", flushTable.Tables[1].Name.L) {
+		t.Fatalf("got %v, want %v", flushTable.Tables[1].Name.L, "tbl2")
+	}
+	if !(flushTable.NoWriteToBinLog) {
+		t.Fatal("expected true")
+	}
+	if !(flushTable.ReadLock) {
+		t.Fatal("expected true")
+	}
 }
 
 func TestFlushPrivileges(t *testing.T) {
 	p := parser.New()
 	stmt, _, err := p.Parse("flush privileges", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	flushPrivilege := stmt[0].(*ast.FlushStmt)
-	require.Equal(t, ast.FlushPrivileges, flushPrivilege.Tp)
+	if !reflect.DeepEqual(ast.FlushPrivileges, flushPrivilege.Tp) {
+		t.Fatalf("got %v, want %v", flushPrivilege.Tp, ast.FlushPrivileges)
+	}
 }
 
 func TestExpression(t *testing.T) {
@@ -2474,10 +2712,14 @@ func TestBuiltinFuncAsIdentifier(t *testing.T) {
 		for _, c := range testcases {
 			_, _, err := p.Parse(c.src, "", "")
 			if !c.ok {
-				require.Errorf(t, err, "source %v", c.src)
+				if err == nil {
+					t.Fatalf("source %v", c.src)
+				}
 				continue
 			}
-			require.NoErrorf(t, err, "source %v", c.src)
+			if err != nil {
+				t.Fatalf("%s: %v", fmt.Sprintf("source %v", c.src), err)
+			}
 			if c.ok && !ignoreSpace {
 				RunRestoreTest(t, c.src, c.restore, false, false)
 			}
@@ -4235,457 +4477,947 @@ func TestDDL(t *testing.T) {
 func TestHintError(t *testing.T) {
 	p := parser.New()
 	stmt, warns, err := p.Parse("select /*+ tidb_unknown(T1,t2) */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
-	require.Len(t, warns, 1)
-	require.Equal(t, `[parser:8061]Optimizer hint tidb_unknown is not supported by TiDB and is ignored`, warns[0].Error())
-	require.Len(t, stmt[0].(*ast.SelectStmt).TableHints, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(warns); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual(`[parser:8061]Optimizer hint tidb_unknown is not supported by TiDB and is ignored`, warns[0].Error()) {
+		t.Fatalf("got %v, want %v", warns[0].Error(), `[parser:8061]Optimizer hint tidb_unknown is not supported by TiDB and is ignored`)
+	}
+	if got := len(stmt[0].(*ast.SelectStmt).TableHints); got != 0 {
+		t.Fatalf("expected length %d, got %d", 0, got)
+	}
 	stmt, warns, err = p.Parse("select /*+ TIDB_INLJ(t1, T2) tidb_unknown(T1,t2, 1) */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.Len(t, stmt[0].(*ast.SelectStmt).TableHints, 1)
-	require.NoError(t, err)
-	require.Len(t, warns, 1)
-	require.Equal(t, `[parser:8061]Optimizer hint tidb_unknown is not supported by TiDB and is ignored`, warns[0].Error())
+	if got := len(stmt[0].(*ast.SelectStmt).TableHints); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(warns); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual(`[parser:8061]Optimizer hint tidb_unknown is not supported by TiDB and is ignored`, warns[0].Error()) {
+		t.Fatalf("got %v, want %v", warns[0].Error(), `[parser:8061]Optimizer hint tidb_unknown is not supported by TiDB and is ignored`)
+	}
 	_, _, err = p.Parse("select c1, c2 from /*+ tidb_unknow(T1,t2) */ t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err) // Hints are ignored after the "FROM" keyword!
+	if err != nil {
+		t.Fatal(err)
+	} // Hints are ignored after the "FROM" keyword!
 	_, _, err = p.Parse("select1 /*+ TIDB_INLJ(t1, T2) */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.EqualError(t, err, "line 1 column 7 near \"select1 /*+ TIDB_INLJ(t1, T2) */ c1, c2 from t1, t2 where t1.c1 = t2.c1\" ")
+	if err == nil || err.Error() != "line 1 column 7 near \"select1 /*+ TIDB_INLJ(t1, T2) */ c1, c2 from t1, t2 where t1.c1 = t2.c1\" " {
+		t.Fatalf("expected error %q, got %v", "line 1 column 7 near \"select1 /*+ TIDB_INLJ(t1, T2) */ c1, c2 from t1, t2 where t1.c1 = t2.c1\" ", err)
+	}
 	_, _, err = p.Parse("select /*+ TIDB_INLJ(t1, T2) */ c1, c2 fromt t1, t2 where t1.c1 = t2.c1", "", "")
-	require.EqualError(t, err, "line 1 column 47 near \"t1, t2 where t1.c1 = t2.c1\" ")
+	if err == nil || err.Error() != "line 1 column 47 near \"t1, t2 where t1.c1 = t2.c1\" " {
+		t.Fatalf("expected error %q, got %v", "line 1 column 47 near \"t1, t2 where t1.c1 = t2.c1\" ", err)
+	}
 	_, _, err = p.Parse("SELECT 1 FROM DUAL WHERE 1 IN (SELECT /*+ DEBUG_HINT3 */ 1)", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	stmt, _, err = p.Parse("insert into t select /*+ memory_quota(1 MB) */ * from t;", "", "")
-	require.NoError(t, err)
-	require.Len(t, stmt[0].(*ast.InsertStmt).TableHints, 0)
-	require.Len(t, stmt[0].(*ast.InsertStmt).Select.(*ast.SelectStmt).TableHints, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(stmt[0].(*ast.InsertStmt).TableHints); got != 0 {
+		t.Fatalf("expected length %d, got %d", 0, got)
+	}
+	if got := len(stmt[0].(*ast.InsertStmt).Select.(*ast.SelectStmt).TableHints); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
 	stmt, _, err = p.Parse("insert /*+ memory_quota(1 MB) */ into t select * from t;", "", "")
-	require.NoError(t, err)
-	require.Len(t, stmt[0].(*ast.InsertStmt).TableHints, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(stmt[0].(*ast.InsertStmt).TableHints); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
 
 	_, warns, err = p.Parse("SELECT id FROM tbl WHERE id = 0 FOR UPDATE /*+ xyz */", "", "")
-	require.NoError(t, err)
-	require.Len(t, warns, 1)
-	require.Regexp(t, `near '/\*\+' at line 1$`, warns[0].Error())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(warns); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !regexp.MustCompile(`near '/\*\+' at line 1$`).MatchString(warns[0].Error()) {
+		t.Fatalf("expected %q to match %q", warns[0].Error(), `near '/\*\+' at line 1$`)
+	}
 
 	_, warns, err = p.Parse("create global binding for select /*+ max_execution_time(1) */ 1 using select /*+ max_execution_time(1) */ 1;\n", "", "")
-	require.NoError(t, err)
-	require.Len(t, warns, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(warns); got != 0 {
+		t.Fatalf("expected length %d, got %d", 0, got)
+	}
 }
 
 func TestErrorMsg(t *testing.T) {
 	p := parser.New()
 	_, _, err := p.Parse("select1 1", "", "")
-	require.EqualError(t, err, "line 1 column 7 near \"select1 1\" ")
+	if err == nil || err.Error() != "line 1 column 7 near \"select1 1\" " {
+		t.Fatalf("expected error %q, got %v", "line 1 column 7 near \"select1 1\" ", err)
+	}
 	_, _, err = p.Parse("select 1 from1 dual", "", "")
-	require.EqualError(t, err, "line 1 column 19 near \"dual\" ")
+	if err == nil || err.Error() != "line 1 column 19 near \"dual\" " {
+		t.Fatalf("expected error %q, got %v", "line 1 column 19 near \"dual\" ", err)
+	}
 	_, _, err = p.Parse("select * from t1 join t2 from t1.a = t2.a;", "", "")
-	require.EqualError(t, err, "line 1 column 29 near \"from t1.a = t2.a;\" ")
+	if err == nil || err.Error() != "line 1 column 29 near \"from t1.a = t2.a;\" " {
+		t.Fatalf("expected error %q, got %v", "line 1 column 29 near \"from t1.a = t2.a;\" ", err)
+	}
 	_, _, err = p.Parse("select * from t1 join t2 one t1.a = t2.a;", "", "")
-	require.EqualError(t, err, "line 1 column 31 near \"t1.a = t2.a;\" ")
+	if err == nil || err.Error() != "line 1 column 31 near \"t1.a = t2.a;\" " {
+		t.Fatalf("expected error %q, got %v", "line 1 column 31 near \"t1.a = t2.a;\" ", err)
+	}
 	_, _, err = p.Parse("select * from t1 join t2 on t1.a >>> t2.a;", "", "")
-	require.EqualError(t, err, "line 1 column 36 near \"> t2.a;\" ")
+	if err == nil || err.Error() != "line 1 column 36 near \"> t2.a;\" " {
+		t.Fatalf("expected error %q, got %v", "line 1 column 36 near \"> t2.a;\" ", err)
+	}
 
 	_, _, err = p.Parse("create table t(f_year year(5))ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;", "", "")
-	require.EqualError(t, err, "[parser:1818]Supports only YEAR or YEAR(4) column")
+	if err == nil || err.Error() != "[parser:1818]Supports only YEAR or YEAR(4) column" {
+		t.Fatalf("expected error %q, got %v", "[parser:1818]Supports only YEAR or YEAR(4) column", err)
+	}
 
 	_, _, err = p.Parse("create table ``.t (id int);", "", "")
-	require.EqualError(t, err, "[parser:1102]Incorrect database name ''")
+	if err == nil || err.Error() != "[parser:1102]Incorrect database name ''" {
+		t.Fatalf("expected error %q, got %v", "[parser:1102]Incorrect database name ''", err)
+	}
 
 	_, _, err = p.Parse("create table ` `.t (id int);", "", "")
-	require.EqualError(t, err, "[parser:1102]Incorrect database name ' '")
+	if err == nil || err.Error() != "[parser:1102]Incorrect database name ' '" {
+		t.Fatalf("expected error %q, got %v", "[parser:1102]Incorrect database name ' '", err)
+	}
 
 	_, _, err = p.Parse("select ifnull(a,0) & ifnull(a,0) like '55' ESCAPE '\\\\a' from t;", "", "")
-	require.EqualError(t, err, "[parser:1210]Incorrect arguments to ESCAPE")
+	if err == nil || err.Error() != "[parser:1210]Incorrect arguments to ESCAPE" {
+		t.Fatalf("expected error %q, got %v", "[parser:1210]Incorrect arguments to ESCAPE", err)
+	}
 
 	_, _, err = p.Parse("load data infile 'aaa' into table aaa FIELDS  Enclosed by '\\\\b';", "", "")
-	require.EqualError(t, err, "[parser:1083]Field separator argument is not what is expected; check the manual")
+	if err == nil || err.Error() != "[parser:1083]Field separator argument is not what is expected; check the manual" {
+		t.Fatalf("expected error %q, got %v", "[parser:1083]Field separator argument is not what is expected; check the manual", err)
+	}
 
 	_, _, err = p.Parse("load data infile 'aaa' into table aaa FIELDS  Escaped by '\\\\b';", "", "")
-	require.EqualError(t, err, "[parser:1083]Field separator argument is not what is expected; check the manual")
+	if err == nil || err.Error() != "[parser:1083]Field separator argument is not what is expected; check the manual" {
+		t.Fatalf("expected error %q, got %v", "[parser:1083]Field separator argument is not what is expected; check the manual", err)
+	}
 
 	_, _, err = p.Parse("load data infile 'aaa' into table aaa FIELDS  Enclosed by '\\\\b' Escaped by '\\\\b' ;", "", "")
-	require.EqualError(t, err, "[parser:1083]Field separator argument is not what is expected; check the manual")
+	if err == nil || err.Error() != "[parser:1083]Field separator argument is not what is expected; check the manual" {
+		t.Fatalf("expected error %q, got %v", "[parser:1083]Field separator argument is not what is expected; check the manual", err)
+	}
 
 	_, _, err = p.Parse("ALTER DATABASE `` CHARACTER SET = ''", "", "")
-	require.EqualError(t, err, "[parser:1115]Unknown character set: ''")
+	if err == nil || err.Error() != "[parser:1115]Unknown character set: ''" {
+		t.Fatalf("expected error %q, got %v", "[parser:1115]Unknown character set: ''", err)
+	}
 
 	_, _, err = p.Parse("ALTER DATABASE t CHARACTER SET = ''", "", "")
-	require.EqualError(t, err, "[parser:1115]Unknown character set: ''")
+	if err == nil || err.Error() != "[parser:1115]Unknown character set: ''" {
+		t.Fatalf("expected error %q, got %v", "[parser:1115]Unknown character set: ''", err)
+	}
 
 	_, _, err = p.Parse("ALTER SCHEMA t CHARACTER SET = 'SOME_INVALID_CHARSET'", "", "")
-	require.EqualError(t, err, "[parser:1115]Unknown character set: 'SOME_INVALID_CHARSET'")
+	if err == nil || err.Error() != "[parser:1115]Unknown character set: 'SOME_INVALID_CHARSET'" {
+		t.Fatalf("expected error %q, got %v", "[parser:1115]Unknown character set: 'SOME_INVALID_CHARSET'", err)
+	}
 
 	_, _, err = p.Parse("ALTER DATABASE t COLLATE = ''", "", "")
-	require.EqualError(t, err, "[ddl:1273]Unknown collation: ''")
+	if err == nil || err.Error() != "[ddl:1273]Unknown collation: ''" {
+		t.Fatalf("expected error %q, got %v", "[ddl:1273]Unknown collation: ''", err)
+	}
 
 	_, _, err = p.Parse("ALTER SCHEMA t COLLATE = 'SOME_INVALID_COLLATION'", "", "")
-	require.EqualError(t, err, "[ddl:1273]Unknown collation: 'SOME_INVALID_COLLATION'")
+	if err == nil || err.Error() != "[ddl:1273]Unknown collation: 'SOME_INVALID_COLLATION'" {
+		t.Fatalf("expected error %q, got %v", "[ddl:1273]Unknown collation: 'SOME_INVALID_COLLATION'", err)
+	}
 
 	_, _, err = p.Parse("ALTER DATABASE CHARSET = 'utf8mb4' COLLATE = 'utf8_bin'", "", "")
-	require.EqualError(t, err, "line 1 column 24 near \"= 'utf8mb4' COLLATE = 'utf8_bin'\" ")
+	if err == nil || err.Error() != "line 1 column 24 near \"= 'utf8mb4' COLLATE = 'utf8_bin'\" " {
+		t.Fatalf("expected error %q, got %v", "line 1 column 24 near \"= 'utf8mb4' COLLATE = 'utf8_bin'\" ", err)
+	}
 
 	_, _, err = p.Parse("ALTER DATABASE t ENCRYPTION = ''", "", "")
-	require.EqualError(t, err, "[parser:1525]Incorrect argument (should be Y or N) value: ''")
+	if err == nil || err.Error() != "[parser:1525]Incorrect argument (should be Y or N) value: ''" {
+		t.Fatalf("expected error %q, got %v", "[parser:1525]Incorrect argument (should be Y or N) value: ''", err)
+	}
 
 	_, _, err = p.Parse("ALTER DATABASE", "", "")
-	require.EqualError(t, err, "line 1 column 14 near \"\" ")
+	if err == nil || err.Error() != "line 1 column 14 near \"\" " {
+		t.Fatalf("expected error %q, got %v", "line 1 column 14 near \"\" ", err)
+	}
 
 	_, _, err = p.Parse("ALTER SCHEMA `ANY_DB_NAME`", "", "")
-	require.EqualError(t, err, "line 1 column 26 near \"\" ")
+	if err == nil || err.Error() != "line 1 column 26 near \"\" " {
+		t.Fatalf("expected error %q, got %v", "line 1 column 26 near \"\" ", err)
+	}
 
 	_, _, err = p.Parse("alter table t partition by range FIELDS(a)", "", "")
-	require.EqualError(t, err, "[ddl:1492]For RANGE partitions each partition must be defined")
+	if err == nil || err.Error() != "[ddl:1492]For RANGE partitions each partition must be defined" {
+		t.Fatalf("expected error %q, got %v", "[ddl:1492]For RANGE partitions each partition must be defined", err)
+	}
 
 	_, _, err = p.Parse("alter table t partition by list FIELDS(a)", "", "")
-	require.EqualError(t, err, "[ddl:1492]For LIST partitions each partition must be defined")
+	if err == nil || err.Error() != "[ddl:1492]For LIST partitions each partition must be defined" {
+		t.Fatalf("expected error %q, got %v", "[ddl:1492]For LIST partitions each partition must be defined", err)
+	}
 
 	_, _, err = p.Parse("alter table t partition by list FIELDS(a)", "", "")
-	require.EqualError(t, err, "[ddl:1492]For LIST partitions each partition must be defined")
+	if err == nil || err.Error() != "[ddl:1492]For LIST partitions each partition must be defined" {
+		t.Fatalf("expected error %q, got %v", "[ddl:1492]For LIST partitions each partition must be defined", err)
+	}
 
 	_, _, err = p.Parse("alter table t partition by list FIELDS(a,b,c)", "", "")
-	require.EqualError(t, err, "[ddl:1492]For LIST partitions each partition must be defined")
+	if err == nil || err.Error() != "[ddl:1492]For LIST partitions each partition must be defined" {
+		t.Fatalf("expected error %q, got %v", "[ddl:1492]For LIST partitions each partition must be defined", err)
+	}
 
 	_, _, err = p.Parse("alter table t lock = first", "", "")
-	require.EqualError(t, err, "[parser:1801]Unknown LOCK type 'first'")
+	if err == nil || err.Error() != "[parser:1801]Unknown LOCK type 'first'" {
+		t.Fatalf("expected error %q, got %v", "[parser:1801]Unknown LOCK type 'first'", err)
+	}
 
 	_, _, err = p.Parse("alter table t lock = start", "", "")
-	require.EqualError(t, err, "[parser:1801]Unknown LOCK type 'start'")
+	if err == nil || err.Error() != "[parser:1801]Unknown LOCK type 'start'" {
+		t.Fatalf("expected error %q, got %v", "[parser:1801]Unknown LOCK type 'start'", err)
+	}
 
 	_, _, err = p.Parse("alter table t lock = commit", "", "")
-	require.EqualError(t, err, "[parser:1801]Unknown LOCK type 'commit'")
+	if err == nil || err.Error() != "[parser:1801]Unknown LOCK type 'commit'" {
+		t.Fatalf("expected error %q, got %v", "[parser:1801]Unknown LOCK type 'commit'", err)
+	}
 
 	_, _, err = p.Parse("alter table t lock = binlog", "", "")
-	require.EqualError(t, err, "[parser:1801]Unknown LOCK type 'binlog'")
+	if err == nil || err.Error() != "[parser:1801]Unknown LOCK type 'binlog'" {
+		t.Fatalf("expected error %q, got %v", "[parser:1801]Unknown LOCK type 'binlog'", err)
+	}
 
 	_, _, err = p.Parse("alter table t lock = randomStr123", "", "")
-	require.EqualError(t, err, "[parser:1801]Unknown LOCK type 'randomStr123'")
+	if err == nil || err.Error() != "[parser:1801]Unknown LOCK type 'randomStr123'" {
+		t.Fatalf("expected error %q, got %v", "[parser:1801]Unknown LOCK type 'randomStr123'", err)
+	}
 
 	_, _, err = p.Parse("create table t (a longtext unicode)", "", "")
-	require.EqualError(t, err, "[parser:1115]Unknown character set: 'ucs2'")
+	if err == nil || err.Error() != "[parser:1115]Unknown character set: 'ucs2'" {
+		t.Fatalf("expected error %q, got %v", "[parser:1115]Unknown character set: 'ucs2'", err)
+	}
 
 	_, _, err = p.Parse("create table t (a long byte, b text unicode)", "", "")
-	require.EqualError(t, err, "[parser:1115]Unknown character set: 'ucs2'")
+	if err == nil || err.Error() != "[parser:1115]Unknown character set: 'ucs2'" {
+		t.Fatalf("expected error %q, got %v", "[parser:1115]Unknown character set: 'ucs2'", err)
+	}
 
 	_, _, err = p.Parse("create table t (a long ascii, b long unicode)", "", "")
-	require.EqualError(t, err, "[parser:1115]Unknown character set: 'ucs2'")
+	if err == nil || err.Error() != "[parser:1115]Unknown character set: 'ucs2'" {
+		t.Fatalf("expected error %q, got %v", "[parser:1115]Unknown character set: 'ucs2'", err)
+	}
 
 	_, _, err = p.Parse("create table t (a text unicode, b mediumtext ascii, c int)", "", "")
-	require.EqualError(t, err, "[parser:1115]Unknown character set: 'ucs2'")
+	if err == nil || err.Error() != "[parser:1115]Unknown character set: 'ucs2'" {
+		t.Fatalf("expected error %q, got %v", "[parser:1115]Unknown character set: 'ucs2'", err)
+	}
 
 	_, _, err = p.Parse("select 1 collate some_unknown_collation", "", "")
-	require.EqualError(t, err, "[ddl:1273]Unknown collation: 'some_unknown_collation'")
+	if err == nil || err.Error() != "[ddl:1273]Unknown collation: 'some_unknown_collation'" {
+		t.Fatalf("expected error %q, got %v", "[ddl:1273]Unknown collation: 'some_unknown_collation'", err)
+	}
 }
 
 func TestOptimizerHints(t *testing.T) {
 	p := parser.New()
 	// Test USE_INDEX
 	stmt, _, err := p.Parse("select /*+ USE_INDEX(T1,T2), use_index(t3,t4) */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt := stmt[0].(*ast.SelectStmt)
 
 	hints := selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "use_index", hints[0].HintName.L)
-	require.Len(t, hints[0].Tables, 1)
-	require.Equal(t, "t1", hints[0].Tables[0].TableName.L)
-	require.Len(t, hints[0].Indexes, 1)
-	require.Equal(t, "t2", hints[0].Indexes[0].L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("use_index", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "use_index")
+	}
+	if got := len(hints[0].Tables); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t1", hints[0].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[0].TableName.L, "t1")
+	}
+	if got := len(hints[0].Indexes); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t2", hints[0].Indexes[0].L) {
+		t.Fatalf("got %v, want %v", hints[0].Indexes[0].L, "t2")
+	}
 
-	require.Equal(t, "use_index", hints[1].HintName.L)
-	require.Len(t, hints[1].Tables, 1)
-	require.Equal(t, "t3", hints[1].Tables[0].TableName.L)
-	require.Len(t, hints[1].Indexes, 1)
-	require.Equal(t, "t4", hints[1].Indexes[0].L)
+	if !reflect.DeepEqual("use_index", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "use_index")
+	}
+	if got := len(hints[1].Tables); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t3", hints[1].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[0].TableName.L, "t3")
+	}
+	if got := len(hints[1].Indexes); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t4", hints[1].Indexes[0].L) {
+		t.Fatalf("got %v, want %v", hints[1].Indexes[0].L, "t4")
+	}
 
 	// Test FORCE_INDEX
 	stmt, _, err = p.Parse("select /*+ FORCE_INDEX(T1,T2), force_index(t3,t4) RESOURCE_GROUP(rg1)*/ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 3)
-	require.Equal(t, "force_index", hints[0].HintName.L)
-	require.Len(t, hints[0].Tables, 1)
-	require.Equal(t, "t1", hints[0].Tables[0].TableName.L)
-	require.Len(t, hints[0].Indexes, 1)
-	require.Equal(t, "t2", hints[0].Indexes[0].L)
+	if got := len(hints); got != 3 {
+		t.Fatalf("expected length %d, got %d", 3, got)
+	}
+	if !reflect.DeepEqual("force_index", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "force_index")
+	}
+	if got := len(hints[0].Tables); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t1", hints[0].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[0].TableName.L, "t1")
+	}
+	if got := len(hints[0].Indexes); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t2", hints[0].Indexes[0].L) {
+		t.Fatalf("got %v, want %v", hints[0].Indexes[0].L, "t2")
+	}
 
-	require.Equal(t, "force_index", hints[1].HintName.L)
-	require.Len(t, hints[1].Tables, 1)
-	require.Equal(t, "t3", hints[1].Tables[0].TableName.L)
-	require.Len(t, hints[1].Indexes, 1)
-	require.Equal(t, "t4", hints[1].Indexes[0].L)
+	if !reflect.DeepEqual("force_index", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "force_index")
+	}
+	if got := len(hints[1].Tables); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t3", hints[1].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[0].TableName.L, "t3")
+	}
+	if got := len(hints[1].Indexes); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t4", hints[1].Indexes[0].L) {
+		t.Fatalf("got %v, want %v", hints[1].Indexes[0].L, "t4")
+	}
 
-	require.Equal(t, "resource_group", hints[2].HintName.L)
-	require.Equal(t, hints[2].HintData, "rg1")
+	if !reflect.DeepEqual("resource_group", hints[2].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[2].HintName.L, "resource_group")
+	}
+	if !reflect.DeepEqual(hints[2].HintData, "rg1") {
+		t.Fatalf("got %v, want %v", "rg1", hints[2].HintData)
+	}
 
 	// Test IGNORE_INDEX
 	stmt, _, err = p.Parse("select /*+ IGNORE_INDEX(T1,T2), ignore_index(t3,t4) */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "ignore_index", hints[0].HintName.L)
-	require.Len(t, hints[0].Tables, 1)
-	require.Equal(t, "t1", hints[0].Tables[0].TableName.L)
-	require.Len(t, hints[0].Indexes, 1)
-	require.Equal(t, "t2", hints[0].Indexes[0].L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("ignore_index", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "ignore_index")
+	}
+	if got := len(hints[0].Tables); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t1", hints[0].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[0].TableName.L, "t1")
+	}
+	if got := len(hints[0].Indexes); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t2", hints[0].Indexes[0].L) {
+		t.Fatalf("got %v, want %v", hints[0].Indexes[0].L, "t2")
+	}
 
-	require.Equal(t, "ignore_index", hints[1].HintName.L)
-	require.Len(t, hints[1].Tables, 1)
-	require.Equal(t, "t3", hints[1].Tables[0].TableName.L)
-	require.Len(t, hints[1].Indexes, 1)
-	require.Equal(t, "t4", hints[1].Indexes[0].L)
+	if !reflect.DeepEqual("ignore_index", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "ignore_index")
+	}
+	if got := len(hints[1].Tables); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t3", hints[1].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[0].TableName.L, "t3")
+	}
+	if got := len(hints[1].Indexes); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t4", hints[1].Indexes[0].L) {
+		t.Fatalf("got %v, want %v", hints[1].Indexes[0].L, "t4")
+	}
 
 	// Test ORDER_INDEX
 	stmt, _, err = p.Parse("select /*+ ORDER_INDEX(T1,T2), order_index(t3,t4) */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "order_index", hints[0].HintName.L)
-	require.Len(t, hints[0].Tables, 1)
-	require.Equal(t, "t1", hints[0].Tables[0].TableName.L)
-	require.Len(t, hints[0].Indexes, 1)
-	require.Equal(t, "t2", hints[0].Indexes[0].L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("order_index", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "order_index")
+	}
+	if got := len(hints[0].Tables); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t1", hints[0].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[0].TableName.L, "t1")
+	}
+	if got := len(hints[0].Indexes); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t2", hints[0].Indexes[0].L) {
+		t.Fatalf("got %v, want %v", hints[0].Indexes[0].L, "t2")
+	}
 
-	require.Equal(t, "order_index", hints[1].HintName.L)
-	require.Len(t, hints[1].Tables, 1)
-	require.Equal(t, "t3", hints[1].Tables[0].TableName.L)
-	require.Len(t, hints[1].Indexes, 1)
-	require.Equal(t, "t4", hints[1].Indexes[0].L)
+	if !reflect.DeepEqual("order_index", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "order_index")
+	}
+	if got := len(hints[1].Tables); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t3", hints[1].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[0].TableName.L, "t3")
+	}
+	if got := len(hints[1].Indexes); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t4", hints[1].Indexes[0].L) {
+		t.Fatalf("got %v, want %v", hints[1].Indexes[0].L, "t4")
+	}
 
 	// Test NO_ORDER_INDEX
 	stmt, _, err = p.Parse("select /*+ NO_ORDER_INDEX(T1,T2), no_order_index(t3,t4) */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "no_order_index", hints[0].HintName.L)
-	require.Len(t, hints[0].Tables, 1)
-	require.Equal(t, "t1", hints[0].Tables[0].TableName.L)
-	require.Len(t, hints[0].Indexes, 1)
-	require.Equal(t, "t2", hints[0].Indexes[0].L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("no_order_index", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "no_order_index")
+	}
+	if got := len(hints[0].Tables); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t1", hints[0].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[0].TableName.L, "t1")
+	}
+	if got := len(hints[0].Indexes); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t2", hints[0].Indexes[0].L) {
+		t.Fatalf("got %v, want %v", hints[0].Indexes[0].L, "t2")
+	}
 
-	require.Equal(t, "no_order_index", hints[1].HintName.L)
-	require.Len(t, hints[1].Tables, 1)
-	require.Equal(t, "t3", hints[1].Tables[0].TableName.L)
-	require.Len(t, hints[1].Indexes, 1)
-	require.Equal(t, "t4", hints[1].Indexes[0].L)
+	if !reflect.DeepEqual("no_order_index", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "no_order_index")
+	}
+	if got := len(hints[1].Tables); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t3", hints[1].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[0].TableName.L, "t3")
+	}
+	if got := len(hints[1].Indexes); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t4", hints[1].Indexes[0].L) {
+		t.Fatalf("got %v, want %v", hints[1].Indexes[0].L, "t4")
+	}
 
 	// Test INDEX_LOOKUP_PUSHDOWN
 	stmt, _, err = p.Parse("select /*+ INDEX_LOOKUP_PUSHDOWN(T1,T2), index_lookup_pushdown(t3,t4) */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "index_lookup_pushdown", hints[0].HintName.L)
-	require.Len(t, hints[0].Tables, 1)
-	require.Equal(t, "t1", hints[0].Tables[0].TableName.L)
-	require.Len(t, hints[0].Indexes, 1)
-	require.Equal(t, "t2", hints[0].Indexes[0].L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("index_lookup_pushdown", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "index_lookup_pushdown")
+	}
+	if got := len(hints[0].Tables); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t1", hints[0].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[0].TableName.L, "t1")
+	}
+	if got := len(hints[0].Indexes); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t2", hints[0].Indexes[0].L) {
+		t.Fatalf("got %v, want %v", hints[0].Indexes[0].L, "t2")
+	}
 
-	require.Equal(t, "index_lookup_pushdown", hints[1].HintName.L)
-	require.Len(t, hints[1].Tables, 1)
-	require.Equal(t, "t3", hints[1].Tables[0].TableName.L)
-	require.Len(t, hints[1].Indexes, 1)
-	require.Equal(t, "t4", hints[1].Indexes[0].L)
+	if !reflect.DeepEqual("index_lookup_pushdown", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "index_lookup_pushdown")
+	}
+	if got := len(hints[1].Tables); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t3", hints[1].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[0].TableName.L, "t3")
+	}
+	if got := len(hints[1].Indexes); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t4", hints[1].Indexes[0].L) {
+		t.Fatalf("got %v, want %v", hints[1].Indexes[0].L, "t4")
+	}
 
 	// Test TIDB_SMJ
 	stmt, _, err = p.Parse("select /*+ TIDB_SMJ(T1,t2), tidb_smj(T3,t4) */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "tidb_smj", hints[0].HintName.L)
-	require.Len(t, hints[0].Tables, 2)
-	require.Equal(t, "t1", hints[0].Tables[0].TableName.L)
-	require.Equal(t, "t2", hints[0].Tables[1].TableName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("tidb_smj", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "tidb_smj")
+	}
+	if got := len(hints[0].Tables); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("t1", hints[0].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[0].TableName.L, "t1")
+	}
+	if !reflect.DeepEqual("t2", hints[0].Tables[1].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[1].TableName.L, "t2")
+	}
 
-	require.Equal(t, "tidb_smj", hints[1].HintName.L)
-	require.Len(t, hints[1].Tables, 2)
-	require.Equal(t, "t3", hints[1].Tables[0].TableName.L)
-	require.Equal(t, "t4", hints[1].Tables[1].TableName.L)
+	if !reflect.DeepEqual("tidb_smj", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "tidb_smj")
+	}
+	if got := len(hints[1].Tables); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("t3", hints[1].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[0].TableName.L, "t3")
+	}
+	if !reflect.DeepEqual("t4", hints[1].Tables[1].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[1].TableName.L, "t4")
+	}
 
 	// Test MERGE_JOIN
 	stmt, _, err = p.Parse("select /*+ MERGE_JOIN(t1, T2), merge_join(t3, t4) */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "merge_join", hints[0].HintName.L)
-	require.Len(t, hints[0].Tables, 2)
-	require.Equal(t, "t1", hints[0].Tables[0].TableName.L)
-	require.Equal(t, "t2", hints[0].Tables[1].TableName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("merge_join", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "merge_join")
+	}
+	if got := len(hints[0].Tables); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("t1", hints[0].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[0].TableName.L, "t1")
+	}
+	if !reflect.DeepEqual("t2", hints[0].Tables[1].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[1].TableName.L, "t2")
+	}
 
-	require.Equal(t, "merge_join", hints[1].HintName.L)
-	require.Len(t, hints[1].Tables, 2)
-	require.Equal(t, "t3", hints[1].Tables[0].TableName.L)
-	require.Equal(t, "t4", hints[1].Tables[1].TableName.L)
+	if !reflect.DeepEqual("merge_join", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "merge_join")
+	}
+	if got := len(hints[1].Tables); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("t3", hints[1].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[0].TableName.L, "t3")
+	}
+	if !reflect.DeepEqual("t4", hints[1].Tables[1].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[1].TableName.L, "t4")
+	}
 
 	// TEST BROADCAST_JOIN
 	stmt, _, err = p.Parse("select /*+ BROADCAST_JOIN(t1, T2), broadcast_join(t3, t4) */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "broadcast_join", hints[0].HintName.L)
-	require.Len(t, hints[0].Tables, 2)
-	require.Equal(t, "t1", hints[0].Tables[0].TableName.L)
-	require.Equal(t, "t2", hints[0].Tables[1].TableName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("broadcast_join", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "broadcast_join")
+	}
+	if got := len(hints[0].Tables); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("t1", hints[0].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[0].TableName.L, "t1")
+	}
+	if !reflect.DeepEqual("t2", hints[0].Tables[1].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[1].TableName.L, "t2")
+	}
 
-	require.Equal(t, "broadcast_join", hints[1].HintName.L)
-	require.Len(t, hints[1].Tables, 2)
-	require.Equal(t, "t3", hints[1].Tables[0].TableName.L)
-	require.Equal(t, "t4", hints[1].Tables[1].TableName.L)
+	if !reflect.DeepEqual("broadcast_join", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "broadcast_join")
+	}
+	if got := len(hints[1].Tables); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("t3", hints[1].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[0].TableName.L, "t3")
+	}
+	if !reflect.DeepEqual("t4", hints[1].Tables[1].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[1].TableName.L, "t4")
+	}
 
 	// Test TIDB_INLJ
 	stmt, _, err = p.Parse("select /*+ TIDB_INLJ(t1, T2), tidb_inlj(t3, t4) */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "tidb_inlj", hints[0].HintName.L)
-	require.Len(t, hints[0].Tables, 2)
-	require.Equal(t, "t1", hints[0].Tables[0].TableName.L)
-	require.Equal(t, "t2", hints[0].Tables[1].TableName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("tidb_inlj", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "tidb_inlj")
+	}
+	if got := len(hints[0].Tables); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("t1", hints[0].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[0].TableName.L, "t1")
+	}
+	if !reflect.DeepEqual("t2", hints[0].Tables[1].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[1].TableName.L, "t2")
+	}
 
-	require.Equal(t, "tidb_inlj", hints[1].HintName.L)
-	require.Len(t, hints[1].Tables, 2)
-	require.Equal(t, "t3", hints[1].Tables[0].TableName.L)
-	require.Equal(t, "t4", hints[1].Tables[1].TableName.L)
+	if !reflect.DeepEqual("tidb_inlj", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "tidb_inlj")
+	}
+	if got := len(hints[1].Tables); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("t3", hints[1].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[0].TableName.L, "t3")
+	}
+	if !reflect.DeepEqual("t4", hints[1].Tables[1].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[1].TableName.L, "t4")
+	}
 
 	// Test INL_JOIN
 	stmt, _, err = p.Parse("select /*+ INL_JOIN(t1, T2), inl_join(t3, t4) */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "inl_join", hints[0].HintName.L)
-	require.Len(t, hints[0].Tables, 2)
-	require.Equal(t, "t1", hints[0].Tables[0].TableName.L)
-	require.Equal(t, "t2", hints[0].Tables[1].TableName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("inl_join", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "inl_join")
+	}
+	if got := len(hints[0].Tables); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("t1", hints[0].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[0].TableName.L, "t1")
+	}
+	if !reflect.DeepEqual("t2", hints[0].Tables[1].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[1].TableName.L, "t2")
+	}
 
-	require.Equal(t, "inl_join", hints[1].HintName.L)
-	require.Len(t, hints[1].Tables, 2)
-	require.Equal(t, "t3", hints[1].Tables[0].TableName.L)
-	require.Equal(t, "t4", hints[1].Tables[1].TableName.L)
+	if !reflect.DeepEqual("inl_join", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "inl_join")
+	}
+	if got := len(hints[1].Tables); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("t3", hints[1].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[0].TableName.L, "t3")
+	}
+	if !reflect.DeepEqual("t4", hints[1].Tables[1].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[1].TableName.L, "t4")
+	}
 
 	// Test INL_HASH_JOIN
 	stmt, _, err = p.Parse("select /*+ INL_HASH_JOIN(t1, T2), inl_hash_join(t3, t4) */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "inl_hash_join", hints[0].HintName.L)
-	require.Len(t, hints[0].Tables, 2)
-	require.Equal(t, "t1", hints[0].Tables[0].TableName.L)
-	require.Equal(t, "t2", hints[0].Tables[1].TableName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("inl_hash_join", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "inl_hash_join")
+	}
+	if got := len(hints[0].Tables); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("t1", hints[0].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[0].TableName.L, "t1")
+	}
+	if !reflect.DeepEqual("t2", hints[0].Tables[1].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[1].TableName.L, "t2")
+	}
 
-	require.Equal(t, "inl_hash_join", hints[1].HintName.L)
-	require.Len(t, hints[1].Tables, 2)
-	require.Equal(t, "t3", hints[1].Tables[0].TableName.L)
-	require.Equal(t, "t4", hints[1].Tables[1].TableName.L)
+	if !reflect.DeepEqual("inl_hash_join", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "inl_hash_join")
+	}
+	if got := len(hints[1].Tables); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("t3", hints[1].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[0].TableName.L, "t3")
+	}
+	if !reflect.DeepEqual("t4", hints[1].Tables[1].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[1].TableName.L, "t4")
+	}
 
 	// Test INL_MERGE_JOIN
 	stmt, _, err = p.Parse("select /*+ INL_MERGE_JOIN(t1, T2), inl_merge_join(t3, t4) */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "inl_merge_join", hints[0].HintName.L)
-	require.Len(t, hints[0].Tables, 2)
-	require.Equal(t, "t1", hints[0].Tables[0].TableName.L)
-	require.Equal(t, "t2", hints[0].Tables[1].TableName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("inl_merge_join", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "inl_merge_join")
+	}
+	if got := len(hints[0].Tables); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("t1", hints[0].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[0].TableName.L, "t1")
+	}
+	if !reflect.DeepEqual("t2", hints[0].Tables[1].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[1].TableName.L, "t2")
+	}
 
-	require.Equal(t, "inl_merge_join", hints[1].HintName.L)
-	require.Len(t, hints[1].Tables, 2)
-	require.Equal(t, "t3", hints[1].Tables[0].TableName.L)
-	require.Equal(t, "t4", hints[1].Tables[1].TableName.L)
+	if !reflect.DeepEqual("inl_merge_join", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "inl_merge_join")
+	}
+	if got := len(hints[1].Tables); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("t3", hints[1].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[0].TableName.L, "t3")
+	}
+	if !reflect.DeepEqual("t4", hints[1].Tables[1].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[1].TableName.L, "t4")
+	}
 
 	// Test TIDB_HJ
 	stmt, _, err = p.Parse("select /*+ TIDB_HJ(t1, T2), tidb_hj(t3, t4) */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "tidb_hj", hints[0].HintName.L)
-	require.Len(t, hints[0].Tables, 2)
-	require.Equal(t, "t1", hints[0].Tables[0].TableName.L)
-	require.Equal(t, "t2", hints[0].Tables[1].TableName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("tidb_hj", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "tidb_hj")
+	}
+	if got := len(hints[0].Tables); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("t1", hints[0].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[0].TableName.L, "t1")
+	}
+	if !reflect.DeepEqual("t2", hints[0].Tables[1].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[1].TableName.L, "t2")
+	}
 
-	require.Equal(t, "tidb_hj", hints[1].HintName.L)
-	require.Len(t, hints[1].Tables, 2)
-	require.Equal(t, "t3", hints[1].Tables[0].TableName.L)
-	require.Equal(t, "t4", hints[1].Tables[1].TableName.L)
+	if !reflect.DeepEqual("tidb_hj", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "tidb_hj")
+	}
+	if got := len(hints[1].Tables); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("t3", hints[1].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[0].TableName.L, "t3")
+	}
+	if !reflect.DeepEqual("t4", hints[1].Tables[1].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[1].TableName.L, "t4")
+	}
 
 	// Test HASH_JOIN
 	stmt, _, err = p.Parse("select /*+ HASH_JOIN(t1, T2), hash_join(t3, t4) */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "hash_join", hints[0].HintName.L)
-	require.Len(t, hints[0].Tables, 2)
-	require.Equal(t, "t1", hints[0].Tables[0].TableName.L)
-	require.Equal(t, "t2", hints[0].Tables[1].TableName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("hash_join", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "hash_join")
+	}
+	if got := len(hints[0].Tables); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("t1", hints[0].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[0].TableName.L, "t1")
+	}
+	if !reflect.DeepEqual("t2", hints[0].Tables[1].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[1].TableName.L, "t2")
+	}
 
-	require.Equal(t, "hash_join", hints[1].HintName.L)
-	require.Len(t, hints[1].Tables, 2)
-	require.Equal(t, "t3", hints[1].Tables[0].TableName.L)
-	require.Equal(t, "t4", hints[1].Tables[1].TableName.L)
+	if !reflect.DeepEqual("hash_join", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "hash_join")
+	}
+	if got := len(hints[1].Tables); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("t3", hints[1].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[0].TableName.L, "t3")
+	}
+	if !reflect.DeepEqual("t4", hints[1].Tables[1].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[1].TableName.L, "t4")
+	}
 
 	// Test HASH_JOIN_BUILD and HASH_JOIN_PROBE
 	stmt, _, err = p.Parse("select /*+ hash_join_build(t1), hash_join_probe(t4) */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "hash_join_build", hints[0].HintName.L)
-	require.Len(t, hints[0].Tables, 1)
-	require.Equal(t, "t1", hints[0].Tables[0].TableName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("hash_join_build", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "hash_join_build")
+	}
+	if got := len(hints[0].Tables); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t1", hints[0].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[0].TableName.L, "t1")
+	}
 
-	require.Equal(t, "hash_join_probe", hints[1].HintName.L)
-	require.Len(t, hints[1].Tables, 1)
-	require.Equal(t, "t4", hints[1].Tables[0].TableName.L)
+	if !reflect.DeepEqual("hash_join_probe", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "hash_join_probe")
+	}
+	if got := len(hints[1].Tables); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t4", hints[1].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[0].TableName.L, "t4")
+	}
 
 	// Test HASH_JOIN with SWAP_JOIN_INPUTS/NO_SWAP_JOIN_INPUTS
 	// t1 for build, t4 for probe
 	stmt, _, err = p.Parse("select /*+ HASH_JOIN(t1, T2), hash_join(t3, t4), SWAP_JOIN_INPUTS(t1), NO_SWAP_JOIN_INPUTS(t4)  */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 4)
-	require.Equal(t, "hash_join", hints[0].HintName.L)
-	require.Len(t, hints[0].Tables, 2)
-	require.Equal(t, "t1", hints[0].Tables[0].TableName.L)
-	require.Equal(t, "t2", hints[0].Tables[1].TableName.L)
+	if got := len(hints); got != 4 {
+		t.Fatalf("expected length %d, got %d", 4, got)
+	}
+	if !reflect.DeepEqual("hash_join", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "hash_join")
+	}
+	if got := len(hints[0].Tables); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("t1", hints[0].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[0].TableName.L, "t1")
+	}
+	if !reflect.DeepEqual("t2", hints[0].Tables[1].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[1].TableName.L, "t2")
+	}
 
-	require.Equal(t, "hash_join", hints[1].HintName.L)
-	require.Len(t, hints[1].Tables, 2)
-	require.Equal(t, "t3", hints[1].Tables[0].TableName.L)
-	require.Equal(t, "t4", hints[1].Tables[1].TableName.L)
+	if !reflect.DeepEqual("hash_join", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "hash_join")
+	}
+	if got := len(hints[1].Tables); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("t3", hints[1].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[0].TableName.L, "t3")
+	}
+	if !reflect.DeepEqual("t4", hints[1].Tables[1].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[1].TableName.L, "t4")
+	}
 
-	require.Equal(t, "swap_join_inputs", hints[2].HintName.L)
-	require.Len(t, hints[2].Tables, 1)
-	require.Equal(t, "t1", hints[2].Tables[0].TableName.L)
+	if !reflect.DeepEqual("swap_join_inputs", hints[2].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[2].HintName.L, "swap_join_inputs")
+	}
+	if got := len(hints[2].Tables); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t1", hints[2].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[2].Tables[0].TableName.L, "t1")
+	}
 
-	require.Equal(t, "no_swap_join_inputs", hints[3].HintName.L)
-	require.Len(t, hints[3].Tables, 1)
-	require.Equal(t, "t4", hints[3].Tables[0].TableName.L)
+	if !reflect.DeepEqual("no_swap_join_inputs", hints[3].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[3].HintName.L, "no_swap_join_inputs")
+	}
+	if got := len(hints[3].Tables); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t4", hints[3].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[3].Tables[0].TableName.L, "t4")
+	}
 
 	// Test MAX_EXECUTION_TIME
 	queries := []string{
@@ -4696,12 +5428,20 @@ func TestOptimizerHints(t *testing.T) {
 	}
 	for i, query := range queries {
 		stmt, _, err = p.Parse(query, "", "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 		selectStmt = stmt[0].(*ast.SelectStmt)
 		hints = selectStmt.TableHints
-		require.Len(t, hints, 1)
-		require.Equal(t, "max_execution_time", hints[0].HintName.L, "case", i)
-		require.Equal(t, uint64(1000), hints[0].HintData.(uint64))
+		if got := len(hints); got != 1 {
+			t.Fatalf("expected length %d, got %d", 1, got)
+		}
+		if !reflect.DeepEqual("max_execution_time", hints[0].HintName.L) {
+			t.Fatalf("case %d: got %v, want %v", i, hints[0].HintName.L, "max_execution_time")
+		}
+		if !reflect.DeepEqual(uint64(1000), hints[0].HintData.(uint64)) {
+			t.Fatalf("got %v, want %v", hints[0].HintData.(uint64), uint64(1000))
+		}
 	}
 
 	// Test NTH_PLAN
@@ -4713,427 +5453,833 @@ func TestOptimizerHints(t *testing.T) {
 	}
 	for i, query := range queries {
 		stmt, _, err = p.Parse(query, "", "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 		selectStmt = stmt[0].(*ast.SelectStmt)
 		hints = selectStmt.TableHints
-		require.Len(t, hints, 1)
-		require.Equal(t, "nth_plan", hints[0].HintName.L, "case", i)
-		require.Equal(t, int64(10), hints[0].HintData.(int64))
+		if got := len(hints); got != 1 {
+			t.Fatalf("expected length %d, got %d", 1, got)
+		}
+		if !reflect.DeepEqual("nth_plan", hints[0].HintName.L) {
+			t.Fatalf("case %d: got %v, want %v", i, hints[0].HintName.L, "nth_plan")
+		}
+		if !reflect.DeepEqual(int64(10), hints[0].HintData.(int64)) {
+			t.Fatalf("got %v, want %v", hints[0].HintData.(int64), int64(10))
+		}
 	}
 
 	// Test USE_INDEX_MERGE
 	stmt, _, err = p.Parse("select /*+ USE_INDEX_MERGE(t1, c1), use_index_merge(t2, c1), use_index_merge(t3, c1, primary, c2) */ c1, c2 from t1, t2, t3 where t1.c1 = t2.c1 and t3.c2 = t1.c2", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 3)
-	require.Equal(t, "use_index_merge", hints[0].HintName.L)
-	require.Len(t, hints[0].Tables, 1)
-	require.Equal(t, "t1", hints[0].Tables[0].TableName.L)
-	require.Len(t, hints[0].Indexes, 1)
-	require.Equal(t, "c1", hints[0].Indexes[0].L)
+	if got := len(hints); got != 3 {
+		t.Fatalf("expected length %d, got %d", 3, got)
+	}
+	if !reflect.DeepEqual("use_index_merge", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "use_index_merge")
+	}
+	if got := len(hints[0].Tables); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t1", hints[0].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[0].TableName.L, "t1")
+	}
+	if got := len(hints[0].Indexes); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("c1", hints[0].Indexes[0].L) {
+		t.Fatalf("got %v, want %v", hints[0].Indexes[0].L, "c1")
+	}
 
-	require.Equal(t, "use_index_merge", hints[1].HintName.L)
-	require.Len(t, hints[1].Tables, 1)
-	require.Equal(t, "t2", hints[1].Tables[0].TableName.L)
-	require.Len(t, hints[1].Indexes, 1)
-	require.Equal(t, "c1", hints[1].Indexes[0].L)
+	if !reflect.DeepEqual("use_index_merge", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "use_index_merge")
+	}
+	if got := len(hints[1].Tables); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t2", hints[1].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[0].TableName.L, "t2")
+	}
+	if got := len(hints[1].Indexes); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("c1", hints[1].Indexes[0].L) {
+		t.Fatalf("got %v, want %v", hints[1].Indexes[0].L, "c1")
+	}
 
-	require.Equal(t, "use_index_merge", hints[2].HintName.L)
-	require.Len(t, hints[2].Tables, 1)
-	require.Equal(t, "t3", hints[2].Tables[0].TableName.L)
-	require.Len(t, hints[2].Indexes, 3)
-	require.Equal(t, "c1", hints[2].Indexes[0].L)
-	require.Equal(t, "primary", hints[2].Indexes[1].L)
-	require.Equal(t, "c2", hints[2].Indexes[2].L)
+	if !reflect.DeepEqual("use_index_merge", hints[2].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[2].HintName.L, "use_index_merge")
+	}
+	if got := len(hints[2].Tables); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t3", hints[2].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[2].Tables[0].TableName.L, "t3")
+	}
+	if got := len(hints[2].Indexes); got != 3 {
+		t.Fatalf("expected length %d, got %d", 3, got)
+	}
+	if !reflect.DeepEqual("c1", hints[2].Indexes[0].L) {
+		t.Fatalf("got %v, want %v", hints[2].Indexes[0].L, "c1")
+	}
+	if !reflect.DeepEqual("primary", hints[2].Indexes[1].L) {
+		t.Fatalf("got %v, want %v", hints[2].Indexes[1].L, "primary")
+	}
+	if !reflect.DeepEqual("c2", hints[2].Indexes[2].L) {
+		t.Fatalf("got %v, want %v", hints[2].Indexes[2].L, "c2")
+	}
 
 	// Test READ_FROM_STORAGE
 	stmt, _, err = p.Parse("select /*+ READ_FROM_STORAGE(tiflash[t1, t2], tikv[t3]) */ c1, c2 from t1, t2, t1 t3 where t1.c1 = t2.c1 and t2.c1 = t3.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "read_from_storage", hints[0].HintName.L)
-	require.Equal(t, "tiflash", hints[0].HintData.(ast.CIStr).L)
-	require.Len(t, hints[0].Tables, 2)
-	require.Equal(t, "t1", hints[0].Tables[0].TableName.L)
-	require.Equal(t, "t2", hints[0].Tables[1].TableName.L)
-	require.Equal(t, "read_from_storage", hints[1].HintName.L)
-	require.Equal(t, "tikv", hints[1].HintData.(ast.CIStr).L)
-	require.Len(t, hints[1].Tables, 1)
-	require.Equal(t, "t3", hints[1].Tables[0].TableName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("read_from_storage", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "read_from_storage")
+	}
+	if !reflect.DeepEqual("tiflash", hints[0].HintData.(ast.CIStr).L) {
+		t.Fatalf("got %v, want %v", hints[0].HintData.(ast.CIStr).L, "tiflash")
+	}
+	if got := len(hints[0].Tables); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("t1", hints[0].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[0].TableName.L, "t1")
+	}
+	if !reflect.DeepEqual("t2", hints[0].Tables[1].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[0].Tables[1].TableName.L, "t2")
+	}
+	if !reflect.DeepEqual("read_from_storage", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "read_from_storage")
+	}
+	if !reflect.DeepEqual("tikv", hints[1].HintData.(ast.CIStr).L) {
+		t.Fatalf("got %v, want %v", hints[1].HintData.(ast.CIStr).L, "tikv")
+	}
+	if got := len(hints[1].Tables); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
+	if !reflect.DeepEqual("t3", hints[1].Tables[0].TableName.L) {
+		t.Fatalf("got %v, want %v", hints[1].Tables[0].TableName.L, "t3")
+	}
 
 	// Test USE_TOJA
 	stmt, _, err = p.Parse("select /*+ USE_TOJA(true), use_toja(false) */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "use_toja", hints[0].HintName.L)
-	require.True(t, hints[0].HintData.(bool))
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("use_toja", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "use_toja")
+	}
+	if !(hints[0].HintData.(bool)) {
+		t.Fatal("expected true")
+	}
 
-	require.Equal(t, "use_toja", hints[1].HintName.L)
-	require.False(t, hints[1].HintData.(bool))
+	if !reflect.DeepEqual("use_toja", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "use_toja")
+	}
+	if hints[1].HintData.(bool) {
+		t.Fatal("expected false")
+	}
 
 	// Test IGNORE_PLAN_CACHE
 	stmt, _, err = p.Parse("select /*+ IGNORE_PLAN_CACHE(), ignore_plan_cache() */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "ignore_plan_cache", hints[0].HintName.L)
-	require.Equal(t, "ignore_plan_cache", hints[1].HintName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("ignore_plan_cache", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "ignore_plan_cache")
+	}
+	if !reflect.DeepEqual("ignore_plan_cache", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "ignore_plan_cache")
+	}
 
 	stmt, _, err = p.Parse("delete /*+ IGNORE_PLAN_CACHE(), ignore_plan_cache() */ from t where a = 1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	deleteStmt := stmt[0].(*ast.DeleteStmt)
 	hints = deleteStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "ignore_plan_cache", hints[0].HintName.L)
-	require.Equal(t, "ignore_plan_cache", hints[1].HintName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("ignore_plan_cache", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "ignore_plan_cache")
+	}
+	if !reflect.DeepEqual("ignore_plan_cache", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "ignore_plan_cache")
+	}
 
 	stmt, _, err = p.Parse("update /*+  IGNORE_PLAN_CACHE(), ignore_plan_cache() */ t set a = 1 where a = 10", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	updateStmt := stmt[0].(*ast.UpdateStmt)
 	hints = updateStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "ignore_plan_cache", hints[0].HintName.L)
-	require.Equal(t, "ignore_plan_cache", hints[1].HintName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("ignore_plan_cache", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "ignore_plan_cache")
+	}
+	if !reflect.DeepEqual("ignore_plan_cache", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "ignore_plan_cache")
+	}
 
 	// Test WRITE_SLOW_LOG
 	stmt, _, err = p.Parse("select /*+ WRITE_SLOW_LOG(), write_slow_log() */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 0)
+	if got := len(hints); got != 0 {
+		t.Fatalf("expected length %d, got %d", 0, got)
+	}
 
 	stmt, _, err = p.Parse("select /*+ WRITE_SLOW_LOG, write_slow_log*/ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "write_slow_log", hints[0].HintName.L)
-	require.Equal(t, "write_slow_log", hints[1].HintName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("write_slow_log", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "write_slow_log")
+	}
+	if !reflect.DeepEqual("write_slow_log", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "write_slow_log")
+	}
 
 	// Test USE_CASCADES
 	stmt, _, err = p.Parse("select /*+ USE_CASCADES(true), use_cascades(false) */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "use_cascades", hints[0].HintName.L)
-	require.True(t, hints[0].HintData.(bool))
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("use_cascades", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "use_cascades")
+	}
+	if !(hints[0].HintData.(bool)) {
+		t.Fatal("expected true")
+	}
 
-	require.Equal(t, "use_cascades", hints[1].HintName.L)
-	require.False(t, hints[1].HintData.(bool))
+	if !reflect.DeepEqual("use_cascades", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "use_cascades")
+	}
+	if hints[1].HintData.(bool) {
+		t.Fatal("expected false")
+	}
 
 	// Test USE_PLAN_CACHE
 	stmt, _, err = p.Parse("select /*+ USE_PLAN_CACHE(), use_plan_cache() */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "use_plan_cache", hints[0].HintName.L)
-	require.Equal(t, "use_plan_cache", hints[1].HintName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("use_plan_cache", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "use_plan_cache")
+	}
+	if !reflect.DeepEqual("use_plan_cache", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "use_plan_cache")
+	}
 
 	// Test QUERY_TYPE
 	stmt, _, err = p.Parse("select /*+ QUERY_TYPE(OLAP), query_type(OLTP) */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "query_type", hints[0].HintName.L)
-	require.Equal(t, "olap", hints[0].HintData.(ast.CIStr).L)
-	require.Equal(t, "query_type", hints[1].HintName.L)
-	require.Equal(t, "oltp", hints[1].HintData.(ast.CIStr).L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("query_type", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "query_type")
+	}
+	if !reflect.DeepEqual("olap", hints[0].HintData.(ast.CIStr).L) {
+		t.Fatalf("got %v, want %v", hints[0].HintData.(ast.CIStr).L, "olap")
+	}
+	if !reflect.DeepEqual("query_type", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "query_type")
+	}
+	if !reflect.DeepEqual("oltp", hints[1].HintData.(ast.CIStr).L) {
+		t.Fatalf("got %v, want %v", hints[1].HintData.(ast.CIStr).L, "oltp")
+	}
 
 	// Test MEMORY_QUOTA
 	stmt, _, err = p.Parse("select /*+ MEMORY_QUOTA(1 MB), memory_quota(1 GB) */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "memory_quota", hints[0].HintName.L)
-	require.Equal(t, int64(1024*1024), hints[0].HintData.(int64))
-	require.Equal(t, "memory_quota", hints[1].HintName.L)
-	require.Equal(t, int64(1024*1024*1024), hints[1].HintData.(int64))
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("memory_quota", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "memory_quota")
+	}
+	if !reflect.DeepEqual(int64(1024*1024), hints[0].HintData.(int64)) {
+		t.Fatalf("got %v, want %v", hints[0].HintData.(int64), int64(1024*1024))
+	}
+	if !reflect.DeepEqual("memory_quota", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "memory_quota")
+	}
+	if !reflect.DeepEqual(int64(1024*1024*1024), hints[1].HintData.(int64)) {
+		t.Fatalf("got %v, want %v", hints[1].HintData.(int64), int64(1024*1024*1024))
+	}
 
 	_, _, err = p.Parse("select /*+ MEMORY_QUOTA(18446744073709551612 MB), memory_quota(8689934592 GB) */ 1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Test HASH_AGG
 	stmt, _, err = p.Parse("select /*+ HASH_AGG(), hash_agg() */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "hash_agg", hints[0].HintName.L)
-	require.Equal(t, "hash_agg", hints[1].HintName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("hash_agg", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "hash_agg")
+	}
+	if !reflect.DeepEqual("hash_agg", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "hash_agg")
+	}
 
 	// Test MPPAgg
 	stmt, _, err = p.Parse("select /*+ MPP_1PHASE_AGG(), mpp_1phase_agg() */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "mpp_1phase_agg", hints[0].HintName.L)
-	require.Equal(t, "mpp_1phase_agg", hints[1].HintName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("mpp_1phase_agg", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "mpp_1phase_agg")
+	}
+	if !reflect.DeepEqual("mpp_1phase_agg", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "mpp_1phase_agg")
+	}
 
 	stmt, _, err = p.Parse("select /*+ MPP_2PHASE_AGG(), mpp_2phase_agg() */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "mpp_2phase_agg", hints[0].HintName.L)
-	require.Equal(t, "mpp_2phase_agg", hints[1].HintName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("mpp_2phase_agg", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "mpp_2phase_agg")
+	}
+	if !reflect.DeepEqual("mpp_2phase_agg", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "mpp_2phase_agg")
+	}
 
 	// Test ShuffleJoin
 	stmt, _, err = p.Parse("select /*+ SHUFFLE_JOIN(t1, t2), shuffle_join(t1, t2) */ * from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "shuffle_join", hints[0].HintName.L)
-	require.Equal(t, "shuffle_join", hints[1].HintName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("shuffle_join", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "shuffle_join")
+	}
+	if !reflect.DeepEqual("shuffle_join", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "shuffle_join")
+	}
 
 	// Test STREAM_AGG
 	stmt, _, err = p.Parse("select /*+ STREAM_AGG(), stream_agg() */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "stream_agg", hints[0].HintName.L)
-	require.Equal(t, "stream_agg", hints[1].HintName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("stream_agg", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "stream_agg")
+	}
+	if !reflect.DeepEqual("stream_agg", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "stream_agg")
+	}
 
 	// Test AGG_TO_COP
 	stmt, _, err = p.Parse("select /*+ AGG_TO_COP(), agg_to_cop() */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "agg_to_cop", hints[0].HintName.L)
-	require.Equal(t, "agg_to_cop", hints[1].HintName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("agg_to_cop", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "agg_to_cop")
+	}
+	if !reflect.DeepEqual("agg_to_cop", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "agg_to_cop")
+	}
 
 	// Test NO_INDEX_MERGE
 	stmt, _, err = p.Parse("select /*+ NO_INDEX_MERGE(), no_index_merge() */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "no_index_merge", hints[0].HintName.L)
-	require.Equal(t, "no_index_merge", hints[1].HintName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("no_index_merge", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "no_index_merge")
+	}
+	if !reflect.DeepEqual("no_index_merge", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "no_index_merge")
+	}
 
 	// Test READ_CONSISTENT_REPLICA
 	stmt, _, err = p.Parse("select /*+ READ_CONSISTENT_REPLICA(), read_consistent_replica() */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "read_consistent_replica", hints[0].HintName.L)
-	require.Equal(t, "read_consistent_replica", hints[1].HintName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("read_consistent_replica", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "read_consistent_replica")
+	}
+	if !reflect.DeepEqual("read_consistent_replica", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "read_consistent_replica")
+	}
 
 	// Test LIMIT_TO_COP
 	stmt, _, err = p.Parse("select /*+ LIMIT_TO_COP(), limit_to_cop() */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "limit_to_cop", hints[0].HintName.L)
-	require.Equal(t, "limit_to_cop", hints[1].HintName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("limit_to_cop", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "limit_to_cop")
+	}
+	if !reflect.DeepEqual("limit_to_cop", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "limit_to_cop")
+	}
 
 	// Test CTE MERGE
 	stmt, _, err = p.Parse("with cte(x) as (select * from t1) select /*+ MERGE(), merge() */ * from cte;", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "merge", hints[0].HintName.L)
-	require.Equal(t, "merge", hints[1].HintName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("merge", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "merge")
+	}
+	if !reflect.DeepEqual("merge", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "merge")
+	}
 
 	// Test STRAIGHT_JOIN
 	stmt, _, err = p.Parse("select /*+ STRAIGHT_JOIN(), straight_join() */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "straight_join", hints[0].HintName.L)
-	require.Equal(t, "straight_join", hints[1].HintName.L)
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("straight_join", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "straight_join")
+	}
+	if !reflect.DeepEqual("straight_join", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "straight_join")
+	}
 
 	// Test LEADING
 	stmt, _, err = p.Parse("select /*+ LEADING(T1), LEADING(t2, t3), LEADING(T4, t5, t6) */ c1, c2 from t1, t2 where t1.c1 = t2.c1", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 3)
-	require.Equal(t, "leading", hints[0].HintName.L)
+	if got := len(hints); got != 3 {
+		t.Fatalf("expected length %d, got %d", 3, got)
+	}
+	if !reflect.DeepEqual("leading", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "leading")
+	}
 	leadingList1, ok := hints[0].HintData.(*ast.LeadingList)
-	require.True(t, ok)
-	require.Len(t, leadingList1.Items, 1)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if got := len(leadingList1.Items); got != 1 {
+		t.Fatalf("expected length %d, got %d", 1, got)
+	}
 	hintTable1, ok := leadingList1.Items[0].(*ast.HintTable)
-	require.True(t, ok)
-	require.Equal(t, "t1", hintTable1.TableName.L)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if !reflect.DeepEqual("t1", hintTable1.TableName.L) {
+		t.Fatalf("got %v, want %v", hintTable1.TableName.L, "t1")
+	}
 
-	require.Equal(t, "leading", hints[1].HintName.L)
+	if !reflect.DeepEqual("leading", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "leading")
+	}
 	leadingList2, ok := hints[1].HintData.(*ast.LeadingList)
-	require.True(t, ok)
-	require.Len(t, leadingList2.Items, 2)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if got := len(leadingList2.Items); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
 	hintTable2, ok := leadingList2.Items[0].(*ast.HintTable)
-	require.True(t, ok)
-	require.Equal(t, "t2", hintTable2.TableName.L)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if !reflect.DeepEqual("t2", hintTable2.TableName.L) {
+		t.Fatalf("got %v, want %v", hintTable2.TableName.L, "t2")
+	}
 	hintTable3, ok := leadingList2.Items[1].(*ast.HintTable)
-	require.True(t, ok)
-	require.Equal(t, "t3", hintTable3.TableName.L)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if !reflect.DeepEqual("t3", hintTable3.TableName.L) {
+		t.Fatalf("got %v, want %v", hintTable3.TableName.L, "t3")
+	}
 
-	require.Equal(t, "leading", hints[2].HintName.L)
+	if !reflect.DeepEqual("leading", hints[2].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[2].HintName.L, "leading")
+	}
 	leadingList3, ok := hints[2].HintData.(*ast.LeadingList)
-	require.True(t, ok)
-	require.Len(t, leadingList3.Items, 3)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if got := len(leadingList3.Items); got != 3 {
+		t.Fatalf("expected length %d, got %d", 3, got)
+	}
 	hintTable4, ok := leadingList3.Items[0].(*ast.HintTable)
-	require.True(t, ok)
-	require.Equal(t, "t4", hintTable4.TableName.L)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if !reflect.DeepEqual("t4", hintTable4.TableName.L) {
+		t.Fatalf("got %v, want %v", hintTable4.TableName.L, "t4")
+	}
 	hintTable5, ok := leadingList3.Items[1].(*ast.HintTable)
-	require.True(t, ok)
-	require.Equal(t, "t5", hintTable5.TableName.L)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if !reflect.DeepEqual("t5", hintTable5.TableName.L) {
+		t.Fatalf("got %v, want %v", hintTable5.TableName.L, "t5")
+	}
 	hintTable6, ok := leadingList3.Items[2].(*ast.HintTable)
-	require.True(t, ok)
-	require.Equal(t, "t6", hintTable6.TableName.L)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if !reflect.DeepEqual("t6", hintTable6.TableName.L) {
+		t.Fatalf("got %v, want %v", hintTable6.TableName.L, "t6")
+	}
 
 	// Test NO_HASH_JOIN
 	stmt, _, err = p.Parse("select /*+ NO_HASH_JOIN(t1, t2), NO_HASH_JOIN(t3) */ * from t1, t2, t3", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "no_hash_join", hints[0].HintName.L)
-	require.Equal(t, hints[0].Tables[0].TableName.L, "t1")
-	require.Equal(t, hints[0].Tables[1].TableName.L, "t2")
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("no_hash_join", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "no_hash_join")
+	}
+	if !reflect.DeepEqual(hints[0].Tables[0].TableName.L, "t1") {
+		t.Fatalf("got %v, want %v", "t1", hints[0].Tables[0].TableName.L)
+	}
+	if !reflect.DeepEqual(hints[0].Tables[1].TableName.L, "t2") {
+		t.Fatalf("got %v, want %v", "t2", hints[0].Tables[1].TableName.L)
+	}
 
-	require.Equal(t, "no_hash_join", hints[1].HintName.L)
-	require.Equal(t, hints[1].Tables[0].TableName.L, "t3")
+	if !reflect.DeepEqual("no_hash_join", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "no_hash_join")
+	}
+	if !reflect.DeepEqual(hints[1].Tables[0].TableName.L, "t3") {
+		t.Fatalf("got %v, want %v", "t3", hints[1].Tables[0].TableName.L)
+	}
 
 	// Test NO_MERGE_JOIN
 	stmt, _, err = p.Parse("select /*+ NO_MERGE_JOIN(t1), NO_MERGE_JOIN(t3) */ * from t1, t2, t3", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "no_merge_join", hints[0].HintName.L)
-	require.Equal(t, hints[0].Tables[0].TableName.L, "t1")
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("no_merge_join", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "no_merge_join")
+	}
+	if !reflect.DeepEqual(hints[0].Tables[0].TableName.L, "t1") {
+		t.Fatalf("got %v, want %v", "t1", hints[0].Tables[0].TableName.L)
+	}
 
-	require.Equal(t, "no_merge_join", hints[1].HintName.L)
-	require.Equal(t, hints[1].Tables[0].TableName.L, "t3")
+	if !reflect.DeepEqual("no_merge_join", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "no_merge_join")
+	}
+	if !reflect.DeepEqual(hints[1].Tables[0].TableName.L, "t3") {
+		t.Fatalf("got %v, want %v", "t3", hints[1].Tables[0].TableName.L)
+	}
 
 	// Test INDEX_JOIN
 	stmt, _, err = p.Parse("select /*+ INDEX_JOIN(t1), INDEX_JOIN(t3) */ * from t1, t2, t3", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "index_join", hints[0].HintName.L)
-	require.Equal(t, hints[0].Tables[0].TableName.L, "t1")
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("index_join", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "index_join")
+	}
+	if !reflect.DeepEqual(hints[0].Tables[0].TableName.L, "t1") {
+		t.Fatalf("got %v, want %v", "t1", hints[0].Tables[0].TableName.L)
+	}
 
-	require.Equal(t, "index_join", hints[1].HintName.L)
-	require.Equal(t, hints[1].Tables[0].TableName.L, "t3")
+	if !reflect.DeepEqual("index_join", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "index_join")
+	}
+	if !reflect.DeepEqual(hints[1].Tables[0].TableName.L, "t3") {
+		t.Fatalf("got %v, want %v", "t3", hints[1].Tables[0].TableName.L)
+	}
 
 	// Test NO_INDEX_JOIN
 	stmt, _, err = p.Parse("select /*+ NO_INDEX_JOIN(t1), NO_INDEX_JOIN(t3) */ * from t1, t2, t3", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "no_index_join", hints[0].HintName.L)
-	require.Equal(t, hints[0].Tables[0].TableName.L, "t1")
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("no_index_join", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "no_index_join")
+	}
+	if !reflect.DeepEqual(hints[0].Tables[0].TableName.L, "t1") {
+		t.Fatalf("got %v, want %v", "t1", hints[0].Tables[0].TableName.L)
+	}
 
-	require.Equal(t, "no_index_join", hints[1].HintName.L)
-	require.Equal(t, hints[1].Tables[0].TableName.L, "t3")
+	if !reflect.DeepEqual("no_index_join", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "no_index_join")
+	}
+	if !reflect.DeepEqual(hints[1].Tables[0].TableName.L, "t3") {
+		t.Fatalf("got %v, want %v", "t3", hints[1].Tables[0].TableName.L)
+	}
 
 	// Test INDEX_HASH_JOIN
 	stmt, _, err = p.Parse("select /*+ INDEX_HASH_JOIN(t1), INDEX_HASH_JOIN(t3) */ * from t1, t2, t3", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "index_hash_join", hints[0].HintName.L)
-	require.Equal(t, hints[0].Tables[0].TableName.L, "t1")
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("index_hash_join", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "index_hash_join")
+	}
+	if !reflect.DeepEqual(hints[0].Tables[0].TableName.L, "t1") {
+		t.Fatalf("got %v, want %v", "t1", hints[0].Tables[0].TableName.L)
+	}
 
-	require.Equal(t, "index_hash_join", hints[1].HintName.L)
-	require.Equal(t, hints[1].Tables[0].TableName.L, "t3")
+	if !reflect.DeepEqual("index_hash_join", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "index_hash_join")
+	}
+	if !reflect.DeepEqual(hints[1].Tables[0].TableName.L, "t3") {
+		t.Fatalf("got %v, want %v", "t3", hints[1].Tables[0].TableName.L)
+	}
 
 	// Test NO_INDEX_HASH_JOIN
 	stmt, _, err = p.Parse("select /*+ NO_INDEX_HASH_JOIN(t1), NO_INDEX_HASH_JOIN(t3) */ * from t1, t2, t3", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "no_index_hash_join", hints[0].HintName.L)
-	require.Equal(t, hints[0].Tables[0].TableName.L, "t1")
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("no_index_hash_join", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "no_index_hash_join")
+	}
+	if !reflect.DeepEqual(hints[0].Tables[0].TableName.L, "t1") {
+		t.Fatalf("got %v, want %v", "t1", hints[0].Tables[0].TableName.L)
+	}
 
-	require.Equal(t, "no_index_hash_join", hints[1].HintName.L)
-	require.Equal(t, hints[1].Tables[0].TableName.L, "t3")
+	if !reflect.DeepEqual("no_index_hash_join", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "no_index_hash_join")
+	}
+	if !reflect.DeepEqual(hints[1].Tables[0].TableName.L, "t3") {
+		t.Fatalf("got %v, want %v", "t3", hints[1].Tables[0].TableName.L)
+	}
 
 	// Test INDEX_MERGE_JOIN
 	stmt, _, err = p.Parse("select /*+ INDEX_MERGE_JOIN(t1), INDEX_MERGE_JOIN(t3) */ * from t1, t2, t3", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "index_merge_join", hints[0].HintName.L)
-	require.Equal(t, hints[0].Tables[0].TableName.L, "t1")
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("index_merge_join", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "index_merge_join")
+	}
+	if !reflect.DeepEqual(hints[0].Tables[0].TableName.L, "t1") {
+		t.Fatalf("got %v, want %v", "t1", hints[0].Tables[0].TableName.L)
+	}
 
-	require.Equal(t, "index_merge_join", hints[1].HintName.L)
-	require.Equal(t, hints[1].Tables[0].TableName.L, "t3")
+	if !reflect.DeepEqual("index_merge_join", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "index_merge_join")
+	}
+	if !reflect.DeepEqual(hints[1].Tables[0].TableName.L, "t3") {
+		t.Fatalf("got %v, want %v", "t3", hints[1].Tables[0].TableName.L)
+	}
 
 	// Test NO_INDEX_MERGE_JOIN
 	stmt, _, err = p.Parse("select /*+ NO_INDEX_MERGE_JOIN(t1), NO_INDEX_MERGE_JOIN(t3) */ * from t1, t2, t3", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "no_index_merge_join", hints[0].HintName.L)
-	require.Equal(t, hints[0].Tables[0].TableName.L, "t1")
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("no_index_merge_join", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "no_index_merge_join")
+	}
+	if !reflect.DeepEqual(hints[0].Tables[0].TableName.L, "t1") {
+		t.Fatalf("got %v, want %v", "t1", hints[0].Tables[0].TableName.L)
+	}
 
-	require.Equal(t, "no_index_merge_join", hints[1].HintName.L)
-	require.Equal(t, hints[1].Tables[0].TableName.L, "t3")
+	if !reflect.DeepEqual("no_index_merge_join", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "no_index_merge_join")
+	}
+	if !reflect.DeepEqual(hints[1].Tables[0].TableName.L, "t3") {
+		t.Fatalf("got %v, want %v", "t3", hints[1].Tables[0].TableName.L)
+	}
 
 	// Test HYPO_INDEX
 	stmt, _, err = p.Parse("select /*+ HYPO_INDEX(t1, a), HYPO_INDEX(t3, a, b, c) */ * from t1, t2, t3", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	selectStmt = stmt[0].(*ast.SelectStmt)
 
 	hints = selectStmt.TableHints
-	require.Len(t, hints, 2)
-	require.Equal(t, "hypo_index", hints[0].HintName.L)
-	require.Equal(t, hints[0].Tables[0].TableName.L, "t1")
+	if got := len(hints); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual("hypo_index", hints[0].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[0].HintName.L, "hypo_index")
+	}
+	if !reflect.DeepEqual(hints[0].Tables[0].TableName.L, "t1") {
+		t.Fatalf("got %v, want %v", "t1", hints[0].Tables[0].TableName.L)
+	}
 
-	require.Equal(t, "hypo_index", hints[1].HintName.L)
-	require.Equal(t, hints[1].Tables[0].TableName.L, "t3")
+	if !reflect.DeepEqual("hypo_index", hints[1].HintName.L) {
+		t.Fatalf("got %v, want %v", hints[1].HintName.L, "hypo_index")
+	}
+	if !reflect.DeepEqual(hints[1].Tables[0].TableName.L, "t3") {
+		t.Fatalf("got %v, want %v", "t3", hints[1].Tables[0].TableName.L)
+	}
 }
 
 func TestType(t *testing.T) {
@@ -5400,7 +6546,9 @@ type subqueryChecker struct {
 // Enter implements ast.Visitor interface.
 func (sc *subqueryChecker) Enter(inNode ast.Node) (outNode ast.Node, skipChildren bool) {
 	if expr, ok := inNode.(*ast.SubqueryExpr); ok {
-		require.Equal(sc.t, sc.text, expr.Query.Text())
+		if !reflect.DeepEqual(sc.text, expr.Query.Text()) {
+			sc.t.Fatalf("got %v, want %v", expr.Query.Text(), sc.text)
+		}
 		return inNode, true
 	}
 	return inNode, false
@@ -5455,7 +6603,9 @@ func TestSubquery(t *testing.T) {
 	p := parser.New()
 	for _, tbl := range tests {
 		stmt, err := p.ParseOneStmt(tbl.input, "", "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 		stmt.Accept(&subqueryChecker{
 			text: tbl.text,
 			t:    t,
@@ -5587,7 +6737,9 @@ func TestSetOperator(t *testing.T) {
 func checkOrderBy(t *testing.T, s ast.Node, hasOrderBy []bool, i int) int {
 	switch x := s.(type) {
 	case *ast.SelectStmt:
-		require.Equal(t, hasOrderBy[i], x.OrderBy != nil)
+		if !reflect.DeepEqual(hasOrderBy[i], x.OrderBy != nil) {
+			t.Fatalf("got %v, want %v", x.OrderBy != nil, hasOrderBy[i])
+		}
 		return i + 1
 	case *ast.SetOprSelectList:
 		for _, sel := range x.Selects {
@@ -5615,18 +6767,24 @@ func TestUnionOrderBy(t *testing.T) {
 
 	for _, tbl := range tests {
 		stmt, _, err := p.Parse(tbl.src, "", "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 		us, ok := stmt[0].(*ast.SetOprStmt)
 		if ok {
 			var i int
 			for _, s := range us.SelectList.Selects {
 				i = checkOrderBy(t, s, tbl.hasOrderBy, i)
 			}
-			require.Equal(t, tbl.hasOrderBy[i], us.OrderBy != nil)
+			if !reflect.DeepEqual(tbl.hasOrderBy[i], us.OrderBy != nil) {
+				t.Fatalf("got %v, want %v", us.OrderBy != nil, tbl.hasOrderBy[i])
+			}
 		}
 		ss, ok := stmt[0].(*ast.SelectStmt)
 		if ok {
-			require.Equal(t, tbl.hasOrderBy[0], ss.OrderBy != nil)
+			if !reflect.DeepEqual(tbl.hasOrderBy[0], ss.OrderBy != nil) {
+				t.Fatalf("got %v, want %v", ss.OrderBy != nil, tbl.hasOrderBy[0])
+			}
 		}
 	}
 }
@@ -5727,9 +6885,13 @@ func TestPriority(t *testing.T) {
 
 	p := parser.New()
 	stmt, _, err := p.Parse("select HIGH_PRIORITY * from t", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	sel := stmt[0].(*ast.SelectStmt)
-	require.Equal(t, mysql.HighPriority, sel.SelectStmtOpts.Priority)
+	if !reflect.DeepEqual(mysql.HighPriority, sel.SelectStmtOpts.Priority) {
+		t.Fatalf("got %v, want %v", sel.SelectStmtOpts.Priority, mysql.HighPriority)
+	}
 }
 
 func TestSQLResult(t *testing.T) {
@@ -5755,10 +6917,14 @@ func TestSQLNoCache(t *testing.T) {
 	p := parser.New()
 	for _, tbl := range table {
 		stmt, _, err := p.Parse(tbl.src, "", "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		sel := stmt[0].(*ast.SelectStmt)
-		require.Equal(t, tbl.ok, sel.SelectStmtOpts.SQLCache)
+		if !reflect.DeepEqual(tbl.ok, sel.SelectStmtOpts.SQLCache) {
+			t.Fatalf("got %v, want %v", sel.SelectStmtOpts.SQLCache, tbl.ok)
+		}
 	}
 }
 
@@ -5968,12 +7134,22 @@ func TestBinding(t *testing.T) {
 
 	p := parser.New()
 	sms, _, err := p.Parse("create global binding for select * from t using select * from t use index(a)", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	v, ok := sms[0].(*ast.CreateBindingStmt)
-	require.True(t, ok)
-	require.Equal(t, "select * from t", v.OriginNode.Text())
-	require.Equal(t, "select * from t use index(a)", v.HintedNode.Text())
-	require.True(t, v.GlobalScope)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if !reflect.DeepEqual("select * from t", v.OriginNode.Text()) {
+		t.Fatalf("got %v, want %v", v.OriginNode.Text(), "select * from t")
+	}
+	if !reflect.DeepEqual("select * from t use index(a)", v.HintedNode.Text()) {
+		t.Fatalf("got %v, want %v", v.HintedNode.Text(), "select * from t use index(a)")
+	}
+	if !(v.GlobalScope) {
+		t.Fatal("expected true")
+	}
 }
 
 func TestView(t *testing.T) {
@@ -6052,13 +7228,25 @@ func TestView(t *testing.T) {
 	// Test case for the text of the select statement in create view statement.
 	p := parser.New()
 	sms, _, err := p.Parse("create view v as select * from t", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	v, ok := sms[0].(*ast.CreateViewStmt)
-	require.True(t, ok)
-	require.Equal(t, ast.AlgorithmUndefined, v.Algorithm)
-	require.Equal(t, "select * from t", v.Select.Text())
-	require.Equal(t, ast.SecurityDefiner, v.Security)
-	require.Equal(t, ast.CheckOptionCascaded, v.CheckOption)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if !reflect.DeepEqual(ast.AlgorithmUndefined, v.Algorithm) {
+		t.Fatalf("got %v, want %v", v.Algorithm, ast.AlgorithmUndefined)
+	}
+	if !reflect.DeepEqual("select * from t", v.Select.Text()) {
+		t.Fatalf("got %v, want %v", v.Select.Text(), "select * from t")
+	}
+	if !reflect.DeepEqual(ast.SecurityDefiner, v.Security) {
+		t.Fatalf("got %v, want %v", v.Security, ast.SecurityDefiner)
+	}
+	if !reflect.DeepEqual(ast.CheckOptionCascaded, v.CheckOption) {
+		t.Fatalf("got %v, want %v", v.CheckOption, ast.CheckOptionCascaded)
+	}
 
 	src := `CREATE OR REPLACE ALGORITHM = UNDEFINED DEFINER = root@localhost
                   SQL SECURITY DEFINER
@@ -6067,29 +7255,61 @@ func TestView(t *testing.T) {
 
 	var st ast.StmtNode
 	st, err = p.ParseOneStmt(src, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	v, ok = st.(*ast.CreateViewStmt)
-	require.True(t, ok)
-	require.True(t, v.OrReplace)
-	require.Equal(t, ast.AlgorithmUndefined, v.Algorithm)
-	require.Equal(t, "root", v.Definer.Username)
-	require.Equal(t, "localhost", v.Definer.Hostname)
-	require.Equal(t, ast.NewCIStr("a"), v.Cols[0])
-	require.Equal(t, ast.NewCIStr("b"), v.Cols[1])
-	require.Equal(t, ast.NewCIStr("c"), v.Cols[2])
-	require.Equal(t, "select c,d,e from t", v.Select.Text())
-	require.Equal(t, ast.SecurityDefiner, v.Security)
-	require.Equal(t, ast.CheckOptionCascaded, v.CheckOption)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if !(v.OrReplace) {
+		t.Fatal("expected true")
+	}
+	if !reflect.DeepEqual(ast.AlgorithmUndefined, v.Algorithm) {
+		t.Fatalf("got %v, want %v", v.Algorithm, ast.AlgorithmUndefined)
+	}
+	if !reflect.DeepEqual("root", v.Definer.Username) {
+		t.Fatalf("got %v, want %v", v.Definer.Username, "root")
+	}
+	if !reflect.DeepEqual("localhost", v.Definer.Hostname) {
+		t.Fatalf("got %v, want %v", v.Definer.Hostname, "localhost")
+	}
+	if !reflect.DeepEqual(ast.NewCIStr("a"), v.Cols[0]) {
+		t.Fatalf("got %v, want %v", v.Cols[0], ast.NewCIStr("a"))
+	}
+	if !reflect.DeepEqual(ast.NewCIStr("b"), v.Cols[1]) {
+		t.Fatalf("got %v, want %v", v.Cols[1], ast.NewCIStr("b"))
+	}
+	if !reflect.DeepEqual(ast.NewCIStr("c"), v.Cols[2]) {
+		t.Fatalf("got %v, want %v", v.Cols[2], ast.NewCIStr("c"))
+	}
+	if !reflect.DeepEqual("select c,d,e from t", v.Select.Text()) {
+		t.Fatalf("got %v, want %v", v.Select.Text(), "select c,d,e from t")
+	}
+	if !reflect.DeepEqual(ast.SecurityDefiner, v.Security) {
+		t.Fatalf("got %v, want %v", v.Security, ast.SecurityDefiner)
+	}
+	if !reflect.DeepEqual(ast.CheckOptionCascaded, v.CheckOption) {
+		t.Fatalf("got %v, want %v", v.CheckOption, ast.CheckOptionCascaded)
+	}
 
 	src = `
 CREATE VIEW v1 AS SELECT * FROM t;
 CREATE VIEW v2 AS SELECT 123123123123123;
 `
 	nodes, _, err := p.Parse(src, "", "")
-	require.NoError(t, err)
-	require.Len(t, nodes, 2)
-	require.Equal(t, nodes[0].(*ast.CreateViewStmt).Select.Text(), "SELECT * FROM t")
-	require.Equal(t, nodes[1].(*ast.CreateViewStmt).Select.Text(), "SELECT 123123123123123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(nodes); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
+	if !reflect.DeepEqual(nodes[0].(*ast.CreateViewStmt).Select.Text(), "SELECT * FROM t") {
+		t.Fatalf("got %v, want %v", "SELECT * FROM t", nodes[0].(*ast.CreateViewStmt).Select.Text())
+	}
+	if !reflect.DeepEqual(nodes[1].(*ast.CreateViewStmt).Select.Text(), "SELECT 123123123123123") {
+		t.Fatalf("got %v, want %v", "SELECT 123123123123123", nodes[1].(*ast.CreateViewStmt).Select.Text())
+	}
 }
 
 func TestTimestampDiffUnit(t *testing.T) {
@@ -6097,19 +7317,31 @@ func TestTimestampDiffUnit(t *testing.T) {
 	// TimeUnit should be unified to upper case.
 	p := parser.New()
 	stmt, _, err := p.Parse("SELECT TIMESTAMPDIFF(MONTH,'2003-02-01','2003-05-01'), TIMESTAMPDIFF(month,'2003-02-01','2003-05-01');", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	ss := stmt[0].(*ast.SelectStmt)
 	fields := ss.Fields.Fields
-	require.Len(t, fields, 2)
+	if got := len(fields); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
 	expr := fields[0].Expr
 	f, ok := expr.(*ast.FuncCallExpr)
-	require.True(t, ok)
-	require.Equal(t, ast.TimeUnitMonth, f.Args[0].(*ast.TimeUnitExpr).Unit)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if !reflect.DeepEqual(ast.TimeUnitMonth, f.Args[0].(*ast.TimeUnitExpr).Unit) {
+		t.Fatalf("got %v, want %v", f.Args[0].(*ast.TimeUnitExpr).Unit, ast.TimeUnitMonth)
+	}
 
 	expr = fields[1].Expr
 	f, ok = expr.(*ast.FuncCallExpr)
-	require.True(t, ok)
-	require.Equal(t, ast.TimeUnitMonth, f.Args[0].(*ast.TimeUnitExpr).Unit)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if !reflect.DeepEqual(ast.TimeUnitMonth, f.Args[0].(*ast.TimeUnitExpr).Unit) {
+		t.Fatalf("got %v, want %v", f.Args[0].(*ast.TimeUnitExpr).Unit, ast.TimeUnitMonth)
+	}
 
 	// Test Illegal TimeUnit for TimestampDiff
 	table := []testCase{
@@ -6132,25 +7364,37 @@ func TestFuncCallExprOffset(t *testing.T) {
 	// Test case for offset field on func call expr.
 	p := parser.New()
 	stmt, _, err := p.Parse("SELECT s.a(), b();", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	ss := stmt[0].(*ast.SelectStmt)
 	fields := ss.Fields.Fields
-	require.Len(t, fields, 2)
+	if got := len(fields); got != 2 {
+		t.Fatalf("expected length %d, got %d", 2, got)
+	}
 
 	{
 		// s.a()
 		expr := fields[0].Expr
 		f, ok := expr.(*ast.FuncCallExpr)
-		require.True(t, ok)
-		require.Equal(t, 7, f.OriginTextPosition())
+		if !(ok) {
+			t.Fatal("expected true")
+		}
+		if !reflect.DeepEqual(7, f.OriginTextPosition()) {
+			t.Fatalf("got %v, want %v", f.OriginTextPosition(), 7)
+		}
 	}
 
 	{
 		// b()
 		expr := fields[1].Expr
 		f, ok := expr.(*ast.FuncCallExpr)
-		require.True(t, ok)
-		require.Equal(t, 14, f.OriginTextPosition())
+		if !(ok) {
+			t.Fatal("expected true")
+		}
+		if !reflect.DeepEqual(14, f.OriginTextPosition()) {
+			t.Fatalf("got %v, want %v", f.OriginTextPosition(), 14)
+		}
 	}
 }
 
@@ -6191,7 +7435,9 @@ func TestSQLModeANSIQuotes(t *testing.T) {
 	}
 	for _, test := range tests {
 		_, _, err := p.Parse(test, "", "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
@@ -6203,18 +7449,28 @@ func TestDDLStatements(t *testing.T) {
 		b char(10) charset utf8 collate utf8_general_ci,
 		c text charset latin1) ENGINE=innoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin`
 	stmts, _, err := p.Parse(createTableStr, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	stmt := stmts[0].(*ast.CreateTableStmt)
-	require.True(t, mysql.HasBinaryFlag(stmt.Cols[0].Tp.GetFlag()))
+	if !(mysql.HasBinaryFlag(stmt.Cols[0].Tp.GetFlag())) {
+		t.Fatal("expected true")
+	}
 	for _, colDef := range stmt.Cols[1:] {
-		require.False(t, mysql.HasBinaryFlag(colDef.Tp.GetFlag()))
+		if mysql.HasBinaryFlag(colDef.Tp.GetFlag()) {
+			t.Fatal("expected false")
+		}
 	}
 	for _, tblOpt := range stmt.Options {
 		switch tblOpt.Tp {
 		case ast.TableOptionCharset:
-			require.Equal(t, "utf8", tblOpt.StrValue)
+			if !reflect.DeepEqual("utf8", tblOpt.StrValue) {
+				t.Fatalf("got %v, want %v", tblOpt.StrValue, "utf8")
+			}
 		case ast.TableOptionCollate:
-			require.Equal(t, "utf8_bin", tblOpt.StrValue)
+			if !reflect.DeepEqual("utf8_bin", tblOpt.StrValue) {
+				t.Fatalf("got %v, want %v", tblOpt.StrValue, "utf8_bin")
+			}
 		}
 	}
 	createTableStr = `CREATE TABLE t (
@@ -6222,12 +7478,20 @@ func TestDDLStatements(t *testing.T) {
 		b binary(10),
 		c blob)`
 	stmts, _, err = p.Parse(createTableStr, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	stmt = stmts[0].(*ast.CreateTableStmt)
 	for _, colDef := range stmt.Cols {
-		require.Equal(t, charset.CharsetBin, colDef.Tp.GetCharset())
-		require.Equal(t, charset.CollationBin, colDef.Tp.GetCollate())
-		require.True(t, mysql.HasBinaryFlag(colDef.Tp.GetFlag()))
+		if !reflect.DeepEqual(charset.CharsetBin, colDef.Tp.GetCharset()) {
+			t.Fatalf("got %v, want %v", colDef.Tp.GetCharset(), charset.CharsetBin)
+		}
+		if !reflect.DeepEqual(charset.CollationBin, colDef.Tp.GetCollate()) {
+			t.Fatalf("got %v, want %v", colDef.Tp.GetCollate(), charset.CollationBin)
+		}
+		if !(mysql.HasBinaryFlag(colDef.Tp.GetFlag())) {
+			t.Fatal("expected true")
+		}
 	}
 	// Test set collate for all column types
 	createTableStr = `CREATE TABLE t (
@@ -6259,27 +7523,39 @@ func TestDDLStatements(t *testing.T) {
 		c_set set('1') collate utf8_bin,
 		c_json json collate utf8_bin)`
 	_, _, err = p.Parse(createTableStr, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	createTableStr = `CREATE TABLE t (c_double double(10))`
 	_, _, err = p.Parse(createTableStr, "", "")
-	require.EqualError(t, err, "[parser:1149]You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use")
+	if err == nil || err.Error() != "[parser:1149]You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use" {
+		t.Fatalf("expected error %q, got %v", "[parser:1149]You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use", err)
+	}
 	p.SetStrictDoubleTypeCheck(false)
 	_, _, err = p.Parse(createTableStr, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	p.SetStrictDoubleTypeCheck(true)
 
 	createTableStr = `CREATE TABLE t (c_double double(10, 2))`
 	_, _, err = p.Parse(createTableStr, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	createTableStr = `create global temporary table t010(local_01 int, local_03 varchar(20))`
 	_, _, err = p.Parse(createTableStr, "", "")
-	require.EqualError(t, err, "line 1 column 70 near \"\"GLOBAL TEMPORARY and ON COMMIT DELETE ROWS must appear together ")
+	if err == nil || err.Error() != "line 1 column 70 near \"\"GLOBAL TEMPORARY and ON COMMIT DELETE ROWS must appear together " {
+		t.Fatalf("expected error %q, got %v", "line 1 column 70 near \"\"GLOBAL TEMPORARY and ON COMMIT DELETE ROWS must appear together ", err)
+	}
 
 	createTableStr = `create global temporary table t010(local_01 int, local_03 varchar(20)) on commit preserve rows`
 	_, _, err = p.Parse(createTableStr, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestAnalyze(t *testing.T) {
@@ -6389,7 +7665,9 @@ func TestTableSample(t *testing.T) {
 	}
 	for _, sql := range cases {
 		_, err := p.ParseOneStmt(sql, "", "")
-		require.NoErrorf(t, err, "source %v", sql)
+		if err != nil {
+			t.Fatalf("%s: %v", fmt.Sprintf("source %v", sql), err)
+		}
 	}
 }
 
@@ -6407,26 +7685,38 @@ func TestGeneratedColumn(t *testing.T) {
 	for _, tbl := range tests {
 		stmtNodes, _, err := p.Parse(tbl.input, "", "")
 		if tbl.ok {
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatal(err)
+			}
 			stmtNode := stmtNodes[0]
 			for _, col := range stmtNode.(*ast.CreateTableStmt).Cols {
 				for _, opt := range col.Options {
 					if opt.Tp == ast.ColumnOptionGenerated {
-						require.Equal(t, tbl.expr, opt.Expr.Text())
+						if !reflect.DeepEqual(tbl.expr, opt.Expr.Text()) {
+							t.Fatalf("got %v, want %v", opt.Expr.Text(), tbl.expr)
+						}
 					}
 				}
 			}
 		} else {
-			require.Error(t, err)
+			if err == nil {
+				t.Fatal("expected error")
+			}
 		}
 	}
 
 	_, _, err := p.Parse("create table t1 (a int, b int as (a + 1) default 10);", "", "")
-	require.Equal(t, err.Error(), "[ddl:1221]Incorrect usage of DEFAULT and generated column")
+	if !reflect.DeepEqual(err.Error(), "[ddl:1221]Incorrect usage of DEFAULT and generated column") {
+		t.Fatalf("got %v, want %v", "[ddl:1221]Incorrect usage of DEFAULT and generated column", err.Error())
+	}
 	_, _, err = p.Parse("create table t1 (a int, b int as (a + 1) on update now());", "", "")
-	require.Equal(t, err.Error(), "[ddl:1221]Incorrect usage of ON UPDATE and generated column")
+	if !reflect.DeepEqual(err.Error(), "[ddl:1221]Incorrect usage of ON UPDATE and generated column") {
+		t.Fatalf("got %v, want %v", "[ddl:1221]Incorrect usage of ON UPDATE and generated column", err.Error())
+	}
 	_, _, err = p.Parse("create table t1 (a int, b int as (a + 1) auto_increment);", "", "")
-	require.Equal(t, err.Error(), "[ddl:1221]Incorrect usage of AUTO_INCREMENT and generated column")
+	if !reflect.DeepEqual(err.Error(), "[ddl:1221]Incorrect usage of AUTO_INCREMENT and generated column") {
+		t.Fatalf("got %v, want %v", "[ddl:1221]Incorrect usage of AUTO_INCREMENT and generated column", err.Error())
+	}
 }
 
 func TestSetTransaction(t *testing.T) {
@@ -6451,13 +7741,23 @@ func TestSetTransaction(t *testing.T) {
 	p := parser.New()
 	for _, tbl := range tests {
 		stmt1, err := p.ParseOneStmt(tbl.input, "", "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 		setStmt := stmt1.(*ast.SetStmt)
 		vars := setStmt.Variables[0]
-		require.Equal(t, "tx_isolation", vars.Name)
-		require.Equal(t, tbl.isGlobal, vars.IsGlobal)
-		require.Equal(t, true, vars.IsSystem)
-		require.Equal(t, tbl.value, vars.Value.(ast.ValueExpr).GetValue())
+		if !reflect.DeepEqual("tx_isolation", vars.Name) {
+			t.Fatalf("got %v, want %v", vars.Name, "tx_isolation")
+		}
+		if !reflect.DeepEqual(tbl.isGlobal, vars.IsGlobal) {
+			t.Fatalf("got %v, want %v", vars.IsGlobal, tbl.isGlobal)
+		}
+		if !reflect.DeepEqual(true, vars.IsSystem) {
+			t.Fatalf("got %v, want %v", vars.IsSystem, true)
+		}
+		if !reflect.DeepEqual(tbl.value, vars.Value.(ast.ValueExpr).GetValue()) {
+			t.Fatalf("got %v, want %v", vars.Value.(ast.ValueExpr).GetValue(), tbl.value)
+		}
 	}
 }
 
@@ -6466,10 +7766,14 @@ func TestSideEffect(t *testing.T) {
 	// clean state, cause the following SQL parse fail.
 	p := parser.New()
 	_, err := p.ParseOneStmt("create table t /*!50100 'abc', 'abc' */;", "", "")
-	require.Error(t, err)
+	if err == nil {
+		t.Fatal("expected error")
+	}
 
 	_, err = p.ParseOneStmt("show tables;", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestTablePartition(t *testing.T) {
@@ -6671,11 +7975,17 @@ ENGINE=INNODB PARTITION BY LINEAR HASH (a) PARTITIONS 1;`, true, "CREATE TABLE `
 	// Check comment content.
 	p := parser.New()
 	stmt, err := p.ParseOneStmt("create table t (id int) partition by range (id) (partition p0 values less than (10) comment 'check')", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	createTable := stmt.(*ast.CreateTableStmt)
 	comment, ok := createTable.Partition.Definitions[0].Comment()
-	require.True(t, ok)
-	require.Equal(t, "check", comment)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if !reflect.DeepEqual("check", comment) {
+		t.Fatalf("got %v, want %v", comment, "check")
+	}
 }
 
 func TestTablePartitionNameList(t *testing.T) {
@@ -6686,16 +7996,28 @@ func TestTablePartitionNameList(t *testing.T) {
 	p := parser.New()
 	for _, tbl := range table {
 		stmt, _, err := p.Parse(tbl.src, "", "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		sel := stmt[0].(*ast.SelectStmt)
 		source, ok := sel.From.TableRefs.Left.(*ast.TableSource)
-		require.True(t, ok)
+		if !(ok) {
+			t.Fatal("expected true")
+		}
 		tableName, ok := source.Source.(*ast.TableName)
-		require.True(t, ok)
-		require.Len(t, tableName.PartitionNames, 2)
-		require.Equal(t, ast.CIStr{O: "p0", L: "p0"}, tableName.PartitionNames[0])
-		require.Equal(t, ast.CIStr{O: "p1", L: "p1"}, tableName.PartitionNames[1])
+		if !(ok) {
+			t.Fatal("expected true")
+		}
+		if got := len(tableName.PartitionNames); got != 2 {
+			t.Fatalf("expected length %d, got %d", 2, got)
+		}
+		if !reflect.DeepEqual(ast.CIStr{O: "p0", L: "p0"}, tableName.PartitionNames[0]) {
+			t.Fatalf("got %v, want %v", tableName.PartitionNames[0], ast.CIStr{O: "p0", L: "p0"})
+		}
+		if !reflect.DeepEqual(ast.CIStr{O: "p1", L: "p1"}, tableName.PartitionNames[1]) {
+			t.Fatalf("got %v, want %v", tableName.PartitionNames[1], ast.CIStr{O: "p1", L: "p1"})
+		}
 	}
 }
 
@@ -6707,12 +8029,18 @@ func TestNotExistsSubquery(t *testing.T) {
 	p := parser.New()
 	for _, tbl := range table {
 		stmt, _, err := p.Parse(tbl.src, "", "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		sel := stmt[0].(*ast.SelectStmt)
 		exists, ok := sel.Where.(*ast.ExistsSubqueryExpr)
-		require.True(t, ok)
-		require.Equal(t, tbl.ok, exists.Not)
+		if !(ok) {
+			t.Fatal("expected true")
+		}
+		if !reflect.DeepEqual(tbl.ok, exists.Not) {
+			t.Fatalf("got %v, want %v", exists.Not, tbl.ok)
+		}
 	}
 }
 
@@ -6816,7 +8144,9 @@ func (wfc *windowFrameBoundChecker) Enter(inNode ast.Node) (outNode ast.Node, sk
 		wfc.fb = inNode.(*ast.FrameBound)
 		if wfc.fb.Unit != ast.TimeUnitInvalid {
 			_, ok := wfc.fb.Expr.(ast.ValueExpr)
-			require.False(wfc.t, ok)
+			if ok {
+				wfc.t.Fatal("expected false")
+			}
 		}
 	}
 	return inNode, false
@@ -6852,20 +8182,30 @@ func TestVisitFrameBound(t *testing.T) {
 	}
 	for _, tbl := range table {
 		stmt, err := p.ParseOneStmt(tbl.s, "", "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 		checker := windowFrameBoundChecker{t: t}
 		stmt.Accept(&checker)
-		require.Equal(t, tbl.exprRc, checker.exprRc)
-		require.Equal(t, tbl.unit, checker.unit)
+		if !reflect.DeepEqual(tbl.exprRc, checker.exprRc) {
+			t.Fatalf("got %v, want %v", checker.exprRc, tbl.exprRc)
+		}
+		if !reflect.DeepEqual(tbl.unit, checker.unit) {
+			t.Fatalf("got %v, want %v", checker.unit, tbl.unit)
+		}
 	}
 }
 
 func TestFieldText(t *testing.T) {
 	p := parser.New()
 	stmts, _, err := p.Parse("select a from t", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	tmp := stmts[0].(*ast.SelectStmt)
-	require.Equal(t, "a", tmp.Fields.Fields[0].Text())
+	if !reflect.DeepEqual("a", tmp.Fields.Fields[0].Text()) {
+		t.Fatalf("got %v, want %v", tmp.Fields.Fields[0].Text(), "a")
+	}
 
 	sqls := []string{
 		"trace select a from t",
@@ -6874,10 +8214,16 @@ func TestFieldText(t *testing.T) {
 	}
 	for _, sql := range sqls {
 		stmts, _, err = p.Parse(sql, "", "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 		traceStmt := stmts[0].(*ast.TraceStmt)
-		require.Equal(t, sql, traceStmt.Text())
-		require.Equal(t, "select a from t", traceStmt.Stmt.Text())
+		if !reflect.DeepEqual(sql, traceStmt.Text()) {
+			t.Fatalf("got %v, want %v", traceStmt.Text(), sql)
+		}
+		if !reflect.DeepEqual("select a from t", traceStmt.Stmt.Text()) {
+			t.Fatalf("got %v, want %v", traceStmt.Stmt.Text(), "select a from t")
+		}
 	}
 }
 
@@ -6890,7 +8236,9 @@ func TestQuotedSystemVariables(t *testing.T) {
 		"",
 		"",
 	)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	ss := st.(*ast.SelectStmt)
 	expected := []*ast.VariableExpr{
 		{
@@ -6938,15 +8286,27 @@ func TestQuotedSystemVariables(t *testing.T) {
 		},
 	}
 
-	require.Len(t, ss.Fields.Fields, len(expected))
+	if got := len(ss.Fields.Fields); got != len(expected) {
+		t.Fatalf("expected length %d, got %d", len(expected), got)
+	}
 	for i, field := range ss.Fields.Fields {
 		ve := field.Expr.(*ast.VariableExpr)
 		comment := fmt.Sprintf("field %d, ve = %v", i, ve)
-		require.Equal(t, expected[i].Name, ve.Name, comment)
-		require.Equal(t, expected[i].IsGlobal, ve.IsGlobal, comment)
-		require.Equal(t, expected[i].IsInstance, ve.IsInstance, comment)
-		require.Equal(t, expected[i].IsSystem, ve.IsSystem, comment)
-		require.Equal(t, expected[i].ExplicitScope, ve.ExplicitScope, comment)
+		if !reflect.DeepEqual(expected[i].Name, ve.Name) {
+			t.Fatalf("%v: got %v, want %v", comment, ve.Name, expected[i].Name)
+		}
+		if !reflect.DeepEqual(expected[i].IsGlobal, ve.IsGlobal) {
+			t.Fatalf("%v: got %v, want %v", comment, ve.IsGlobal, expected[i].IsGlobal)
+		}
+		if !reflect.DeepEqual(expected[i].IsInstance, ve.IsInstance) {
+			t.Fatalf("%v: got %v, want %v", comment, ve.IsInstance, expected[i].IsInstance)
+		}
+		if !reflect.DeepEqual(expected[i].IsSystem, ve.IsSystem) {
+			t.Fatalf("%v: got %v, want %v", comment, ve.IsSystem, expected[i].IsSystem)
+		}
+		if !reflect.DeepEqual(expected[i].ExplicitScope, ve.ExplicitScope) {
+			t.Fatalf("%v: got %v, want %v", comment, ve.ExplicitScope, expected[i].ExplicitScope)
+		}
 	}
 }
 
@@ -6959,7 +8319,9 @@ func TestQuotedVariableColumnName(t *testing.T) {
 		"",
 		"",
 	)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	ss := st.(*ast.SelectStmt)
 	expected := []string{
 		"@abc",
@@ -6975,9 +8337,13 @@ func TestQuotedVariableColumnName(t *testing.T) {
 		"@",
 	}
 
-	require.Len(t, ss.Fields.Fields, len(expected))
+	if got := len(ss.Fields.Fields); got != len(expected) {
+		t.Fatalf("expected length %d, got %d", len(expected), got)
+	}
 	for i, field := range ss.Fields.Fields {
-		require.Equal(t, expected[i], field.Text())
+		if !reflect.DeepEqual(expected[i], field.Text()) {
+			t.Fatalf("got %v, want %v", field.Text(), expected[i])
+		}
 	}
 }
 
@@ -6985,14 +8351,26 @@ func TestCharset(t *testing.T) {
 	p := parser.New()
 
 	st, err := p.ParseOneStmt("ALTER SCHEMA GLOBAL DEFAULT CHAR SET utf8mb4", "", "")
-	require.NoError(t, err)
-	require.NotNil(t, st.(*ast.AlterDatabaseStmt))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.(*ast.AlterDatabaseStmt) == nil {
+		t.Fatal("expected non-nil")
+	}
 	st, err = p.ParseOneStmt("ALTER DATABASE CHAR SET = utf8mb4", "", "")
-	require.NoError(t, err)
-	require.NotNil(t, st.(*ast.AlterDatabaseStmt))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.(*ast.AlterDatabaseStmt) == nil {
+		t.Fatal("expected non-nil")
+	}
 	st, err = p.ParseOneStmt("ALTER DATABASE DEFAULT CHAR SET = utf8mb4", "", "")
-	require.NoError(t, err)
-	require.NotNil(t, st.(*ast.AlterDatabaseStmt))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.(*ast.AlterDatabaseStmt) == nil {
+		t.Fatal("expected non-nil")
+	}
 }
 
 func TestUnderscoreCharset(t *testing.T) {
@@ -7012,11 +8390,17 @@ func TestUnderscoreCharset(t *testing.T) {
 		sql := fmt.Sprintf("select hex(_%s '3F')", tt.cs)
 		_, err := p.ParseOneStmt(sql, "", "")
 		if tt.parseFail {
-			require.EqualError(t, err, fmt.Sprintf("line 1 column %d near \"'3F')\" ", len(tt.cs)+17))
+			if err == nil || err.Error() != fmt.Sprintf("line 1 column %d near \"'3F')\" ", len(tt.cs)+17) {
+				t.Fatalf("expected error %q, got %v", fmt.Sprintf("line 1 column %d near \"'3F')\" ", len(tt.cs)+17), err)
+			}
 		} else if tt.unSupport {
-			require.EqualError(t, err, ast.ErrUnknownCharacterSet.GenWithStack("Unsupported character introducer: '%-.64s'", tt.cs).Error())
+			if err == nil || err.Error() != ast.ErrUnknownCharacterSet.GenWithStack("Unsupported character introducer: '%-.64s'", tt.cs).Error() {
+				t.Fatalf("expected error %q, got %v", ast.ErrUnknownCharacterSet.GenWithStack("Unsupported character introducer: '%-.64s'", tt.cs).Error(), err)
+			}
 		} else {
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 }
@@ -7025,45 +8409,83 @@ func TestFulltextSearch(t *testing.T) {
 	p := parser.New()
 
 	st, err := p.ParseOneStmt("SELECT * FROM fulltext_test WHERE MATCH(content) AGAINST('search')", "", "")
-	require.NoError(t, err)
-	require.NotNil(t, st.(*ast.SelectStmt))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.(*ast.SelectStmt) == nil {
+		t.Fatal("expected non-nil")
+	}
 
 	st, err = p.ParseOneStmt("SELECT * FROM fulltext_test WHERE MATCH() AGAINST('search')", "", "")
-	require.Error(t, err)
-	require.Nil(t, st)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if st != nil {
+		t.Fatalf("expected nil, got %v", st)
+	}
 
 	st, err = p.ParseOneStmt("SELECT * FROM fulltext_test WHERE MATCH(content) AGAINST()", "", "")
-	require.Error(t, err)
-	require.Nil(t, st)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if st != nil {
+		t.Fatalf("expected nil, got %v", st)
+	}
 
 	st, err = p.ParseOneStmt("SELECT * FROM fulltext_test WHERE MATCH(content) AGAINST('search' IN)", "", "")
-	require.Error(t, err)
-	require.Nil(t, st)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if st != nil {
+		t.Fatalf("expected nil, got %v", st)
+	}
 
 	st, err = p.ParseOneStmt("SELECT * FROM fulltext_test WHERE MATCH(content) AGAINST('search' IN BOOLEAN MODE WITH QUERY EXPANSION)", "", "")
-	require.Error(t, err)
-	require.Nil(t, st)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if st != nil {
+		t.Fatalf("expected nil, got %v", st)
+	}
 
 	st, err = p.ParseOneStmt("SELECT * FROM fulltext_test WHERE MATCH(title,content) AGAINST('search' IN NATURAL LANGUAGE MODE)", "", "")
-	require.NoError(t, err)
-	require.NotNil(t, st.(*ast.SelectStmt))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.(*ast.SelectStmt) == nil {
+		t.Fatal("expected non-nil")
+	}
 	writer := bytes.NewBufferString("")
 	st.(*ast.SelectStmt).Where.Format(writer)
-	require.Equal(t, "MATCH(title,content) AGAINST(\"search\")", writer.String())
+	if !reflect.DeepEqual("MATCH(title,content) AGAINST(\"search\")", writer.String()) {
+		t.Fatalf("got %v, want %v", writer.String(), "MATCH(title,content) AGAINST(\"search\")")
+	}
 
 	st, err = p.ParseOneStmt("SELECT * FROM fulltext_test WHERE MATCH(title,content) AGAINST('search' IN BOOLEAN MODE)", "", "")
-	require.NoError(t, err)
-	require.NotNil(t, st.(*ast.SelectStmt))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.(*ast.SelectStmt) == nil {
+		t.Fatal("expected non-nil")
+	}
 	writer.Reset()
 	st.(*ast.SelectStmt).Where.Format(writer)
-	require.Equal(t, "MATCH(title,content) AGAINST(\"search\" IN BOOLEAN MODE)", writer.String())
+	if !reflect.DeepEqual("MATCH(title,content) AGAINST(\"search\" IN BOOLEAN MODE)", writer.String()) {
+		t.Fatalf("got %v, want %v", writer.String(), "MATCH(title,content) AGAINST(\"search\" IN BOOLEAN MODE)")
+	}
 
 	st, err = p.ParseOneStmt("SELECT * FROM fulltext_test WHERE MATCH(title,content) AGAINST('search' WITH QUERY EXPANSION)", "", "")
-	require.NoError(t, err)
-	require.NotNil(t, st.(*ast.SelectStmt))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.(*ast.SelectStmt) == nil {
+		t.Fatal("expected non-nil")
+	}
 	writer.Reset()
 	st.(*ast.SelectStmt).Where.Format(writer)
-	require.Equal(t, "MATCH(title,content) AGAINST(\"search\" WITH QUERY EXPANSION)", writer.String())
+	if !reflect.DeepEqual("MATCH(title,content) AGAINST(\"search\" WITH QUERY EXPANSION)", writer.String()) {
+		t.Fatalf("got %v, want %v", writer.String(), "MATCH(title,content) AGAINST(\"search\" WITH QUERY EXPANSION)")
+	}
 }
 
 func TestStartTransaction(t *testing.T) {
@@ -7094,8 +8516,12 @@ func TestSignedInt64OutOfRange(t *testing.T) {
 
 	for _, s := range cases {
 		_, err := p.ParseOneStmt(s, "", "")
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "out of range")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if !strings.Contains(err.Error(), "out of range") {
+			t.Fatalf("expected %q to contain %q", err.Error(), "out of range")
+		}
 	}
 }
 
@@ -7303,17 +8729,37 @@ func TestStatisticsOps(t *testing.T) {
 
 	p := parser.New()
 	sms, _, err := p.Parse("create statistics if not exists stats1 (cardinality) on t(a,b,c)", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	v, ok := sms[0].(*ast.CreateStatisticsStmt)
-	require.True(t, ok)
-	require.True(t, v.IfNotExists)
-	require.Equal(t, "stats1", v.StatsName)
-	require.Equal(t, ast.StatsTypeCardinality, v.StatsType)
-	require.Equal(t, ast.CIStr{O: "t", L: "t"}, v.Table.Name)
-	require.Len(t, v.Columns, 3)
-	require.Equal(t, ast.CIStr{O: "a", L: "a"}, v.Columns[0].Name)
-	require.Equal(t, ast.CIStr{O: "b", L: "b"}, v.Columns[1].Name)
-	require.Equal(t, ast.CIStr{O: "c", L: "c"}, v.Columns[2].Name)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if !(v.IfNotExists) {
+		t.Fatal("expected true")
+	}
+	if !reflect.DeepEqual("stats1", v.StatsName) {
+		t.Fatalf("got %v, want %v", v.StatsName, "stats1")
+	}
+	if !reflect.DeepEqual(ast.StatsTypeCardinality, v.StatsType) {
+		t.Fatalf("got %v, want %v", v.StatsType, ast.StatsTypeCardinality)
+	}
+	if !reflect.DeepEqual(ast.CIStr{O: "t", L: "t"}, v.Table.Name) {
+		t.Fatalf("got %v, want %v", v.Table.Name, ast.CIStr{O: "t", L: "t"})
+	}
+	if got := len(v.Columns); got != 3 {
+		t.Fatalf("expected length %d, got %d", 3, got)
+	}
+	if !reflect.DeepEqual(ast.CIStr{O: "a", L: "a"}, v.Columns[0].Name) {
+		t.Fatalf("got %v, want %v", v.Columns[0].Name, ast.CIStr{O: "a", L: "a"})
+	}
+	if !reflect.DeepEqual(ast.CIStr{O: "b", L: "b"}, v.Columns[1].Name) {
+		t.Fatalf("got %v, want %v", v.Columns[1].Name, ast.CIStr{O: "b", L: "b"})
+	}
+	if !reflect.DeepEqual(ast.CIStr{O: "c", L: "c"}, v.Columns[2].Name) {
+		t.Fatalf("got %v, want %v", v.Columns[2].Name, ast.CIStr{O: "c", L: "c"})
+	}
 }
 
 func TestHighNotPrecedenceMode(t *testing.T) {
@@ -7321,42 +8767,74 @@ func TestHighNotPrecedenceMode(t *testing.T) {
 	var sb strings.Builder
 
 	sms, _, err := p.Parse("SELECT NOT 1 BETWEEN -5 AND 5", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	v, ok := sms[0].(*ast.SelectStmt)
-	require.True(t, ok)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
 	v1, ok := v.Fields.Fields[0].Expr.(*ast.UnaryOperationExpr)
-	require.True(t, ok)
-	require.Equal(t, opcode.Not, v1.Op)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if !reflect.DeepEqual(opcode.Not, v1.Op) {
+		t.Fatalf("got %v, want %v", v1.Op, opcode.Not)
+	}
 	err = sms[0].Restore(NewRestoreCtx(DefaultRestoreFlags, &sb))
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	restoreSQL := sb.String()
-	require.Equal(t, "SELECT NOT 1 BETWEEN -5 AND 5", restoreSQL)
+	if !reflect.DeepEqual("SELECT NOT 1 BETWEEN -5 AND 5", restoreSQL) {
+		t.Fatalf("got %v, want %v", restoreSQL, "SELECT NOT 1 BETWEEN -5 AND 5")
+	}
 	sb.Reset()
 
 	sms, _, err = p.Parse("SELECT !1 BETWEEN -5 AND 5", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	v, ok = sms[0].(*ast.SelectStmt)
-	require.True(t, ok)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
 	_, ok = v.Fields.Fields[0].Expr.(*ast.BetweenExpr)
-	require.True(t, ok)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
 	err = sms[0].Restore(NewRestoreCtx(DefaultRestoreFlags, &sb))
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	restoreSQL = sb.String()
-	require.Equal(t, "SELECT !1 BETWEEN -5 AND 5", restoreSQL)
+	if !reflect.DeepEqual("SELECT !1 BETWEEN -5 AND 5", restoreSQL) {
+		t.Fatalf("got %v, want %v", restoreSQL, "SELECT !1 BETWEEN -5 AND 5")
+	}
 	sb.Reset()
 
 	p = parser.New()
 	p.SetSQLMode(mysql.ModeHighNotPrecedence)
 	sms, _, err = p.Parse("SELECT NOT 1 BETWEEN -5 AND 5", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	v, ok = sms[0].(*ast.SelectStmt)
-	require.True(t, ok)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
 	_, ok = v.Fields.Fields[0].Expr.(*ast.BetweenExpr)
-	require.True(t, ok)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
 	err = sms[0].Restore(NewRestoreCtx(DefaultRestoreFlags, &sb))
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	restoreSQL = sb.String()
-	require.Equal(t, "SELECT !1 BETWEEN -5 AND 5", restoreSQL)
+	if !reflect.DeepEqual("SELECT !1 BETWEEN -5 AND 5", restoreSQL) {
+		t.Fatalf("got %v, want %v", restoreSQL, "SELECT !1 BETWEEN -5 AND 5")
+	}
 }
 
 // For CTE
@@ -7471,10 +8949,14 @@ func TestWithoutCharsetFlags(t *testing.T) {
 	for _, tbl := range cases {
 		stmts, _, err := p.Parse(tbl.src, "", "")
 		if !tbl.ok {
-			require.Error(t, err)
+			if err == nil {
+				t.Fatal("expected error")
+			}
 			continue
 		}
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 		// restore correctness test
 		var sb strings.Builder
 		restoreSQLs := ""
@@ -7483,14 +8965,18 @@ func TestWithoutCharsetFlags(t *testing.T) {
 			ctx := NewRestoreCtx(tbl.flag, &sb)
 			ctx.DefaultDB = "test"
 			err = stmt.Restore(ctx)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatal(err)
+			}
 			restoreSQL := sb.String()
 			if restoreSQLs != "" {
 				restoreSQLs += "; "
 			}
 			restoreSQLs += restoreSQL
 		}
-		require.Equal(t, tbl.restore, restoreSQLs)
+		if !reflect.DeepEqual(tbl.restore, restoreSQLs) {
+			t.Fatalf("got %v, want %v", restoreSQLs, tbl.restore)
+		}
 	}
 }
 
@@ -7507,23 +8993,31 @@ func TestRestoreBinOpWithBrackets(t *testing.T) {
 		_, _, err := p.Parse(tbl.src, "", "")
 		comment := fmt.Sprintf("source %v", tbl.src)
 		if !tbl.ok {
-			require.Error(t, err, comment)
+			if err == nil {
+				t.Fatal(comment)
+			}
 			continue
 		}
-		require.NoError(t, err, comment)
+		if err != nil {
+			t.Fatalf("%v: %v", comment, err)
+		}
 		// restore correctness test
 		if tbl.ok {
 			var sb strings.Builder
 			comment := fmt.Sprintf("source %v", tbl.src)
 			stmts, _, err := p.Parse(tbl.src, "", "")
-			require.NoError(t, err, comment)
+			if err != nil {
+				t.Fatalf("%v: %v", comment, err)
+			}
 			restoreSQLs := ""
 			for _, stmt := range stmts {
 				sb.Reset()
 				ctx := NewRestoreCtx(RestoreStringSingleQuotes|RestoreSpacesAroundBinaryOperation|RestoreBracketAroundBinaryOperation|RestoreStringWithoutCharset|RestoreNameBackQuotes, &sb)
 				ctx.DefaultDB = "test"
 				err = stmt.Restore(ctx)
-				require.NoError(t, err, comment)
+				if err != nil {
+					t.Fatalf("%v: %v", comment, err)
+				}
 				restoreSQL := sb.String()
 				comment = fmt.Sprintf("source %v; restore %v", tbl.src, restoreSQL)
 				if restoreSQLs != "" {
@@ -7532,7 +9026,9 @@ func TestRestoreBinOpWithBrackets(t *testing.T) {
 				restoreSQLs += restoreSQL
 			}
 			comment = fmt.Sprintf("restore %v; expect %v", restoreSQLs, tbl.restore)
-			require.Equal(t, tbl.restore, restoreSQLs, comment)
+			if !reflect.DeepEqual(tbl.restore, restoreSQLs) {
+				t.Fatalf("%v: got %v, want %v", comment, restoreSQLs, tbl.restore)
+			}
 		}
 	}
 }
@@ -7565,23 +9061,31 @@ func TestCTEBindings(t *testing.T) {
 		_, _, err := p.Parse(tbl.src, "", "")
 		comment := fmt.Sprintf("source %v", tbl.src)
 		if !tbl.ok {
-			require.Error(t, err, comment)
+			if err == nil {
+				t.Fatal(comment)
+			}
 			continue
 		}
-		require.NoError(t, err, comment)
+		if err != nil {
+			t.Fatalf("%v: %v", comment, err)
+		}
 		// restore correctness test
 		if tbl.ok {
 			var sb strings.Builder
 			comment := fmt.Sprintf("source %v", tbl.src)
 			stmts, _, err := p.Parse(tbl.src, "", "")
-			require.NoError(t, err, comment)
+			if err != nil {
+				t.Fatalf("%v: %v", comment, err)
+			}
 			restoreSQLs := ""
 			for _, stmt := range stmts {
 				sb.Reset()
 				ctx := NewRestoreCtx(RestoreStringSingleQuotes|RestoreSpacesAroundBinaryOperation|RestoreStringWithoutCharset|RestoreNameBackQuotes, &sb)
 				ctx.DefaultDB = "test"
 				err = stmt.Restore(ctx)
-				require.NoError(t, err, comment)
+				if err != nil {
+					t.Fatalf("%v: %v", comment, err)
+				}
 				restoreSQL := sb.String()
 				comment = fmt.Sprintf("source %v; restore %v", tbl.src, restoreSQL)
 				if restoreSQLs != "" {
@@ -7590,7 +9094,9 @@ func TestCTEBindings(t *testing.T) {
 				restoreSQLs += restoreSQL
 			}
 			comment = fmt.Sprintf("restore %v; expect %v", restoreSQLs, tbl.restore)
-			require.Equal(t, tbl.restore, restoreSQLs, comment)
+			if !reflect.DeepEqual(tbl.restore, restoreSQLs) {
+				t.Fatalf("%v: got %v, want %v", comment, restoreSQLs, tbl.restore)
+			}
 		}
 	}
 }
@@ -7621,35 +9127,71 @@ func TestPlanReplayer(t *testing.T) {
 
 	p := parser.New()
 	sms, _, err := p.Parse("PLAN REPLAYER DUMP EXPLAIN SELECT a FROM t", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	v, ok := sms[0].(*ast.PlanReplayerStmt)
-	require.True(t, ok)
-	require.Equal(t, "SELECT a FROM t", v.Stmt.Text())
-	require.False(t, v.Analyze)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if !reflect.DeepEqual("SELECT a FROM t", v.Stmt.Text()) {
+		t.Fatalf("got %v, want %v", v.Stmt.Text(), "SELECT a FROM t")
+	}
+	if v.Analyze {
+		t.Fatal("expected false")
+	}
 
 	sms, _, err = p.Parse("PLAN REPLAYER DUMP EXPLAIN ANALYZE SELECT a FROM t", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	v, ok = sms[0].(*ast.PlanReplayerStmt)
-	require.True(t, ok)
-	require.Equal(t, "SELECT a FROM t", v.Stmt.Text())
-	require.True(t, v.Analyze)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if !reflect.DeepEqual("SELECT a FROM t", v.Stmt.Text()) {
+		t.Fatalf("got %v, want %v", v.Stmt.Text(), "SELECT a FROM t")
+	}
+	if !(v.Analyze) {
+		t.Fatal("expected true")
+	}
 
 	// Multiple SQL records: EXPLAIN ( "sql1", "sql2", ... )
 	sms, _, err = p.Parse("PLAN REPLAYER DUMP EXPLAIN ('SELECT * FROM t1', 'SELECT * FROM t2')", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	v, ok = sms[0].(*ast.PlanReplayerStmt)
-	require.True(t, ok)
-	require.Nil(t, v.Stmt)
-	require.False(t, v.Analyze)
-	require.Equal(t, []string{"SELECT * FROM t1", "SELECT * FROM t2"}, v.StmtList)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if v.Stmt != nil {
+		t.Fatalf("expected nil, got %v", v.Stmt)
+	}
+	if v.Analyze {
+		t.Fatal("expected false")
+	}
+	if !reflect.DeepEqual([]string{"SELECT * FROM t1", "SELECT * FROM t2"}, v.StmtList) {
+		t.Fatalf("got %v, want %v", v.StmtList, []string{"SELECT * FROM t1", "SELECT * FROM t2"})
+	}
 
 	sms, _, err = p.Parse("PLAN REPLAYER DUMP EXPLAIN ANALYZE ('SELECT * FROM t1')", "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	v, ok = sms[0].(*ast.PlanReplayerStmt)
-	require.True(t, ok)
-	require.Nil(t, v.Stmt)
-	require.True(t, v.Analyze)
-	require.Equal(t, []string{"SELECT * FROM t1"}, v.StmtList)
+	if !(ok) {
+		t.Fatal("expected true")
+	}
+	if v.Stmt != nil {
+		t.Fatalf("expected nil, got %v", v.Stmt)
+	}
+	if !(v.Analyze) {
+		t.Fatal("expected true")
+	}
+	if !reflect.DeepEqual([]string{"SELECT * FROM t1"}, v.StmtList) {
+		t.Fatalf("got %v, want %v", v.StmtList, []string{"SELECT * FROM t1"})
+	}
 }
 
 func TestTrafficStmt(t *testing.T) {
@@ -7686,22 +9228,36 @@ func TestTrafficStmt(t *testing.T) {
 	for _, tbl := range table {
 		stmts, _, err := p.Parse(tbl.src, "", "")
 		if !tbl.ok {
-			require.Error(t, err, tbl.src)
+			if err == nil {
+				t.Fatal(tbl.src)
+			}
 			continue
 		}
-		require.NoError(t, err, tbl.src)
-		require.Len(t, stmts, 1)
+		if err != nil {
+			t.Fatalf("%v: %v", tbl.src, err)
+		}
+		if got := len(stmts); got != 1 {
+			t.Fatalf("expected length %d, got %d", 1, got)
+		}
 		v, ok := stmts[0].(*ast.TrafficStmt)
-		require.True(t, ok)
+		if !(ok) {
+			t.Fatal("expected true")
+		}
 		switch v.OpType {
 		case ast.TrafficOpCapture, ast.TrafficOpReplay:
-			require.Equal(t, "/tmp", v.Dir)
+			if !reflect.DeepEqual("/tmp", v.Dir) {
+				t.Fatalf("got %v, want %v", v.Dir, "/tmp")
+			}
 		}
 		sb.Reset()
 		ctx := NewRestoreCtx(RestoreStringSingleQuotes|RestoreSpacesAroundBinaryOperation|RestoreStringWithoutCharset|RestoreNameBackQuotes, &sb)
 		err = v.Restore(ctx)
-		require.NoError(t, err)
-		require.Equal(t, tbl.restore, sb.String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(tbl.restore, sb.String()) {
+			t.Fatalf("got %v, want %v", sb.String(), tbl.restore)
+		}
 	}
 }
 
@@ -7710,25 +9266,43 @@ func TestGBKEncoding(t *testing.T) {
 	gbkEncoding, _ := charset.Lookup("gbk")
 	encoder := gbkEncoding.NewEncoder()
 	sql, err := encoder.String("create table 测试表 (测试列 varchar(255) default 'GBK测试用例');")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	stmt, _, err := p.ParseSQL(sql)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	checker := &gbkEncodingChecker{}
 	_, _ = stmt[0].Accept(checker)
-	require.NotEqual(t, "测试表", checker.tblName)
-	require.NotEqual(t, "测试列", checker.colName)
+	if reflect.DeepEqual("测试表", checker.tblName) {
+		t.Fatalf("expected values to differ, both are %v", checker.tblName)
+	}
+	if reflect.DeepEqual("测试列", checker.colName) {
+		t.Fatalf("expected values to differ, both are %v", checker.colName)
+	}
 
 	gbkOpt := parser.CharsetClient("gbk")
 	stmt, _, err = p.ParseSQL(sql, gbkOpt)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, _ = stmt[0].Accept(checker)
-	require.Equal(t, "测试表", checker.tblName)
-	require.Equal(t, "测试列", checker.colName)
-	require.Equal(t, "GBK测试用例", checker.expr)
+	if !reflect.DeepEqual("测试表", checker.tblName) {
+		t.Fatalf("got %v, want %v", checker.tblName, "测试表")
+	}
+	if !reflect.DeepEqual("测试列", checker.colName) {
+		t.Fatalf("got %v, want %v", checker.colName, "测试列")
+	}
+	if !reflect.DeepEqual("GBK测试用例", checker.expr) {
+		t.Fatalf("got %v, want %v", checker.expr, "GBK测试用例")
+	}
 
 	_, _, err = p.ParseSQL("select _gbk '\xc6\x5c' from dual;")
-	require.Error(t, err)
+	if err == nil {
+		t.Fatal("expected error")
+	}
 
 	for _, test := range []struct {
 		sql string
@@ -7746,9 +9320,13 @@ func TestGBKEncoding(t *testing.T) {
 	} {
 		_, _, err = p.ParseSQL(test.sql, gbkOpt)
 		if test.err {
-			require.Error(t, err, test.sql)
+			if err == nil {
+				t.Fatal(test.sql)
+			}
 		} else {
-			require.NoError(t, err, test.sql)
+			if err != nil {
+				t.Fatalf("%v: %v", test.sql, err)
+			}
 		}
 	}
 }
@@ -7758,25 +9336,43 @@ func TestGB18030Encoding(t *testing.T) {
 	gb18030Encoding, _ := charset.Lookup("gb18030")
 	encoder := gb18030Encoding.NewEncoder()
 	sql, err := encoder.String("create table 测试表 (测试列 varchar(255) default 'GB18030测试用例');")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	stmt, _, err := p.ParseSQL(sql)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	checker := &gbkEncodingChecker{}
 	_, _ = stmt[0].Accept(checker)
-	require.NotEqual(t, "测试表", checker.tblName)
-	require.NotEqual(t, "测试列", checker.colName)
+	if reflect.DeepEqual("测试表", checker.tblName) {
+		t.Fatalf("expected values to differ, both are %v", checker.tblName)
+	}
+	if reflect.DeepEqual("测试列", checker.colName) {
+		t.Fatalf("expected values to differ, both are %v", checker.colName)
+	}
 
 	gb18030Opt := parser.CharsetClient("gb18030")
 	stmt, _, err = p.ParseSQL(sql, gb18030Opt)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, _ = stmt[0].Accept(checker)
-	require.Equal(t, "测试表", checker.tblName)
-	require.Equal(t, "测试列", checker.colName)
-	require.Equal(t, "GB18030测试用例", checker.expr)
+	if !reflect.DeepEqual("测试表", checker.tblName) {
+		t.Fatalf("got %v, want %v", checker.tblName, "测试表")
+	}
+	if !reflect.DeepEqual("测试列", checker.colName) {
+		t.Fatalf("got %v, want %v", checker.colName, "测试列")
+	}
+	if !reflect.DeepEqual("GB18030测试用例", checker.expr) {
+		t.Fatalf("got %v, want %v", checker.expr, "GB18030测试用例")
+	}
 
 	_, _, err = p.ParseSQL("select _gbk '\xc6\x5c' from dual;")
-	require.Error(t, err)
+	if err == nil {
+		t.Fatal("expected error")
+	}
 
 	for _, test := range []struct {
 		sql string
@@ -7794,9 +9390,13 @@ func TestGB18030Encoding(t *testing.T) {
 	} {
 		_, _, err = p.ParseSQL(test.sql, gb18030Opt)
 		if test.err {
-			require.Error(t, err, test.sql)
+			if err == nil {
+				t.Fatal(test.sql)
+			}
 		} else {
-			require.NoError(t, err, test.sql)
+			if err != nil {
+				t.Fatalf("%v: %v", test.sql, err)
+			}
 		}
 	}
 }
@@ -7834,9 +9434,13 @@ func TestInsertStatementMemoryAllocation(t *testing.T) {
 	var oldStats, newStats runtime.MemStats
 	runtime.ReadMemStats(&oldStats)
 	_, err := parser.New().ParseOneStmt(sql, "", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	runtime.ReadMemStats(&newStats)
-	require.Less(t, int(newStats.TotalAlloc-oldStats.TotalAlloc), 1024*500)
+	if !(int(newStats.TotalAlloc-oldStats.TotalAlloc) < 1024*500) {
+		t.Fatalf("expected %v < %v", int(newStats.TotalAlloc-oldStats.TotalAlloc), 1024*500)
+	}
 }
 
 func TestCharsetIntroducer(t *testing.T) {
@@ -7844,11 +9448,17 @@ func TestCharsetIntroducer(t *testing.T) {
 	defer charset.RemoveCharset("gbk")
 	// `_gbk` is treated as a character set.
 	_, _, err := p.Parse("select _gbk 'a';", "", "")
-	require.EqualError(t, err, "[ddl:1115]Unsupported character introducer: 'gbk'")
+	if err == nil || err.Error() != "[ddl:1115]Unsupported character introducer: 'gbk'" {
+		t.Fatalf("expected error %q, got %v", "[ddl:1115]Unsupported character introducer: 'gbk'", err)
+	}
 	_, _, err = p.Parse("select _gbk 0x1234;", "", "")
-	require.EqualError(t, err, "[ddl:1115]Unsupported character introducer: 'gbk'")
+	if err == nil || err.Error() != "[ddl:1115]Unsupported character introducer: 'gbk'" {
+		t.Fatalf("expected error %q, got %v", "[ddl:1115]Unsupported character introducer: 'gbk'", err)
+	}
 	_, _, err = p.Parse("select _gbk 0b101001;", "", "")
-	require.EqualError(t, err, "[ddl:1115]Unsupported character introducer: 'gbk'")
+	if err == nil || err.Error() != "[ddl:1115]Unsupported character introducer: 'gbk'" {
+		t.Fatalf("expected error %q, got %v", "[ddl:1115]Unsupported character introducer: 'gbk'", err)
+	}
 }
 
 func TestNonTransactionalDML(t *testing.T) {
@@ -7972,30 +9582,52 @@ func TestIssue45898(t *testing.T) {
 	p := parser.New()
 	p.ParseSQL("a.")
 	stmts, _, err := p.ParseSQL("select count(1) from t")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var sb strings.Builder
 	restoreCtx := NewRestoreCtx(DefaultRestoreFlags, &sb)
 	sb.Reset()
 	stmts[0].Restore(restoreCtx)
-	require.Equal(t, "SELECT COUNT(1) FROM `t`", sb.String())
+	if !reflect.DeepEqual("SELECT COUNT(1) FROM `t`", sb.String()) {
+		t.Fatalf("got %v, want %v", sb.String(), "SELECT COUNT(1) FROM `t`")
+	}
 }
 
 func TestMultiStmt(t *testing.T) {
 	p := parser.New()
 	stmts, _, err := p.Parse("SELECT 'foo'; SELECT 'foo;bar','baz'; select 'foo' , 'bar' , 'baz' ;select 1", "", "")
-	require.NoError(t, err)
-	require.Equal(t, len(stmts), 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(len(stmts), 4) {
+		t.Fatalf("got %v, want %v", 4, len(stmts))
+	}
 	stmt1 := stmts[0].(*ast.SelectStmt)
 	stmt2 := stmts[1].(*ast.SelectStmt)
 	stmt3 := stmts[2].(*ast.SelectStmt)
 	stmt4 := stmts[3].(*ast.SelectStmt)
-	require.Equal(t, "'foo'", stmt1.Fields.Fields[0].Text())
-	require.Equal(t, "'foo;bar'", stmt2.Fields.Fields[0].Text())
-	require.Equal(t, "'baz'", stmt2.Fields.Fields[1].Text())
-	require.Equal(t, "'foo'", stmt3.Fields.Fields[0].Text())
-	require.Equal(t, "'bar'", stmt3.Fields.Fields[1].Text())
-	require.Equal(t, "'baz'", stmt3.Fields.Fields[2].Text())
-	require.Equal(t, "1", stmt4.Fields.Fields[0].Text())
+	if !reflect.DeepEqual("'foo'", stmt1.Fields.Fields[0].Text()) {
+		t.Fatalf("got %v, want %v", stmt1.Fields.Fields[0].Text(), "'foo'")
+	}
+	if !reflect.DeepEqual("'foo;bar'", stmt2.Fields.Fields[0].Text()) {
+		t.Fatalf("got %v, want %v", stmt2.Fields.Fields[0].Text(), "'foo;bar'")
+	}
+	if !reflect.DeepEqual("'baz'", stmt2.Fields.Fields[1].Text()) {
+		t.Fatalf("got %v, want %v", stmt2.Fields.Fields[1].Text(), "'baz'")
+	}
+	if !reflect.DeepEqual("'foo'", stmt3.Fields.Fields[0].Text()) {
+		t.Fatalf("got %v, want %v", stmt3.Fields.Fields[0].Text(), "'foo'")
+	}
+	if !reflect.DeepEqual("'bar'", stmt3.Fields.Fields[1].Text()) {
+		t.Fatalf("got %v, want %v", stmt3.Fields.Fields[1].Text(), "'bar'")
+	}
+	if !reflect.DeepEqual("'baz'", stmt3.Fields.Fields[2].Text()) {
+		t.Fatalf("got %v, want %v", stmt3.Fields.Fields[2].Text(), "'baz'")
+	}
+	if !reflect.DeepEqual("1", stmt4.Fields.Fields[0].Text()) {
+		t.Fatalf("got %v, want %v", stmt4.Fields.Fields[0].Text(), "1")
+	}
 }
 
 // https://dev.mysql.com/doc/refman/8.1/en/other-vendor-data-types.html

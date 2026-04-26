@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
+	"reflect"
 )
 
 func TestParseDuration(t *testing.T) {
@@ -58,8 +58,12 @@ func TestParseDuration(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.str, func(t *testing.T) {
 			d, err := ParseDuration(c.str)
-			require.NoError(t, err)
-			require.Equal(t, c.duration, d)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(c.duration, d) {
+				t.Fatalf("got %v, want %v", d, c.duration)
+			}
 		})
 	}
 }
