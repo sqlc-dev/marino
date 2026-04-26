@@ -16,8 +16,17 @@ jobs:
         with:
           go-version: '1.25'
 
-      - name: Generate parser
-        run: make parser
+      - name: Regenerate parser
+        run: |
+          rm -f parser/parser.go parser/hintparser.go
+          make parser
+
+      - name: Verify parser is up to date
+        run: |
+          if ! git diff --exit-code -- parser/parser.go parser/hintparser.go; then
+            echo "::error::Generated parser files are out of date. Run 'make parser' and commit the result."
+            exit 1
+          fi
 
       - name: Build
         run: go build ./...
