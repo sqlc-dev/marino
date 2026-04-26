@@ -15,6 +15,8 @@ package terror
 
 import (
 	"fmt"
+	"log/slog"
+	"os"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -22,9 +24,7 @@ import (
 	"sync/atomic"
 
 	"github.com/pingcap/errors"
-	"github.com/pingcap/log"
 	"github.com/sqlc-dev/marino/mysql"
-	"go.uber.org/zap"
 )
 
 // ErrCode represents a specific error type in a error class.
@@ -239,19 +239,19 @@ func getMySQLErrorCode(e *Error) uint16 {
 	if index := strings.Index(string(rfcCode), ":"); index > 0 {
 		ec, has := rfcCode2errClass.Get(string(rfcCode)[:index])
 		if !has {
-			log.Warn("Unknown error class", zap.String("class", string(rfcCode)[:index]))
+			slog.Warn("Unknown error class", slog.String("class", string(rfcCode)[:index]))
 			return defaultMySQLErrorCode
 		}
 		class = ec
 	}
 	codeMap, ok := ErrClassToMySQLCodes[class]
 	if !ok {
-		log.Warn("Unknown error class", zap.Int("class", int(class)))
+		slog.Warn("Unknown error class", slog.Int("class", int(class)))
 		return defaultMySQLErrorCode
 	}
 	_, ok = codeMap[ErrCode(e.Code())]
 	if !ok {
-		log.Debug("Unknown error code", zap.Int("class", int(class)), zap.Int("code", int(e.Code())))
+		slog.Debug("Unknown error code", slog.Int("class", int(class)), slog.Int("code", int(e.Code())))
 		return defaultMySQLErrorCode
 	}
 	return uint16(e.Code())
@@ -306,7 +306,8 @@ func MustNil(err error, closeFuns ...func()) {
 		for _, f := range closeFuns {
 			f()
 		}
-		log.Fatal("unexpected error", zap.Error(err), zap.Stack("stack"))
+		slog.Error("unexpected error", slog.Any("error", err), slog.String("stack", string(debug.Stack())))
+		os.Exit(1)
 	}
 }
 
@@ -314,14 +315,14 @@ func MustNil(err error, closeFuns ...func()) {
 func Call(fn func() error) {
 	err := fn()
 	if err != nil {
-		log.Error("function call errored", zap.Error(err), zap.Stack("stack"))
+		slog.Error("function call errored", slog.Any("error", err), slog.String("stack", string(debug.Stack())))
 	}
 }
 
 // Log logs the error if it is not nil.
 func Log(err error) {
 	if err != nil {
-		log.Error("encountered error", zap.Error(err), zap.Stack("stack"))
+		slog.Error("encountered error", slog.Any("error", err), slog.String("stack", string(debug.Stack())))
 	}
 }
 
