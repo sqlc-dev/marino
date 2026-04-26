@@ -3,7 +3,6 @@ module github.com/sqlc-dev/marino
 go 1.25
 
 require (
-	github.com/coreos/go-semver v0.3.1
 	github.com/go-sql-driver/mysql v1.7.1
 	go.uber.org/goleak v1.3.0
 	golang.org/x/text v0.19.0
