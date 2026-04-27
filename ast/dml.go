@@ -22,6 +22,7 @@ import (
 	"github.com/sqlc-dev/marino/auth"
 	"github.com/sqlc-dev/marino/format"
 	"github.com/sqlc-dev/marino/mysql"
+	"github.com/sqlc-dev/marino/types"
 	"github.com/sqlc-dev/marino/util"
 )
 
@@ -53,6 +54,8 @@ var (
 	_ Node = &TableName{}
 	_ Node = &TableRefsClause{}
 	_ Node = &TableSource{}
+	_ Node = &JSONTable{}
+	_ Node = &JSONTableColumn{}
 	_ Node = &SetOprSelectList{}
 	_ Node = &WildCardField{}
 	_ Node = &WindowSpec{}
@@ -654,6 +657,203 @@ func (n *TableSource) Accept(v Visitor) (Node, bool) {
 		return n, false
 	}
 	n.Source = node.(ResultSetNode)
+	return v.Leave(n)
+}
+
+// JSONTableColumnTp is the type of a JSON_TABLE column entry.
+type JSONTableColumnTp int
+
+const (
+	// JSONTableColumnForOrdinality is `name FOR ORDINALITY`.
+	JSONTableColumnForOrdinality JSONTableColumnTp = iota + 1
+	// JSONTableColumnPath is `name type PATH 'json_path' [on_empty] [on_error]`.
+	JSONTableColumnPath
+	// JSONTableColumnExistsPath is `name type EXISTS PATH 'json_path'`.
+	JSONTableColumnExistsPath
+	// JSONTableColumnNested is `NESTED [PATH] 'json_path' COLUMNS (column_list)`.
+	JSONTableColumnNested
+)
+
+// JSONTableOnHandlerTp is the behavior choice for ON EMPTY / ON ERROR.
+type JSONTableOnHandlerTp int
+
+const (
+	// JSONTableOnHandlerNull substitutes NULL.
+	JSONTableOnHandlerNull JSONTableOnHandlerTp = iota + 1
+	// JSONTableOnHandlerDefault substitutes a literal value.
+	JSONTableOnHandlerDefault
+	// JSONTableOnHandlerError raises an error.
+	JSONTableOnHandlerError
+)
+
+// JSONTableOnHandler describes a `{NULL | DEFAULT 'val' | ERROR} ON {EMPTY | ERROR}` clause.
+type JSONTableOnHandler struct {
+	Tp           JSONTableOnHandlerTp
+	DefaultValue string
+}
+
+// JSONTableColumn represents one entry in a JSON_TABLE COLUMNS list.
+type JSONTableColumn struct {
+	node
+
+	Tp        JSONTableColumnTp
+	Name      CIStr
+	FieldType *types.FieldType
+	Path      string
+
+	HasOnEmpty bool
+	OnEmpty    JSONTableOnHandler
+	HasOnError bool
+	OnError    JSONTableOnHandler
+
+	NestedColumns []*JSONTableColumn
+}
+
+// Restore implements Node interface.
+func (n *JSONTableColumn) Restore(ctx *format.RestoreCtx) error {
+	switch n.Tp {
+	case JSONTableColumnForOrdinality:
+		ctx.WriteName(n.Name.String())
+		ctx.WriteKeyWord(" FOR ORDINALITY")
+	case JSONTableColumnPath:
+		ctx.WriteName(n.Name.String())
+		ctx.WritePlain(" ")
+		if err := n.FieldType.Restore(ctx); err != nil {
+			return annotate(err, "An error occurred while restoring JSONTableColumn.FieldType")
+		}
+		ctx.WriteKeyWord(" PATH ")
+		ctx.WriteString(n.Path)
+		if n.HasOnEmpty {
+			if err := n.OnEmpty.restore(ctx, " ON EMPTY"); err != nil {
+				return err
+			}
+		}
+		if n.HasOnError {
+			if err := n.OnError.restore(ctx, " ON ERROR"); err != nil {
+				return err
+			}
+		}
+	case JSONTableColumnExistsPath:
+		ctx.WriteName(n.Name.String())
+		ctx.WritePlain(" ")
+		if err := n.FieldType.Restore(ctx); err != nil {
+			return annotate(err, "An error occurred while restoring JSONTableColumn.FieldType")
+		}
+		ctx.WriteKeyWord(" EXISTS PATH ")
+		ctx.WriteString(n.Path)
+	case JSONTableColumnNested:
+		ctx.WriteKeyWord("NESTED PATH ")
+		ctx.WriteString(n.Path)
+		ctx.WriteKeyWord(" COLUMNS")
+		ctx.WritePlain(" (")
+		for i, c := range n.NestedColumns {
+			if i > 0 {
+				ctx.WritePlain(", ")
+			}
+			if err := c.Restore(ctx); err != nil {
+				return annotatef(err, "An error occurred while restoring JSONTableColumn.NestedColumns[%d]", i)
+			}
+		}
+		ctx.WritePlain(")")
+	default:
+		return fmt.Errorf("unknown JSONTableColumnTp %d", n.Tp)
+	}
+	return nil
+}
+
+// Accept implements Node Accept interface.
+func (n *JSONTableColumn) Accept(v Visitor) (Node, bool) {
+	newNode, skipChildren := v.Enter(n)
+	if skipChildren {
+		return v.Leave(newNode)
+	}
+	n = newNode.(*JSONTableColumn)
+	for i, c := range n.NestedColumns {
+		node, ok := c.Accept(v)
+		if !ok {
+			return n, false
+		}
+		n.NestedColumns[i] = node.(*JSONTableColumn)
+	}
+	return v.Leave(n)
+}
+
+func (h *JSONTableOnHandler) restore(ctx *format.RestoreCtx, suffix string) error {
+	switch h.Tp {
+	case JSONTableOnHandlerNull:
+		ctx.WriteKeyWord(" NULL")
+	case JSONTableOnHandlerError:
+		ctx.WriteKeyWord(" ERROR")
+	case JSONTableOnHandlerDefault:
+		ctx.WriteKeyWord(" DEFAULT ")
+		ctx.WriteString(h.DefaultValue)
+	default:
+		return fmt.Errorf("unknown JSONTableOnHandlerTp %d", h.Tp)
+	}
+	ctx.WriteKeyWord(suffix)
+	return nil
+}
+
+// JSONTable represents the MySQL JSON_TABLE table function.
+// See https://dev.mysql.com/doc/refman/8.0/en/json-table-functions.html
+type JSONTable struct {
+	node
+
+	// Expr is the JSON document expression argument.
+	Expr ExprNode
+	// Path is the root JSON path string literal.
+	Path string
+	// Columns lists the column definitions inside `COLUMNS (...)`.
+	Columns []*JSONTableColumn
+}
+
+func (*JSONTable) resultSet() {}
+
+// Restore implements Node interface.
+func (n *JSONTable) Restore(ctx *format.RestoreCtx) error {
+	ctx.WriteKeyWord("JSON_TABLE")
+	ctx.WritePlain("(")
+	if err := n.Expr.Restore(ctx); err != nil {
+		return annotate(err, "An error occurred while restoring JSONTable.Expr")
+	}
+	ctx.WritePlain(", ")
+	ctx.WriteString(n.Path)
+	ctx.WriteKeyWord(" COLUMNS")
+	ctx.WritePlain(" (")
+	for i, c := range n.Columns {
+		if i > 0 {
+			ctx.WritePlain(", ")
+		}
+		if err := c.Restore(ctx); err != nil {
+			return annotatef(err, "An error occurred while restoring JSONTable.Columns[%d]", i)
+		}
+	}
+	ctx.WritePlain(")")
+	ctx.WritePlain(")")
+	return nil
+}
+
+// Accept implements Node Accept interface.
+func (n *JSONTable) Accept(v Visitor) (Node, bool) {
+	newNode, skipChildren := v.Enter(n)
+	if skipChildren {
+		return v.Leave(newNode)
+	}
+	n = newNode.(*JSONTable)
+	if n.Expr != nil {
+		node, ok := n.Expr.Accept(v)
+		if !ok {
+			return n, false
+		}
+		n.Expr = node.(ExprNode)
+	}
+	for i, c := range n.Columns {
+		node, ok := c.Accept(v)
+		if !ok {
+			return n, false
+		}
+		n.Columns[i] = node.(*JSONTableColumn)
+	}
 	return v.Leave(n)
 }
 

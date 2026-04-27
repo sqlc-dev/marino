@@ -43,8 +43,8 @@ func TestKeywords(t *testing.T) {
 }
 
 func TestKeywordsLength(t *testing.T) {
-	if !reflect.DeepEqual(679, len(parser.Keywords)) {
-		t.Fatalf("got %v, want %v", len(parser.Keywords), 679)
+	if !reflect.DeepEqual(684, len(parser.Keywords)) {
+		t.Fatalf("got %v, want %v", len(parser.Keywords), 684)
 	}
 
 	reservedNr := 0
@@ -53,8 +53,8 @@ func TestKeywordsLength(t *testing.T) {
 			reservedNr += 1
 		}
 	}
-	if !reflect.DeepEqual(233, reservedNr) {
-		t.Fatalf("got %v, want %v", reservedNr, 233)
+	if !reflect.DeepEqual(234, reservedNr) {
+		t.Fatalf("got %v, want %v", reservedNr, 234)
 	}
 }
 
