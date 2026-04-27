@@ -43,6 +43,15 @@ type likeEscapeSpec struct {
 	explicit bool
 }
 
+// jsonTableOnSpec is a parser-internal helper carrying the optional
+// ON EMPTY and/or ON ERROR handlers parsed for a JSON_TABLE column.
+type jsonTableOnSpec struct {
+	hasOnEmpty bool
+	onEmpty    ast.JSONTableOnHandler
+	hasOnError bool
+	onError    ast.JSONTableOnHandler
+}
+
 func getMaskingPolicyRestrictOp(name string) (ast.MaskingPolicyRestrictOps, bool) {
 	switch strings.ToUpper(name) {
 	case ast.MaskingPolicyRestrictNameInsertIntoSelect:
@@ -198,6 +207,7 @@ func getMaskingPolicyRestrictOp(name string) (ast.MaskingPolicyRestrictOps, bool
 	is                "IS"
 	iterate           "ITERATE"
 	join              "JOIN"
+	jsonTable         "JSON_TABLE"
 	key               "KEY"
 	keys              "KEYS"
 	kill              "KILL"
@@ -430,6 +440,7 @@ func getMaskingPolicyRestrictOp(name string) (ast.MaskingPolicyRestrictOps, bool
 	do                         "DO"
 	duplicate                  "DUPLICATE"
 	dynamic                    "DYNAMIC"
+	empty                      "EMPTY"
 	enable                     "ENABLE"
 	enabled                    "ENABLED"
 	encryption                 "ENCRYPTION"
@@ -532,6 +543,7 @@ func getMaskingPolicyRestrictOp(name string) (ast.MaskingPolicyRestrictOps, bool
 	names                      "NAMES"
 	national                   "NATIONAL"
 	ncharType                  "NCHAR"
+	nested                     "NESTED"
 	never                      "NEVER"
 	next                       "NEXT"
 	nextval                    "NEXTVAL"
@@ -556,6 +568,7 @@ func getMaskingPolicyRestrictOp(name string) (ast.MaskingPolicyRestrictOps, bool
 	onDuplicate                "ON_DUPLICATE"
 	open                       "OPEN"
 	optional                   "OPTIONAL"
+	ordinality                 "ORDINALITY"
 	packKeys                   "PACK_KEYS"
 	pageSym                    "PAGE"
 	pageChecksum               "PAGE_CHECKSUM"
@@ -567,6 +580,7 @@ func getMaskingPolicyRestrictOp(name string) (ast.MaskingPolicyRestrictOps, bool
 	partitions                 "PARTITIONS"
 	password                   "PASSWORD"
 	passwordLockTime           "PASSWORD_LOCK_TIME"
+	path                       "PATH"
 	pause                      "PAUSE"
 	percent                    "PERCENT"
 	per_db                     "PER_DB"
@@ -1420,6 +1434,12 @@ func getMaskingPolicyRestrictOp(name string) (ast.MaskingPolicyRestrictOps, bool
 	TableAsName                            "table alias name"
 	TableAsNameOpt                         "table alias name optional"
 	TableElement                           "table definition element"
+	JsonTable                              "JSON_TABLE table function"
+	JsonTableColumn                        "JSON_TABLE column"
+	JsonTableColumnList                    "JSON_TABLE column list"
+	JsonTableNestedPathKwOpt               "Optional PATH keyword in NESTED clause"
+	JsonTableOnSpecOpt                     "Optional ON EMPTY and/or ON ERROR clauses for JSON_TABLE column"
+	JsonTableOnHandler                     "JSON_TABLE on-empty/on-error handler"
 	TableElementList                       "table definition element list"
 	TableElementListOpt                    "table definition element list optional"
 	TableFactor                            "table factor"
@@ -7287,6 +7307,7 @@ UnReservedKeyword:
 |	"DO"
 |	"DUPLICATE"
 |	"DYNAMIC"
+|	"EMPTY"
 |	"ENCRYPTION"
 |	"END"
 |	"ENFORCED"
@@ -7322,9 +7343,11 @@ UnReservedKeyword:
 |	"NAMES"
 |	"NVARCHAR"
 |	"OFFSET"
+|	"ORDINALITY"
 |	"PACK_KEYS"
 |	"PARSER"
 |	"PASSWORD" %prec lowerThanEq
+|	"PATH"
 |	"PREPARE"
 |	"PRE_SPLIT_REGIONS"
 |	"PROXY"
@@ -7387,6 +7410,7 @@ UnReservedKeyword:
 |	"MIN_ROWS"
 |	"NATIONAL"
 |	"NCHAR"
+|	"NESTED"
 |	"ROW_FORMAT"
 |	"QUARTER"
 |	"GRANTS"
@@ -10453,6 +10477,136 @@ TableFactor:
 		j := $2.(*ast.Join)
 		j.ExplicitParens = true
 		$$ = $2
+	}
+|	JsonTable TableAsNameOpt
+	{
+		$$ = &ast.TableSource{Source: $1.(*ast.JSONTable), AsName: $2.(ast.CIStr)}
+	}
+
+JsonTable:
+	"JSON_TABLE" '(' Expression ',' stringLit "COLUMNS" '(' JsonTableColumnList ')' ')'
+	{
+		$$ = &ast.JSONTable{
+			Expr:    $3.(ast.ExprNode),
+			Path:    $5,
+			Columns: $8.([]*ast.JSONTableColumn),
+		}
+	}
+
+JsonTableColumnList:
+	JsonTableColumn
+	{
+		$$ = []*ast.JSONTableColumn{$1.(*ast.JSONTableColumn)}
+	}
+|	JsonTableColumnList ',' JsonTableColumn
+	{
+		$$ = append($1.([]*ast.JSONTableColumn), $3.(*ast.JSONTableColumn))
+	}
+
+JsonTableColumn:
+	Identifier "FOR" "ORDINALITY"
+	{
+		$$ = &ast.JSONTableColumn{
+			Tp:   ast.JSONTableColumnForOrdinality,
+			Name: ast.NewCIStr($1),
+		}
+	}
+|	Identifier Type "PATH" stringLit JsonTableOnSpecOpt
+	{
+		col := &ast.JSONTableColumn{
+			Tp:        ast.JSONTableColumnPath,
+			Name:      ast.NewCIStr($1),
+			FieldType: $2.(*types.FieldType),
+			Path:      $4,
+		}
+		if $5 != nil {
+			spec := $5.(*jsonTableOnSpec)
+			if spec.hasOnEmpty {
+				col.HasOnEmpty = true
+				col.OnEmpty = spec.onEmpty
+			}
+			if spec.hasOnError {
+				col.HasOnError = true
+				col.OnError = spec.onError
+			}
+		}
+		$$ = col
+	}
+|	Identifier Type "EXISTS" "PATH" stringLit
+	{
+		$$ = &ast.JSONTableColumn{
+			Tp:        ast.JSONTableColumnExistsPath,
+			Name:      ast.NewCIStr($1),
+			FieldType: $2.(*types.FieldType),
+			Path:      $5,
+		}
+	}
+|	"NESTED" JsonTableNestedPathKwOpt stringLit "COLUMNS" '(' JsonTableColumnList ')'
+	{
+		$$ = &ast.JSONTableColumn{
+			Tp:            ast.JSONTableColumnNested,
+			Path:          $3,
+			NestedColumns: $6.([]*ast.JSONTableColumn),
+		}
+	}
+
+JsonTableNestedPathKwOpt:
+	/* empty */
+	{
+		$$ = nil
+	}
+|	"PATH"
+	{
+		$$ = nil
+	}
+
+/*
+ * JsonTableOnSpecOpt enumerates every combination of optional ON EMPTY and
+ * ON ERROR clauses explicitly. A single optional non-terminal would cause a
+ * shift/reduce conflict because NULL/DEFAULT/ERROR can both start the next
+ * clause and end the column definition.
+ */
+JsonTableOnSpecOpt:
+	/* empty */
+	{
+		$$ = nil
+	}
+|	JsonTableOnHandler "ON" "EMPTY"
+	{
+		$$ = &jsonTableOnSpec{
+			hasOnEmpty: true,
+			onEmpty:    *$1.(*ast.JSONTableOnHandler),
+		}
+	}
+|	JsonTableOnHandler "ON" "ERROR"
+	{
+		$$ = &jsonTableOnSpec{
+			hasOnError: true,
+			onError:    *$1.(*ast.JSONTableOnHandler),
+		}
+	}
+|	JsonTableOnHandler "ON" "EMPTY" JsonTableOnHandler "ON" "ERROR"
+	{
+		$$ = &jsonTableOnSpec{
+			hasOnEmpty: true,
+			onEmpty:    *$1.(*ast.JSONTableOnHandler),
+			hasOnError: true,
+			onError:    *$4.(*ast.JSONTableOnHandler),
+		}
+	}
+
+JsonTableOnHandler:
+	"NULL"
+	{
+		$$ = &ast.JSONTableOnHandler{Tp: ast.JSONTableOnHandlerNull}
+	}
+|	"ERROR"
+	{
+		$$ = &ast.JSONTableOnHandler{Tp: ast.JSONTableOnHandlerError}
+	}
+|	"DEFAULT" stringLit
+	{
+		$$ = &ast.JSONTableOnHandler{Tp: ast.JSONTableOnHandlerDefault, DefaultValue: $2}
 	}
 
 PartitionNameListOpt:
@@ -16132,22 +16286,22 @@ StatsObject:
 	{
 		$$ = &ast.StatsObject{
 			StatsObjectScope: ast.StatsObjectScopeDatabase,
-			DBName:             ast.NewCIStr($1),
+			DBName:           ast.NewCIStr($1),
 		}
 	}
 |	Identifier '.' Identifier
 	{
 		$$ = &ast.StatsObject{
 			StatsObjectScope: ast.StatsObjectScopeTable,
-			DBName:             ast.NewCIStr($1),
-			TableName:          ast.NewCIStr($3),
+			DBName:           ast.NewCIStr($1),
+			TableName:        ast.NewCIStr($3),
 		}
 	}
 |	Identifier
 	{
 		$$ = &ast.StatsObject{
 			StatsObjectScope: ast.StatsObjectScopeTable,
-			TableName:          ast.NewCIStr($1),
+			TableName:        ast.NewCIStr($1),
 		}
 	}
 
