@@ -374,13 +374,13 @@ func TestParseHint(t *testing.T) {
 				{
 					HintName: ast.NewCIStr("LEADING"),
 					HintData: &ast.LeadingList{
-						Items: []interface{}{
+						Items: []any{
 							&ast.HintTable{TableName: ast.NewCIStr("a")},
 							&ast.LeadingList{
-								Items: []interface{}{
+								Items: []any{
 									&ast.HintTable{TableName: ast.NewCIStr("b")},
 									&ast.LeadingList{
-										Items: []interface{}{
+										Items: []any{
 											&ast.HintTable{TableName: ast.NewCIStr("c")},
 											&ast.HintTable{TableName: ast.NewCIStr("d")},
 										},
@@ -404,7 +404,7 @@ func TestParseHint(t *testing.T) {
 				{
 					HintName: ast.NewCIStr("LEADING"),
 					HintData: &ast.LeadingList{
-						Items: []interface{}{
+						Items: []any{
 							&ast.HintTable{TableName: ast.NewCIStr("a")},
 							&ast.HintTable{TableName: ast.NewCIStr("b")},
 							&ast.HintTable{TableName: ast.NewCIStr("c")},
@@ -424,15 +424,15 @@ func TestParseHint(t *testing.T) {
 				{
 					HintName: ast.NewCIStr("LEADING"),
 					HintData: &ast.LeadingList{
-						Items: []interface{}{
+						Items: []any{
 							&ast.LeadingList{
-								Items: []interface{}{
+								Items: []any{
 									&ast.HintTable{TableName: ast.NewCIStr("a")},
 									&ast.HintTable{TableName: ast.NewCIStr("b")},
 								},
 							},
 							&ast.LeadingList{
-								Items: []interface{}{
+								Items: []any{
 									&ast.HintTable{TableName: ast.NewCIStr("c")},
 									&ast.HintTable{TableName: ast.NewCIStr("d")},
 								},
@@ -454,10 +454,10 @@ func TestParseHint(t *testing.T) {
 				{
 					HintName: ast.NewCIStr("LEADING"),
 					HintData: &ast.LeadingList{
-						Items: []interface{}{
+						Items: []any{
 							&ast.HintTable{TableName: ast.NewCIStr("x")},
 							&ast.LeadingList{
-								Items: []interface{}{
+								Items: []any{
 									&ast.HintTable{TableName: ast.NewCIStr("y")},
 									&ast.HintTable{TableName: ast.NewCIStr("z")},
 								},

@@ -1,6 +1,6 @@
 module github.com/sqlc-dev/marino/goyacc
 
-go 1.25
+go 1.26
 
 require (
 	github.com/sqlc-dev/marino v0.0.0

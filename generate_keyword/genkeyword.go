@@ -110,7 +110,7 @@ func main() {
 	}
 
 	section := sectionNone
-	for _, line := range strings.Split(string(parserData), "\n") {
+	for line := range strings.SplitSeq(string(parserData), "\n") {
 		if line == "" { // Empty line indicates section end
 			section = sectionNone
 		} else if strings.Contains(line, reservedKeywordStart) {
