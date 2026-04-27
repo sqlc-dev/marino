@@ -31,7 +31,6 @@ import (
 	"github.com/sqlc-dev/marino/opcode"
 	"github.com/sqlc-dev/marino/parser"
 	"github.com/sqlc-dev/marino/terror"
-	"github.com/sqlc-dev/marino/test_driver"
 )
 
 func TestSimple(t *testing.T) {
@@ -330,9 +329,9 @@ func TestSimple(t *testing.T) {
 		t.Fatal("expected true")
 	}
 	expr := sel.Fields.Fields[0]
-	vExpr := expr.Expr.(*test_driver.ValueExpr)
-	if !reflect.DeepEqual(test_driver.KindInt64, vExpr.Kind()) {
-		t.Fatalf("got %v, want %v", vExpr.Kind(), test_driver.KindInt64)
+	vExpr := expr.Expr.(*ast.ValueExprBase)
+	if !reflect.DeepEqual(ast.KindInt64, vExpr.Kind()) {
+		t.Fatalf("got %v, want %v", vExpr.Kind(), ast.KindInt64)
 	}
 	src = "SELECT 9223372036854775808;"
 	st, err = p.ParseOneStmt(src, "", "")
@@ -344,9 +343,9 @@ func TestSimple(t *testing.T) {
 		t.Fatal("expected true")
 	}
 	expr = sel.Fields.Fields[0]
-	vExpr = expr.Expr.(*test_driver.ValueExpr)
-	if !reflect.DeepEqual(test_driver.KindUint64, vExpr.Kind()) {
-		t.Fatalf("got %v, want %v", vExpr.Kind(), test_driver.KindUint64)
+	vExpr = expr.Expr.(*ast.ValueExprBase)
+	if !reflect.DeepEqual(ast.KindUint64, vExpr.Kind()) {
+		t.Fatalf("got %v, want %v", vExpr.Kind(), ast.KindUint64)
 	}
 
 	src = `select 99e+r10 from t1;`
@@ -8611,8 +8610,8 @@ func (checker *nodeTextCleaner) Enter(in ast.Node) (out ast.Node, skipChildren b
 		node.F = strings.ToLower(node.F)
 	case *ast.SelectField:
 		node.Offset = 0
-	case *test_driver.ValueExpr:
-		if node.Kind() == test_driver.KindMysqlDecimal {
+	case *ast.ValueExprBase:
+		if node.Kind() == ast.KindMysqlDecimal {
 			_ = node.GetMysqlDecimal().FromString(node.GetMysqlDecimal().ToString())
 		}
 	case *ast.GrantStmt:

@@ -13,7 +13,7 @@
 
 //go:build !codes
 
-package test_driver
+package ast
 
 import (
 	"bytes"
@@ -155,12 +155,12 @@ func (d *Datum) SetNull() {
 }
 
 // GetBinaryLiteral gets Bit value
-func (d *Datum) GetBinaryLiteral() BinaryLiteral {
+func (d *Datum) GetBinaryLiteral() BinaryLit {
 	return d.b
 }
 
 // SetBinaryLiteral sets Bit value
-func (d *Datum) SetBinaryLiteral(b BinaryLiteral) {
+func (d *Datum) SetBinaryLiteral(b BinaryLit) {
 	d.k = KindBinaryLiteral
 	d.b = b
 }
@@ -227,12 +227,12 @@ func (d *Datum) SetValue(val any) {
 		d.SetBytes(x)
 	case *MyDecimal:
 		d.SetMysqlDecimal(x)
-	case BinaryLiteral:
+	case BinaryLit:
 		d.SetBinaryLiteral(x)
-	case BitLiteral: // Store as BinaryLiteral for Bit and Hex literals
-		d.SetBinaryLiteral(BinaryLiteral(x))
+	case BitLiteral: // Store as BinaryLit for Bit and Hex literals
+		d.SetBinaryLiteral(BinaryLit(x))
 	case HexLiteral:
-		d.SetBinaryLiteral(BinaryLiteral(x))
+		d.SetBinaryLiteral(BinaryLit(x))
 	default:
 		d.SetInterface(x)
 	}
@@ -270,20 +270,20 @@ func MakeDatums(args ...any) []Datum {
 	return datums
 }
 
-// BinaryLiteral is the internal type for storing bit / hex literal type.
-type BinaryLiteral []byte
+// BinaryLit is the internal type for storing bit / hex literal type.
+type BinaryLit []byte
 
 // BitLiteral is the bit literal type.
-type BitLiteral BinaryLiteral
+type BitLiteral BinaryLit
 
 // HexLiteral is the hex literal type.
-type HexLiteral BinaryLiteral
+type HexLiteral BinaryLit
 
-// ZeroBinaryLiteral is a BinaryLiteral literal with zero value.
-var ZeroBinaryLiteral = BinaryLiteral{}
+// ZeroBinaryLit is a BinaryLit literal with zero value.
+var ZeroBinaryLit = BinaryLit{}
 
 // String implements fmt.Stringer interface.
-func (b BinaryLiteral) String() string {
+func (b BinaryLit) String() string {
 	if len(b) == 0 {
 		return ""
 	}
@@ -291,12 +291,12 @@ func (b BinaryLiteral) String() string {
 }
 
 // ToString returns the string representation for the literal.
-func (b BinaryLiteral) ToString() string {
+func (b BinaryLit) ToString() string {
 	return string(b)
 }
 
 // ToBitLiteralString returns the bit literal representation for the literal.
-func (b BinaryLiteral) ToBitLiteralString(trimLeadingZero bool) string {
+func (b BinaryLit) ToBitLiteralString(trimLeadingZero bool) string {
 	if len(b) == 0 {
 		return "b''"
 	}
@@ -317,7 +317,7 @@ func (b BinaryLiteral) ToBitLiteralString(trimLeadingZero bool) string {
 // ParseBitStr parses bit string.
 // The string format can be b'val', B'val' or 0bval, val must be 0 or 1.
 // See https://dev.mysql.com/doc/refman/5.7/en/bit-value-literals.html
-func ParseBitStr(s string) (BinaryLiteral, error) {
+func ParseBitStr(s string) (BinaryLit, error) {
 	if len(s) == 0 {
 		return nil, fmt.Errorf("invalid empty string for parsing bit type")
 	}
@@ -333,7 +333,7 @@ func ParseBitStr(s string) (BinaryLiteral, error) {
 	}
 
 	if len(s) == 0 {
-		return ZeroBinaryLiteral, nil
+		return ZeroBinaryLit, nil
 	}
 
 	alignedLength := (len(s) + 7) &^ 7
@@ -362,14 +362,14 @@ func NewBitLiteral(s string) (BitLiteral, error) {
 	return BitLiteral(b), nil
 }
 
-// ToString implement ast.BinaryLiteral interface
+// ToString implement BinaryLiteral interface
 func (b BitLiteral) ToString() string {
-	return BinaryLiteral(b).ToString()
+	return BinaryLit(b).ToString()
 }
 
 // ParseHexStr parses hexadecimal string literal.
 // See https://dev.mysql.com/doc/refman/5.7/en/hexadecimal-literals.html
-func ParseHexStr(s string) (BinaryLiteral, error) {
+func ParseHexStr(s string) (BinaryLit, error) {
 	if len(s) == 0 {
 		return nil, fmt.Errorf("invalid empty string for parsing hexadecimal literal")
 	}
@@ -388,7 +388,7 @@ func ParseHexStr(s string) (BinaryLiteral, error) {
 	}
 
 	if len(s) == 0 {
-		return ZeroBinaryLiteral, nil
+		return ZeroBinaryLit, nil
 	}
 
 	if len(s)%2 != 0 {
@@ -410,9 +410,9 @@ func NewHexLiteral(s string) (HexLiteral, error) {
 	return HexLiteral(h), nil
 }
 
-// ToString implement ast.BinaryLiteral interface
+// ToString implement BinaryLiteral interface
 func (b HexLiteral) ToString() string {
-	return BinaryLiteral(b).ToString()
+	return BinaryLit(b).ToString()
 }
 
 // SetBinChsClnFlag sets charset, collation as 'binary' and adds binaryFlag to FieldType.
@@ -491,7 +491,7 @@ func DefaultTypeForValue(value any, tp *types.FieldType, charset string, collate
 		tp.SetDecimal(0)
 		tp.AddFlag(mysql.UnsignedFlag)
 		SetBinChsClnFlag(tp)
-	case BinaryLiteral:
+	case BinaryLit:
 		tp.SetType(mysql.TypeBit)
 		tp.SetFlen(len(x) * 8)
 		tp.SetDecimal(0)

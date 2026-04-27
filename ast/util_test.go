@@ -22,7 +22,6 @@ import (
 	. "github.com/sqlc-dev/marino/format"
 	"github.com/sqlc-dev/marino/mysql"
 	"github.com/sqlc-dev/marino/parser"
-	"github.com/sqlc-dev/marino/test_driver"
 
 	"reflect"
 )
@@ -194,7 +193,7 @@ func (checker *nodeTextCleaner) Enter(in Node) (out Node, skipChildren bool) {
 		node.FnName.O = strings.ToLower(node.FnName.O)
 		switch node.FnName.L {
 		case "convert":
-			node.Args[1].(*test_driver.ValueExpr).Datum.SetBytes(nil)
+			node.Args[1].(*ValueExprBase).Datum.SetBytes(nil)
 		}
 	case *AggregateFuncExpr:
 		node.F = strings.ToLower(node.F)

@@ -21,9 +21,6 @@ import (
 	"github.com/sqlc-dev/marino/charset"
 	"github.com/sqlc-dev/marino/mysql"
 	"github.com/sqlc-dev/marino/parser"
-
-	// import parser_driver
-	_ "github.com/sqlc-dev/marino/test_driver"
 	. "github.com/sqlc-dev/marino/types"
 
 	"reflect"

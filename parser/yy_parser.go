@@ -129,13 +129,6 @@ type stmtTexter interface {
 
 // New returns a Parser object with default SQL mode.
 func New() *Parser {
-	if ast.NewValueExpr == nil ||
-		ast.NewParamMarkerExpr == nil ||
-		ast.NewHexLiteral == nil ||
-		ast.NewBitLiteral == nil {
-		panic("no parser driver (forgotten import?) https://github.com/pingcap/parser/issues/43")
-	}
-
 	p := &Parser{
 		cache: make([]yySymType, 200),
 	}

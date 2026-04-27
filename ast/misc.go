@@ -4226,18 +4226,11 @@ type TextString struct {
 	IsBinaryLiteral bool
 }
 
+// BinaryLiteral abstracts over the concrete bit/hex literal types so the
+// parser can stringify any of them without a type switch.
 type BinaryLiteral interface {
 	ToString() string
 }
-
-// NewDecimal creates a types.Decimal value, it's provided by parser driver.
-var NewDecimal func(string) (any, error)
-
-// NewHexLiteral creates a types.HexLiteral value, it's provided by parser driver.
-var NewHexLiteral func(string) (any, error)
-
-// NewBitLiteral creates a types.BitLiteral value, it's provided by parser driver.
-var NewBitLiteral func(string) (any, error)
 
 // SetResourceGroupStmt is a statement to set the resource group name for current session.
 type SetResourceGroupStmt struct {

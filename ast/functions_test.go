@@ -21,7 +21,6 @@ import (
 	"github.com/sqlc-dev/marino/format"
 	"github.com/sqlc-dev/marino/mysql"
 	"github.com/sqlc-dev/marino/parser"
-	"github.com/sqlc-dev/marino/test_driver"
 
 	"reflect"
 )
@@ -182,7 +181,7 @@ func TestConvert(t *testing.T) {
 
 		st := stmt.(*SelectStmt)
 		expr := st.Fields.Fields[0].Expr.(*FuncCallExpr)
-		charsetArg := expr.Args[1].(*test_driver.ValueExpr)
+		charsetArg := expr.Args[1].(*ValueExprBase)
 		if !reflect.DeepEqual(testCase.CharsetName, charsetArg.GetString()) {
 			t.Fatalf("got %v, want %v", charsetArg.GetString(), testCase.CharsetName)
 		}
@@ -217,7 +216,7 @@ func TestChar(t *testing.T) {
 
 		st := stmt.(*SelectStmt)
 		expr := st.Fields.Fields[0].Expr.(*FuncCallExpr)
-		charsetArg := expr.Args[1].(*test_driver.ValueExpr)
+		charsetArg := expr.Args[1].(*ValueExprBase)
 		if !reflect.DeepEqual(testCase.CharsetName, charsetArg.GetString()) {
 			t.Fatalf("got %v, want %v", charsetArg.GetString(), testCase.CharsetName)
 		}
