@@ -13,51 +13,32 @@
 
 //go:build !codes
 
-package test_driver
+package ast
 
 import (
 	"fmt"
 	"io"
 	"strconv"
 
-	"github.com/sqlc-dev/marino/ast"
 	"github.com/sqlc-dev/marino/charset"
 	"github.com/sqlc-dev/marino/format"
 	"github.com/sqlc-dev/marino/mysql"
 )
 
-func init() {
-	ast.NewValueExpr = newValueExpr
-	ast.NewParamMarkerExpr = newParamMarkerExpr
-	ast.NewDecimal = func(str string) (any, error) {
-		dec := new(MyDecimal)
-		err := dec.FromString([]byte(str))
-		return dec, err
-	}
-	ast.NewHexLiteral = func(str string) (any, error) {
-		h, err := NewHexLiteral(str)
-		return h, err
-	}
-	ast.NewBitLiteral = func(str string) (any, error) {
-		b, err := NewBitLiteral(str)
-		return b, err
-	}
-}
-
 var (
-	_ ast.ParamMarkerExpr = &ParamMarkerExpr{}
-	_ ast.ValueExpr       = &ValueExpr{}
+	_ ParamMarkerExpr = &ParamMarkerExprBase{}
+	_ ValueExpr       = &ValueExprBase{}
 )
 
-// ValueExpr is the simple value expression.
-type ValueExpr struct {
-	ast.TexprNode
+// ValueExprBase is the simple value expression.
+type ValueExprBase struct {
+	exprNode
 	Datum
 	projectionOffset int
 }
 
 // Restore implements Node interface.
-func (n *ValueExpr) Restore(ctx *format.RestoreCtx) error {
+func (n *ValueExprBase) Restore(ctx *format.RestoreCtx) error {
 	switch n.Kind() {
 	case KindNull:
 		ctx.WriteKeyWord("NULL")
@@ -114,12 +95,12 @@ func (n *ValueExpr) Restore(ctx *format.RestoreCtx) error {
 }
 
 // GetDatumString implements the ValueExpr interface.
-func (n *ValueExpr) GetDatumString() string {
+func (n *ValueExprBase) GetDatumString() string {
 	return n.GetString()
 }
 
 // Format the ExprNode into a Writer.
-func (n *ValueExpr) Format(w io.Writer) {
+func (n *ValueExprBase) Format(w io.Writer) {
 	var s string
 	switch n.Kind() {
 	case KindNull:
@@ -156,75 +137,83 @@ func (n *ValueExpr) Format(w io.Writer) {
 	_, _ = fmt.Fprint(w, s)
 }
 
-// newValueExpr creates a ValueExpr with value, and sets default field type.
-func newValueExpr(value any, charset string, collate string) ast.ValueExpr {
-	if ve, ok := value.(*ValueExpr); ok {
+// NewValueExpr creates a ValueExpr with value, and sets default field type.
+func NewValueExpr(value any, charset string, collate string) ValueExpr {
+	if ve, ok := value.(*ValueExprBase); ok {
 		return ve
 	}
-	ve := &ValueExpr{}
+	ve := &ValueExprBase{}
 	ve.SetValue(value)
 	DefaultTypeForValue(value, &ve.Type, charset, collate)
 	ve.projectionOffset = -1
 	return ve
 }
 
-// SetProjectionOffset sets ValueExpr.projectionOffset for logical plan builder.
-func (n *ValueExpr) SetProjectionOffset(offset int) {
+// SetProjectionOffset sets ValueExprBase.projectionOffset for logical plan builder.
+func (n *ValueExprBase) SetProjectionOffset(offset int) {
 	n.projectionOffset = offset
 }
 
-// GetProjectionOffset returns ValueExpr.projectionOffset.
-func (n *ValueExpr) GetProjectionOffset() int {
+// GetProjectionOffset returns ValueExprBase.projectionOffset.
+func (n *ValueExprBase) GetProjectionOffset() int {
 	return n.projectionOffset
 }
 
 // Accept implements Node interface.
-func (n *ValueExpr) Accept(v ast.Visitor) (ast.Node, bool) {
+func (n *ValueExprBase) Accept(v Visitor) (Node, bool) {
 	newNode, skipChildren := v.Enter(n)
 	if skipChildren {
 		return v.Leave(newNode)
 	}
-	n = newNode.(*ValueExpr)
+	n = newNode.(*ValueExprBase)
 	return v.Leave(n)
 }
 
-// ParamMarkerExpr expression holds a place for another expression.
+// ParamMarkerExprBase expression holds a place for another expression.
 // Used in parsing prepare statement.
-type ParamMarkerExpr struct {
-	ValueExpr
+type ParamMarkerExprBase struct {
+	ValueExprBase
 	Offset    int
 	Order     int
 	InExecute bool
 }
 
 // Restore implements Node interface.
-func (n *ParamMarkerExpr) Restore(ctx *format.RestoreCtx) error {
+func (n *ParamMarkerExprBase) Restore(ctx *format.RestoreCtx) error {
 	ctx.WritePlain("?")
 	return nil
 }
 
-func newParamMarkerExpr(offset int) ast.ParamMarkerExpr {
-	return &ParamMarkerExpr{
+// NewParamMarkerExpr creates a ParamMarkerExpr.
+func NewParamMarkerExpr(offset int) ParamMarkerExpr {
+	return &ParamMarkerExprBase{
 		Offset: offset,
 	}
 }
 
 // Format the ExprNode into a Writer.
-func (n *ParamMarkerExpr) Format(w io.Writer) {
+func (n *ParamMarkerExprBase) Format(w io.Writer) {
 	panic("Not implemented")
 }
 
 // Accept implements Node Accept interface.
-func (n *ParamMarkerExpr) Accept(v ast.Visitor) (ast.Node, bool) {
+func (n *ParamMarkerExprBase) Accept(v Visitor) (Node, bool) {
 	newNode, skipChildren := v.Enter(n)
 	if skipChildren {
 		return v.Leave(newNode)
 	}
-	n = newNode.(*ParamMarkerExpr)
+	n = newNode.(*ParamMarkerExprBase)
 	return v.Leave(n)
 }
 
 // SetOrder implements the ParamMarkerExpr interface.
-func (n *ParamMarkerExpr) SetOrder(order int) {
+func (n *ParamMarkerExprBase) SetOrder(order int) {
 	n.Order = order
+}
+
+// NewDecimal creates a *MyDecimal value.
+func NewDecimal(s string) (*MyDecimal, error) {
+	dec := new(MyDecimal)
+	err := dec.FromString([]byte(s))
+	return dec, err
 }

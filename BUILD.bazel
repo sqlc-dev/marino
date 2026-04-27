@@ -60,7 +60,6 @@ go_test(
         "//pkg/parser/mysql",
         "//pkg/parser/opcode",
         "//pkg/parser/terror",
-        "//pkg/parser/test_driver",
         "@com_github_pingcap_errors//:errors",
         "@com_github_stretchr_testify//require",
         "@org_uber_go_goleak//:goleak",

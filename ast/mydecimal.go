@@ -13,7 +13,7 @@
 
 //go:build !codes
 
-package test_driver
+package ast
 
 const panicInfo = "This branch is not implemented. " +
 	"This is because you are trying to test something specific to TiDB's MyDecimal implementation. " +

@@ -49,7 +49,6 @@ import (
 
 	"github.com/sqlc-dev/marino/parser"
 	"github.com/sqlc-dev/marino/ast"
-	_ "github.com/sqlc-dev/marino/test_driver"
 )
 
 func parse(sql string) (*ast.StmtNode, error) {
@@ -88,9 +87,6 @@ If the parser runs properly, you should get a result like this:
 > **NOTE**
 >
 > Here are a few things you might want to know:
-> - To use a parser, a `parser_driver` is required. It decides how to parse the basic data types in SQL.
->
->   You can use [`github.com/sqlc-dev/marino/test_driver`](https://pkg.go.dev/github.com/sqlc-dev/marino/test_driver) as the `parser_driver`.
 > - The instantiated parser object is not goroutine safe and not lightweight. It is better to keep it in a single goroutine, and reuse it if possible.
 > - Warning: the `parser.result` object is being reused without being properly reset or copied. This can cause unexpected behavior or errors if the object is used for multiple parsing operations or concurrently in multiple goroutines. To avoid these issues, make a copy of `parser.result` object before calling `parser.Parse()` again or before using it in another goroutine, or create a new `parser` object altogether for each new parsing operation.
 

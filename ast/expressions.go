@@ -64,12 +64,6 @@ type ValueExpr interface {
 	SetProjectionOffset(offset int)
 }
 
-// NewValueExpr creates a ValueExpr with value, and sets default field type.
-var NewValueExpr func(value any, charset string, collate string) ValueExpr
-
-// NewParamMarkerExpr creates a ParamMarkerExpr.
-var NewParamMarkerExpr func(offset int) ParamMarkerExpr
-
 // BetweenExpr is for "between and" or "not between and" expression.
 type BetweenExpr struct {
 	exprNode

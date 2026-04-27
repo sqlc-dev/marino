@@ -33,7 +33,6 @@ go_test(
         "//pkg/parser/ast",
         "//pkg/parser/charset",
         "//pkg/parser/mysql",
-        "//pkg/parser/test_driver",
         "@com_github_stretchr_testify//require",
     ],
 )
