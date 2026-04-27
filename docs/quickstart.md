@@ -19,25 +19,11 @@ touch main.go
 
 ## Import Dependencies
 
-First, you need to use `go get` to fetch the dependencies through git hash. The git hashes are available in [release page](https://github.com/pingcap/tidb/releases). Take `v7.5.0` as an example:
+First, you need to use `go get` to fetch the dependency:
 
 ```bash
-go get -v github.com/sqlc-dev/marino@069631e
+go get -v github.com/sqlc-dev/marino
 ```
-
-> **NOTE**
-> 
-> The parser was merged into TiDB repo since v5.3.0. So you can only choose version v5.3.0 or higher in this TiDB repo.
->
-> You may want to use advanced API on expressions (a kind of AST node), such as numbers, string literals, booleans, nulls, etc. It is strongly recommended using the `types` package in TiDB repo with the following command:
->
-> ```bash
-> go get -v github.com/pingcap/tidb/pkg/types/parser_driver@069631e
-> ```
-> and import it in your golang source code:
-> ```go
-> import _ "github.com/pingcap/tidb/pkg/types/parser_driver"
-> ```
 
 Your directory should contain the following three files:
 ```
@@ -104,7 +90,7 @@ If the parser runs properly, you should get a result like this:
 > Here are a few things you might want to know:
 > - To use a parser, a `parser_driver` is required. It decides how to parse the basic data types in SQL.
 >
->   You can use [`github.com/sqlc-dev/marino/test_driver`](https://pkg.go.dev/github.com/sqlc-dev/marino/test_driver) as the `parser_driver` for test. Again, if you need advanced features, please use the `parser_driver` in TiDB (run `go get -v github.com/pingcap/tidb/types/parser_driver@069631e` and import it).
+>   You can use [`github.com/sqlc-dev/marino/test_driver`](https://pkg.go.dev/github.com/sqlc-dev/marino/test_driver) as the `parser_driver`.
 > - The instantiated parser object is not goroutine safe and not lightweight. It is better to keep it in a single goroutine, and reuse it if possible.
 > - Warning: the `parser.result` object is being reused without being properly reset or copied. This can cause unexpected behavior or errors if the object is used for multiple parsing operations or concurrently in multiple goroutines. To avoid these issues, make a copy of `parser.result` object before calling `parser.Parse()` again or before using it in another goroutine, or create a new `parser` object altogether for each new parsing operation.
 
