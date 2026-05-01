@@ -8089,6 +8089,10 @@ ReplaceIntoStmt:
 	"REPLACE" TableOptimizerHintsOpt PriorityOpt IntoOpt TableName PartitionNameListOpt InsertValues
 	{
 		x := $7.(*ast.InsertStmt)
+		if x.RowAlias.O != "" || len(x.ColumnAliases) > 0 {
+			yylex.AppendError(ErrSyntax)
+			return 1
+		}
 		if $2 != nil {
 			x.TableHints = $2.([]*ast.TableOptimizerHint)
 		}
