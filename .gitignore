@@ -4,3 +4,4 @@ y.go
 .idea/
 .vscode/
 coverage.txt
+parser/genkeyword
