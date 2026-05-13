@@ -1121,6 +1121,15 @@ func TestDMLStmt(t *testing.T) {
 		{"INSERT IGNORE INTO t (a,b,c) VALUES (1,2,3),(4,5,6) ON DUPLICATE KEY UPDATE c=VALUES(a)+VALUES(b);", true, "INSERT IGNORE INTO `t` (`a`,`b`,`c`) VALUES (1,2,3),(4,5,6) ON DUPLICATE KEY UPDATE `c`=VALUES(`a`)+VALUES(`b`)"},
 		{"INSERT IGNORE INTO t (a,b,c) VALUES (1,2,3),(4,5,6) ON DUPLICATE KEY UPDATE c:=VALUES(a)+VALUES(b);", true, "INSERT IGNORE INTO `t` (`a`,`b`,`c`) VALUES (1,2,3),(4,5,6) ON DUPLICATE KEY UPDATE `c`=VALUES(`a`)+VALUES(`b`)"},
 
+		// row alias for ON DUPLICATE KEY UPDATE (MySQL 8.0.19+)
+		{"INSERT INTO odk (id, v) VALUES (1, 10) AS new ON DUPLICATE KEY UPDATE v = new.v;", true, "INSERT INTO `odk` (`id`,`v`) VALUES (1,10) AS `new` ON DUPLICATE KEY UPDATE `v`=`new`.`v`"},
+		{"INSERT INTO odk (id, v) VALUES (1, 10) AS new(nid, nv) ON DUPLICATE KEY UPDATE v = nv;", true, "INSERT INTO `odk` (`id`,`v`) VALUES (1,10) AS `new`(`nid`,`nv`) ON DUPLICATE KEY UPDATE `v`=`nv`"},
+		{"INSERT INTO odk VALUES (1, 10) AS new ON DUPLICATE KEY UPDATE v = new.v;", true, "INSERT INTO `odk` VALUES (1,10) AS `new` ON DUPLICATE KEY UPDATE `v`=`new`.`v`"},
+		{"INSERT IGNORE INTO odk (id, v) VALUES (1, 10) AS new ON DUPLICATE KEY UPDATE v = new.v;", true, "INSERT IGNORE INTO `odk` (`id`,`v`) VALUES (1,10) AS `new` ON DUPLICATE KEY UPDATE `v`=`new`.`v`"},
+		{"INSERT INTO odk SET id = 1, v = 10 AS new ON DUPLICATE KEY UPDATE v = new.v;", true, "INSERT INTO `odk` SET `id`=1,`v`=10 AS `new` ON DUPLICATE KEY UPDATE `v`=`new`.`v`"},
+		// row alias is not supported with INSERT ... SELECT in marino.
+		{"INSERT INTO odk (id, v) SELECT id, v FROM staging AS s AS new ON DUPLICATE KEY UPDATE v = new.v;", false, ""},
+
 		// for insert ... set
 		{"INSERT INTO t SET a=1,b=2", true, "INSERT INTO `t` SET `a`=1,`b`=2"},
 		{"INSERT INTO t (a) SET a=1", false, ""},

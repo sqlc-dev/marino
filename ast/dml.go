@@ -2399,6 +2399,12 @@ type InsertStmt struct {
 	Priority    mysql.PriorityEnum
 	OnDuplicate []*Assignment
 	Select      ResultSetNode
+	// RowAlias is the alias for the inserted row, set by `INSERT ... AS row_alias`.
+	// MySQL 8.0.19+ syntax for use inside ON DUPLICATE KEY UPDATE.
+	RowAlias *CIStr
+	// ColumnAliases are the optional column aliases that follow RowAlias,
+	// set by `INSERT ... AS row_alias (col_alias_list)`.
+	ColumnAliases []*CIStr
 	// TableHints represents the table level Optimizer Hint for join type.
 	TableHints     []*TableOptimizerHint
 	PartitionNames []CIStr
@@ -2514,6 +2520,20 @@ func (n *InsertStmt) Restore(ctx *format.RestoreCtx) error {
 			}
 		default:
 			return fmt.Errorf("Incorrect type for InsertStmt.Select: %T", v)
+		}
+	}
+	if n.RowAlias != nil {
+		ctx.WriteKeyWord(" AS ")
+		ctx.WriteName(n.RowAlias.O)
+		if len(n.ColumnAliases) != 0 {
+			ctx.WritePlain("(")
+			for i, c := range n.ColumnAliases {
+				if i != 0 {
+					ctx.WritePlain(",")
+				}
+				ctx.WriteName(c.O)
+			}
+			ctx.WritePlain(")")
 		}
 	}
 	if n.OnDuplicate != nil {
