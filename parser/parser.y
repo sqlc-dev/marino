@@ -43,6 +43,14 @@ type likeEscapeSpec struct {
 	explicit bool
 }
 
+// insertRowAlias carries the optional row alias and column aliases parsed
+// from `INSERT ... AS row_alias [(col_alias_list)]` into the InsertIntoStmt
+// action so they can be attached to the resulting ast.InsertStmt.
+type insertRowAlias struct {
+	name    *ast.CIStr
+	columns []*ast.CIStr
+}
+
 func getMaskingPolicyRestrictOp(name string) (ast.MaskingPolicyRestrictOps, bool) {
 	switch strings.ToUpper(name) {
 	case ast.MaskingPolicyRestrictNameInsertIntoSelect:
@@ -1301,6 +1309,7 @@ func getMaskingPolicyRestrictOp(name string) (ast.MaskingPolicyRestrictOps, bool
 	NoWriteToBinLogAliasOpt                "NO_WRITE_TO_BINLOG alias LOCAL or empty"
 	ObjectType                             "Grant statement object type"
 	OnDuplicateKeyUpdate                   "ON DUPLICATE KEY UPDATE value list"
+	RowAliasOpt                            "Optional row alias for INSERT ... AS row_alias [(col_alias_list)]"
 	OnCommitOpt                            "ON COMMIT DELETE |PRESERVE ROWS"
 	DuplicateOpt                           "[IGNORE|REPLACE] in CREATE TABLE ... SELECT statement or LOAD DATA statement"
 	FormatOpt                              "FORMAT 'SQL FILE'..."
@@ -7899,12 +7908,17 @@ IntoOpt:
 |	"INTO"
 
 InsertValues:
-	'(' ColumnNameListOpt ')' ValueSym ValuesList
+	'(' ColumnNameListOpt ')' ValueSym ValuesList RowAliasOpt
 	{
-		$$ = &ast.InsertStmt{
+		is := &ast.InsertStmt{
 			Columns: $2.([]*ast.ColumnName),
 			Lists:   $5.([][]ast.ExprNode),
 		}
+		if ra, _ := $6.(*insertRowAlias); ra != nil {
+			is.RowAlias = ra.name
+			is.ColumnAliases = ra.columns
+		}
+		$$ = is
 	}
 |	'(' ColumnNameListOpt ')' SetOprStmt
 	{
@@ -7931,9 +7945,14 @@ InsertValues:
 		}
 		$$ = &ast.InsertStmt{Columns: $2.([]*ast.ColumnName), Select: sel}
 	}
-|	ValueSym ValuesList %prec insertValues
+|	ValueSym ValuesList RowAliasOpt %prec insertValues
 	{
-		$$ = &ast.InsertStmt{Lists: $2.([][]ast.ExprNode)}
+		is := &ast.InsertStmt{Lists: $2.([][]ast.ExprNode)}
+		if ra, _ := $3.(*insertRowAlias); ra != nil {
+			is.RowAlias = ra.name
+			is.ColumnAliases = ra.columns
+		}
+		$$ = is
 	}
 |	SetOprStmt
 	{
@@ -7960,9 +7979,14 @@ InsertValues:
 		}
 		$$ = &ast.InsertStmt{Select: sel}
 	}
-|	"SET" ColumnSetValueList
+|	"SET" ColumnSetValueList RowAliasOpt
 	{
-		$$ = $2.(*ast.InsertStmt)
+		is := $2.(*ast.InsertStmt)
+		if ra, _ := $3.(*insertRowAlias); ra != nil {
+			is.RowAlias = ra.name
+			is.ColumnAliases = ra.columns
+		}
+		$$ = is
 	}
 
 ValueSym:
@@ -8036,6 +8060,28 @@ OnDuplicateKeyUpdate:
 |	"ON" "DUPLICATE" "KEY" "UPDATE" AssignmentList
 	{
 		$$ = $5
+	}
+
+RowAliasOpt:
+	%prec empty
+	{
+		$$ = (*insertRowAlias)(nil)
+	}
+|	"AS" Identifier
+	{
+		name := ast.NewCIStr($2)
+		$$ = &insertRowAlias{name: &name}
+	}
+|	"AS" Identifier '(' IdentList ')'
+	{
+		name := ast.NewCIStr($2)
+		idents := $4.([]ast.CIStr)
+		cols := make([]*ast.CIStr, 0, len(idents))
+		for i := range idents {
+			c := idents[i]
+			cols = append(cols, &c)
+		}
+		$$ = &insertRowAlias{name: &name, columns: cols}
 	}
 
 /************************************************************************************
@@ -16132,22 +16178,22 @@ StatsObject:
 	{
 		$$ = &ast.StatsObject{
 			StatsObjectScope: ast.StatsObjectScopeDatabase,
-			DBName:             ast.NewCIStr($1),
+			DBName:           ast.NewCIStr($1),
 		}
 	}
 |	Identifier '.' Identifier
 	{
 		$$ = &ast.StatsObject{
 			StatsObjectScope: ast.StatsObjectScopeTable,
-			DBName:             ast.NewCIStr($1),
-			TableName:          ast.NewCIStr($3),
+			DBName:           ast.NewCIStr($1),
+			TableName:        ast.NewCIStr($3),
 		}
 	}
 |	Identifier
 	{
 		$$ = &ast.StatsObject{
 			StatsObjectScope: ast.StatsObjectScopeTable,
-			TableName:          ast.NewCIStr($1),
+			TableName:        ast.NewCIStr($1),
 		}
 	}
 
