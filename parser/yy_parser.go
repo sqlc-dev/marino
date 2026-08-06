@@ -178,6 +178,31 @@ func (parser *Parser) ParseSQL(sql string, params ...ParseParam) (stmt []ast.Stm
 		}
 	}
 	parser.src = sql
+
+	// The hand-written recursive-descent parser handles what it has
+	// implemented; anything else falls back to the goyacc parser
+	// (see PLAN.md and rd_parser.go).
+	if stmts, rdWarns, rdErr, handled := parser.parseRD(sql); handled {
+		if rdDifferential && len(sql) <= rdDifferentialMaxLen {
+			parser.rdDifferentialCheck(sql, params, stmts, rdWarns, rdErr)
+		}
+		return stmts, rdWarns, rdErr
+	}
+	return parser.yaccParseSQL(sql, params...)
+}
+
+// yaccParseSQL parses with the goyacc-generated parser. It re-applies the
+// params so that it is also callable on a freshly configured Parser by the
+// differential harness.
+func (parser *Parser) yaccParseSQL(sql string, params ...ParseParam) (stmt []ast.StmtNode, warns []error, err error) {
+	resetParams(parser)
+	parser.lexer.reset(sql)
+	for _, p := range params {
+		if err := p.ApplyOn(parser); err != nil {
+			return nil, nil, err
+		}
+	}
+	parser.src = sql
 	parser.result = parser.result[:0]
 
 	var l yyLexer = &parser.lexer
