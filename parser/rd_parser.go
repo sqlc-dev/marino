@@ -361,9 +361,24 @@ func (r *rdParser) parseStatement() ast.StmtNode {
 	case batch:
 		return r.parseNonTransactionalDMLStmt()
 	default:
+		if f, ok := rdStmtDispatch[r.tok()]; ok {
+			return f(r)
+		}
 		r.unsupported(fmt.Sprintf("statement starting with token %d (%q)", r.tok(), r.cur().lit))
 		return nil
 	}
+}
+
+// rdStmtDispatch maps a statement's leading token to its parse function.
+// Families register in their own file's init so files stay independent;
+// each leading token has exactly one owner.
+var rdStmtDispatch = map[int]func(*rdParser) ast.StmtNode{}
+
+func rdRegister(tok int, f func(*rdParser) ast.StmtNode) {
+	if _, dup := rdStmtDispatch[tok]; dup {
+		panic(fmt.Sprintf("rdRegister: token %d already registered", tok))
+	}
+	rdStmtDispatch[tok] = f
 }
 
 // finishSelectFamily parses the select statement family after an
