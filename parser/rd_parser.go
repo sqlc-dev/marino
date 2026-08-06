@@ -323,28 +323,65 @@ func (r *rdParser) parseStatement() ast.StmtNode {
 		// DoStmt: "DO" ExpressionList
 		r.advance()
 		return &ast.DoStmt{Exprs: r.parseExpressionList()}
-	case selectKwd, tableKwd, values, with, int('('):
-		// Statement: SelectStmt | SelectStmtWithClause | SetOprStmt | SubSelect
+	case selectKwd, tableKwd, values, int('('):
+		// Statement: SelectStmt | SetOprStmt | SubSelect
 		if r.tok() == int('(') && !r.subSelectFollows() {
 			r.syntaxError()
 		}
-		stmt, sub := r.parseSelectCore()
-		if sub != nil {
-			// Statement: SubSelect — unwrap and mark braced.
-			switch x := sub.Query.(type) {
-			case *ast.SelectStmt:
-				x.IsInBraces = true
-				return x
-			case *ast.SetOprStmt:
-				x.IsInBraces = true
-				return x
-			}
+		return r.finishSelectFamily(nil)
+	case with:
+		// A WITH clause prefixes SELECT, UPDATE, and DELETE statements.
+		withClause := r.parseWithClause()
+		switch r.tok() {
+		case update:
+			return r.parseUpdateStmt(withClause)
+		case deleteKwd:
+			return r.parseDeleteStmt(withClause)
+		default:
+			return r.finishSelectFamily(withClause)
 		}
-		return stmt
+	case insert:
+		return r.parseInsertIntoStmt()
+	case replace:
+		return r.parseReplaceIntoStmt()
+	case update:
+		return r.parseUpdateStmt(nil)
+	case deleteKwd:
+		return r.parseDeleteStmt(nil)
+	case load:
+		if r.la(1) != data {
+			r.unsupported("LOAD statement")
+		}
+		return r.parseLoadDataStmt()
+	case importKwd:
+		if r.la(1) != into {
+			r.unsupported("IMPORT statement")
+		}
+		return r.parseImportIntoStmt()
+	case batch:
+		return r.parseNonTransactionalDMLStmt()
 	default:
 		r.unsupported(fmt.Sprintf("statement starting with token %d (%q)", r.tok(), r.cur().lit))
 		return nil
 	}
+}
+
+// finishSelectFamily parses the select statement family after an
+// optional pre-parsed WITH clause, applying the Statement: SubSelect
+// action to a bare parenthesized query.
+func (r *rdParser) finishSelectFamily(withClause *ast.WithClause) ast.StmtNode {
+	stmt, sub := r.parseSelectCoreWith(withClause)
+	if sub != nil {
+		switch x := sub.Query.(type) {
+		case *ast.SelectStmt:
+			x.IsInBraces = true
+			return x
+		case *ast.SetOprStmt:
+			x.IsInBraces = true
+			return x
+		}
+	}
+	return stmt
 }
 
 var (

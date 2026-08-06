@@ -38,6 +38,13 @@ func (r *rdParser) parseSelectCore() (ast.StmtNode, *ast.SubqueryExpr) {
 	if r.tok() == with {
 		withClause = r.parseWithClause()
 	}
+	return r.parseSelectCoreWith(withClause)
+}
+
+// parseSelectCoreWith is parseSelectCore after the optional WithClause
+// has been consumed (statement dispatch needs the WITH parsed before it
+// can tell SELECT from UPDATE/DELETE).
+func (r *rdParser) parseSelectCoreWith(withClause *ast.WithClause) (ast.StmtNode, *ast.SubqueryExpr) {
 
 	// First SetOprClause.
 	var firstSel *ast.SelectStmt
