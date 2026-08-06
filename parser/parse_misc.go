@@ -82,45 +82,60 @@ func (r *rdParser) parseKillStmt() ast.StmtNode {
 	// KillOrKillTiDB BuiltinFunction
 	return &ast.KillStmt{
 		TiDBExtension: tidbExtension,
-		Expr:          r.parseBuiltinFunction(),
+		Expr:          r.parseParenBuiltinFunction(),
 	}
 }
 
-// parseBuiltinFunction implements BuiltinFunction:
+// parseParenBuiltinFunction implements the full BuiltinFunction
+// production including its parenthesized recursion:
 //
 //	'(' BuiltinFunction ')' | identifier '(' ')' |
 //	identifier '(' ExpressionList ')' | "REPLACE" '(' ExpressionList ')'
-func (r *rdParser) parseBuiltinFunction() ast.ExprNode {
+//
+// deferring the call alternatives to parseBuiltinFunction
+// (parse_column.go).
+func (r *rdParser) parseParenBuiltinFunction() ast.ExprNode {
 	start := r.cur().offset
 	if r.accept(int('(')) {
-		f := r.parseBuiltinFunction()
+		f := r.parseParenBuiltinFunction()
 		r.expect(int(')'))
 		return r.setOrigin(f, start)
 	}
-	var name string
-	requireArgs := false
-	switch r.tok() {
-	case identifier:
-		name = r.cur().lit
-	case replace:
-		name = r.cur().lit
-		requireArgs = true
-	default:
+	if r.tok() != identifier && r.tok() != replace {
 		r.syntaxError()
 	}
+	return r.parseBuiltinFunction()
+}
+
+// parseBuiltinFunction implements the call alternatives of
+// BuiltinFunction (callers dispatch on the identifier/"REPLACE" leading
+// token; the parenthesized recursion is handled by their paren parsers):
+//
+//	identifier '(' ')' | identifier '(' ExpressionList ')' |
+//	"REPLACE" '(' ExpressionList ')'
+func (r *rdParser) parseBuiltinFunction() ast.ExprNode {
+	start := r.cur().offset
+	isReplace := r.tok() == replace
+	fnName := r.cur().lit
 	r.advance()
 	r.expect(int('('))
-	if !requireArgs && r.accept(int(')')) {
-		return r.setOrigin(&ast.FuncCallExpr{
-			FnName: ast.NewCIStr(name),
-		}, start)
+	var v ast.ExprNode
+	if !isReplace && r.tok() == int(')') {
+		// identifier '(' ')'
+		r.advance()
+		v = &ast.FuncCallExpr{
+			FnName: ast.NewCIStr(fnName),
+		}
+	} else {
+		// identifier '(' ExpressionList ')' | "REPLACE" '(' ExpressionList ')'
+		args := r.parseExpressionList()
+		r.expect(int(')'))
+		v = &ast.FuncCallExpr{
+			FnName: ast.NewCIStr(fnName),
+			Args:   args,
+		}
 	}
-	args := r.parseExpressionList()
-	r.expect(int(')'))
-	return r.setOrigin(&ast.FuncCallExpr{
-		FnName: ast.NewCIStr(name),
-		Args:   args,
-	}, start)
+	return r.setOrigin(v, start)
 }
 
 // parseTruncateTableStmt implements TruncateTableStmt: "TRUNCATE" OptTable TableName.

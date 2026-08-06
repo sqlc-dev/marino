@@ -71,6 +71,7 @@ func (r *rdParser) parseIfNotExists() bool {
 		return false
 	}
 	r.advance()
+	// NotSym: not | not2
 	if r.tok() != not && r.tok() != not2 {
 		r.syntaxError()
 	}
