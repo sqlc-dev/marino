@@ -183,8 +183,9 @@ func (d *dumper) nodeState(v reflect.Value) {
 	}
 	iv := a.Interface()
 	if n, ok := iv.(ast.Node); ok {
-		d.nl()
-		fmt.Fprintf(&d.buf, ".text: %s", strconv.Quote(n.Text()))
+		// OriginalText, not Text(): Text() memoizes a converted copy on
+		// the node, and a dump must never mutate the tree it renders
+		// (the test suite deep-compares trees including that memo state).
 		d.nl()
 		fmt.Fprintf(&d.buf, ".originalText: %s", strconv.Quote(n.OriginalText()))
 		d.nl()

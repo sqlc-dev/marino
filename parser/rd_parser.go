@@ -314,6 +314,10 @@ func (r *rdParser) parseStatement() ast.StmtNode {
 	case ';', 0:
 		// EmptyStmt: /* empty */
 		return nil
+	case do:
+		// DoStmt: "DO" ExpressionList
+		r.advance()
+		return &ast.DoStmt{Exprs: r.parseExpressionList()}
 	default:
 		r.unsupported(fmt.Sprintf("statement starting with token %d (%q)", r.tok(), r.cur().lit))
 		return nil
