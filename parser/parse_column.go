@@ -248,8 +248,7 @@ func (r *rdParser) parseColumnOption() interface{} {
 		// ColumnOption: "STORAGE" StorageMedia
 		r.advance()
 		opt := &ast.ColumnOption{Tp: ast.ColumnOptionStorage, StrValue: r.parseStorageMedia()}
-		r.sc.AppendError(r.sc.Errorf("The STORAGE clause is parsed but ignored by all storage engines."))
-		r.sc.lastErrorAsWarn()
+		r.appendWarnf("The STORAGE clause is parsed but ignored by all storage engines.")
 		return opt
 	case autoRandom:
 		// ColumnOption: "AUTO_RANDOM" AutoRandomOpt
@@ -455,8 +454,7 @@ func (r *rdParser) parseDefaultValueExprParen() ast.ExprNode {
 			v = r.parseSignedLiteral()
 		}
 	}
-	rp := r.expect(int(')'))
-	_ = rp
+	r.expect(int(')'))
 	return r.setOrigin(v, start)
 }
 
@@ -622,8 +620,7 @@ func (r *rdParser) parseMatchOpt() ast.MatchType {
 		r.syntaxError()
 	}
 	r.advance()
-	r.sc.AppendError(r.sc.Errorf("The MATCH clause is parsed but ignored by all storage engines."))
-	r.sc.lastErrorAsWarn()
+	r.appendWarnf("The MATCH clause is parsed but ignored by all storage engines.")
 	return m
 }
 
@@ -673,8 +670,7 @@ func (r *rdParser) parseReferOpt() ast.ReferOptionType {
 			return ast.ReferOptionSetNull
 		}
 		r.expect(defaultKwd)
-		r.sc.AppendError(r.sc.Errorf("The SET DEFAULT clause is parsed but ignored by all storage engines."))
-		r.sc.lastErrorAsWarn()
+		r.appendWarnf("The SET DEFAULT clause is parsed but ignored by all storage engines.")
 		return ast.ReferOptionSetDefault
 	case no:
 		r.advance()
