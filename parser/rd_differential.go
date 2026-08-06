@@ -23,6 +23,7 @@ package parser
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/sqlc-dev/marino/ast"
 	astdump "github.com/sqlc-dev/marino/internal/dump"
@@ -50,7 +51,7 @@ func (parser *Parser) rdDifferentialCheck(sql string, params []ParseParam, stmts
 	oStmts, oWarns, oErr := oracle.yaccParseSQL(sql, params...)
 
 	fail := func(aspect, rd, yacc string) {
-		panic(fmt.Sprintf("rd/yacc parser divergence on %s\nSQL: %s\n--- rd ---\n%s\n--- yacc ---\n%s", aspect, sql, rd, yacc))
+		panic(fmt.Sprintf("rd/yacc parser divergence on %s\nSQL: %s\n%s", aspect, sql, firstDiff(rd, yacc)))
 	}
 	if (rdErr == nil) != (oErr == nil) || (rdErr != nil && rdErr.Error() != oErr.Error()) {
 		fail("error", fmt.Sprintf("%v", rdErr), fmt.Sprintf("%v", oErr))
@@ -67,4 +68,37 @@ func (parser *Parser) rdDifferentialCheck(sql string, params []ParseParam, stmts
 	if rdDump != oDump {
 		fail("AST", rdDump, oDump)
 	}
+}
+
+// firstDiff renders the first run of differing lines between two dumps,
+// with a little context.
+func firstDiff(a, b string) string {
+	al, bl := strings.Split(a, "\n"), strings.Split(b, "\n")
+	n := len(al)
+	if len(bl) < n {
+		n = len(bl)
+	}
+	i := 0
+	for i < n && al[i] == bl[i] {
+		i++
+	}
+	var sb strings.Builder
+	lo := i - 3
+	if lo < 0 {
+		lo = 0
+	}
+	for k := lo; k < i; k++ {
+		fmt.Fprintf(&sb, "  %s\n", al[k])
+	}
+	for k := i; k < i+8; k++ {
+		if k < len(al) {
+			fmt.Fprintf(&sb, "rd  > %s\n", al[k])
+		}
+	}
+	for k := i; k < i+8; k++ {
+		if k < len(bl) {
+			fmt.Fprintf(&sb, "yacc> %s\n", bl[k])
+		}
+	}
+	return sb.String()
 }

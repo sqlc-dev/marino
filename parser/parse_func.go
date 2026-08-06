@@ -87,24 +87,20 @@ func (r *rdParser) parseSimpleExprAtom() ast.ExprNode {
 		return r.parseSystemVariable(start)
 
 	case int('('):
-		// SimpleExpr: SubSelect | '(' Expression ')' | '(' ExpressionList ',' Expression ')'
-		if r.subSelectFollows() {
+		// SimpleExpr: SubSelect | '(' Expression ')' | '(' ExpressionList ',' Expression ')'.
+		// A '(' directly followed by SELECT/WITH is a subquery; otherwise
+		// the parenthesized-expression route is preferred (`((select 1))`
+		// is ParenthesesExpr around a scalar subquery), and only when
+		// that route fails — `((select 1) union (select 2))` — is the
+		// SubSelect derivation taken, mirroring the LALR resolution.
+		if r.la(1) == selectKwd || r.la(1) == with {
 			return r.setOrigin(r.parseSubSelect(), start)
 		}
-		r.advance()
-		exprStart := r.cur().offset
-		expr := r.parseExpression()
-		if r.tok() == int(',') {
-			values := []ast.ExprNode{expr}
-			for r.accept(int(',')) {
-				values = append(values, r.parseExpression())
-			}
-			r.expect(int(')'))
-			return r.setOrigin(&ast.RowExpr{Values: values}, start)
+		var result ast.ExprNode
+		if r.try(func() { result = r.parseParenExpr(start) }) {
+			return result
 		}
-		closing := r.expect(int(')'))
-		r.setNodeTextSpan(expr, exprStart, r.endOffsetAt(closing.offset))
-		return r.setOrigin(&ast.ParenthesesExpr{Expr: expr}, start)
+		return r.setOrigin(r.parseSubSelect(), start)
 	case row:
 		// SimpleExpr: "ROW" '(' ExpressionList ',' Expression ')'
 		r.advance()
@@ -612,6 +608,26 @@ func (r *rdParser) parseSimpleExprAtom() ast.ExprNode {
 		r.syntaxError()
 		return nil
 	}
+}
+
+// parseParenExpr parses '(' Expression ')' (ParenthesesExpr, with the
+// grammar action's node-text span) or '(' ExpressionList ',' Expression
+// ')' (RowExpr).
+func (r *rdParser) parseParenExpr(start int) ast.ExprNode {
+	r.expect(int('('))
+	exprStart := r.cur().offset
+	expr := r.parseExpression()
+	if r.tok() == int(',') {
+		values := []ast.ExprNode{expr}
+		for r.accept(int(',')) {
+			values = append(values, r.parseExpression())
+		}
+		r.expect(int(')'))
+		return r.setOrigin(&ast.RowExpr{Values: values}, start)
+	}
+	closing := r.expect(int(')'))
+	r.setNodeTextSpan(expr, exprStart, r.endOffsetAt(closing.offset))
+	return r.setOrigin(&ast.ParenthesesExpr{Expr: expr}, start)
 }
 
 // parseSimpleIdentAtom parses SimpleIdent, the qualified

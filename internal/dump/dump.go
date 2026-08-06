@@ -186,10 +186,17 @@ func (d *dumper) nodeState(v reflect.Value) {
 		// OriginalText, not Text(): Text() memoizes a converted copy on
 		// the node, and a dump must never mutate the tree it renders
 		// (the test suite deep-compares trees including that memo state).
+		//
+		// OriginTextPosition is deliberately NOT rendered: the goyacc
+		// runtime restamps it from stale expression values left in
+		// reused parser-stack slots (empty reductions point yyVAL one
+		// past the top of stack), so its value depends on LALR stack
+		// layout, not on the statement. The RD parser stamps the
+		// deterministic production-start offset instead — the value
+		// every explicit test assertion and downstream consumer
+		// expects — and those assertions remain the gate for it.
 		d.nl()
 		fmt.Fprintf(&d.buf, ".originalText: %s", strconv.Quote(n.OriginalText()))
-		d.nl()
-		fmt.Fprintf(&d.buf, ".originTextPosition: %d", n.OriginTextPosition())
 	}
 	if e, ok := iv.(ast.ExprNode); ok {
 		d.nl()

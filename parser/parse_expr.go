@@ -275,16 +275,27 @@ func (r *rdParser) parsePredicate() ast.ExprNode {
 	case in:
 		// PredicateExpr: BitExpr InOrNotOp '(' ExpressionList ')'
 		//              | BitExpr InOrNotOp SubSelect
+		// A '(' directly followed by SELECT/WITH is the subquery form;
+		// otherwise the list form is preferred (`in ((select 1))` is a
+		// one-element list holding a scalar subquery) with the subquery
+		// derivation as the fallback (`in ((select 1) union (select 2))`).
 		r.advance()
-		if r.tok() == int('(') && r.subSelectFollows() {
+		if r.tok() == int('(') && (r.la(1) == selectKwd || r.la(1) == with) {
 			sq := r.parseSubSelect()
 			sq.MultiRows = true
 			return r.setOrigin(&ast.PatternInExpr{Expr: v, Not: notFlag, Sel: sq}, start)
 		}
-		r.expect(int('('))
-		list := r.parseExpressionList()
-		r.expect(int(')'))
-		return r.setOrigin(&ast.PatternInExpr{Expr: v, Not: notFlag, List: list}, start)
+		var list []ast.ExprNode
+		if r.try(func() {
+			r.expect(int('('))
+			list = r.parseExpressionList()
+			r.expect(int(')'))
+		}) {
+			return r.setOrigin(&ast.PatternInExpr{Expr: v, Not: notFlag, List: list}, start)
+		}
+		sq := r.parseSubSelect()
+		sq.MultiRows = true
+		return r.setOrigin(&ast.PatternInExpr{Expr: v, Not: notFlag, Sel: sq}, start)
 	case between:
 		// PredicateExpr: BitExpr BetweenOrNotOp BitExpr "AND" PredicateExpr
 		r.advance()
@@ -737,13 +748,6 @@ func (r *rdParser) parseOptFieldLen() int {
 		return r.parseFieldLen()
 	}
 	return types.UnspecifiedLength
-}
-
-// parseSubSelect implements SubSelect. Placeholder until the SELECT
-// milestone.
-func (r *rdParser) parseSubSelect() *ast.SubqueryExpr {
-	r.unsupported("subquery")
-	return nil
 }
 
 // subSelectFollows reports whether the current '(' opens a subquery, the

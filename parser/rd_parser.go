@@ -236,6 +236,11 @@ func (parser *Parser) parseRD(sql string) (stmts []ast.StmtNode, warns []error, 
 		case rdLexError:
 			logRDFallback(sql, "lex error")
 			handled = false
+		case rdActionAbort:
+			// The aborting error lives on the discarded scanner clone;
+			// goyacc re-parses and reports it identically.
+			logRDFallback(sql, "action abort")
+			handled = false
 		default:
 			panic(e)
 		}
@@ -318,6 +323,24 @@ func (r *rdParser) parseStatement() ast.StmtNode {
 		// DoStmt: "DO" ExpressionList
 		r.advance()
 		return &ast.DoStmt{Exprs: r.parseExpressionList()}
+	case selectKwd, tableKwd, values, with, int('('):
+		// Statement: SelectStmt | SelectStmtWithClause | SetOprStmt | SubSelect
+		if r.tok() == int('(') && !r.subSelectFollows() {
+			r.syntaxError()
+		}
+		stmt, sub := r.parseSelectCore()
+		if sub != nil {
+			// Statement: SubSelect — unwrap and mark braced.
+			switch x := sub.Query.(type) {
+			case *ast.SelectStmt:
+				x.IsInBraces = true
+				return x
+			case *ast.SetOprStmt:
+				x.IsInBraces = true
+				return x
+			}
+		}
+		return stmt
 	default:
 		r.unsupported(fmt.Sprintf("statement starting with token %d (%q)", r.tok(), r.cur().lit))
 		return nil
