@@ -448,13 +448,12 @@ func (r *rdParser) parseTableOptimizerHints() []*ast.TableOptimizerHint {
 	return hints
 }
 
-// parseHintComment routes a hintComment token through the Parser's hint
-// parser using the token's recorded hint position.
+// parseHintComment routes a hintComment token through the recursive-
+// descent hint parser (parse_hint.go) using the token's recorded hint
+// position; the goyacc oracle keeps using the goyacc hint parser, so the
+// differential harness compares hint ASTs and warnings too.
 func (r *rdParser) parseHintComment(t rdToken) ([]*ast.TableOptimizerHint, []error) {
-	if r.p.hintParser == nil {
-		r.p.hintParser = newHintParser()
-	}
-	return r.p.hintParser.parse(t.lit, r.sc.GetSQLMode(), t.hintPos)
+	return rdParseHint(t.lit, r.sc.GetSQLMode(), t.hintPos)
 }
 
 // parseFieldList implements FieldList with the per-field Offset and text
