@@ -284,15 +284,29 @@ Layered, in order of authority:
 1. **Existing Go test suite, unmodified** — the acceptance gate
    (`test.sh`: `go test -p 1 -race ./...`). It asserts restore round-trips,
    AST structure, error cases, digests, and API behavior.
-2. **Corpus goldens** — full-tree dumps + exact error strings from the
-   pinned oracle, with the family dev loop:
+2. **In-process differential harness** (an upgrade over the plan's
+   original golden-corpus mechanics, possible because the oracle is
+   in-tree): while goyacc is present, `ParseSQL` under `go test` re-parses
+   every RD-handled input with goyacc and compares the full `internal/dump`
+   renderings plus error and warning strings, panicking on divergence
+   (`rd_differential.go`). The entire existing suite therefore doubles as
+   the differential corpus, with `MARINO_RD_LOG` + `cmd/next-test` as the
+   todo tracker:
    ```sh
-   go run ./cmd/next-test                  # next todo case, closest file first
+   rm -f /tmp/rd.log
+   MARINO_RD_LOG=/tmp/rd.log go test ./parser/ -count=1
+   go run ./cmd/next-test /tmp/rd.log      # ranked remaining fallbacks
    # implement in parser/parse_*.go
-   go test ./parser -run TestCorpus -check-parse -v 2>&1 | grep "PARSE PASSES NOW"
-   go test ./... -timeout 120s             # everything else still green
-   # commit code + metadata together
+   go test ./... -timeout 120s             # everything still green
    ```
+   Committed dump goldens (regenerable from the pinned oracle commit)
+   land at removal time as the post-goyacc regression layer.
+
+   One deliberate deviation surfaced by this harness:
+   `OriginTextPosition` values from goyacc depended on parser-stack slot
+   reuse (empty reductions restamp stale expressions), so they are not
+   reproduced; the RD parser stamps deterministic production-start
+   offsets, which is what every explicit test assertion expects.
 3. **Round trip** — every corpus case that parses is restored
    (`format.RestoreCtx`) and re-parsed; the two dumps must agree, mirroring
    the existing `RunRestoreTest` but over the whole corpus.
