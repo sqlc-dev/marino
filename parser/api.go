@@ -18,7 +18,6 @@ import (
 	"math"
 	"regexp"
 	"strconv"
-	"unicode"
 
 	"github.com/sqlc-dev/marino/ast"
 	"github.com/sqlc-dev/marino/auth"
@@ -112,10 +111,6 @@ func (parser *Parser) setNodeText(n interface {
 	}
 }
 
-type stmtTexter interface {
-	stmtText() string
-}
-
 // New returns a Parser object with default SQL mode.
 func New() *Parser {
 	p := &Parser{}
@@ -173,10 +168,6 @@ func (parser *Parser) Parse(sql, charset, collation string) (stmt []ast.StmtNode
 	return parser.ParseSQL(sql, CharsetConnection(charset), CollationConnection(collation))
 }
 
-func (parser *Parser) lastErrorAsWarn() {
-	parser.lexer.lastErrorAsWarn()
-}
-
 // ParseOneStmt parses a query and returns an ast.StmtNode.
 // The query must have one statement, otherwise ErrSyntax is returned.
 func (parser *Parser) ParseOneStmt(sql, charset, collation string) (ast.StmtNode, error) {
@@ -220,18 +211,6 @@ func (parser *Parser) setLastSelectFieldText(st *ast.SelectStmt, lastEnd int) {
 	if lastField.Offset+len(lastField.OriginalText()) >= len(parser.src)-1 {
 		lastField.SetText(parser.lexer.client, parser.src[lastField.Offset:lastEnd])
 	}
-}
-
-func (*Parser) startOffset(v *yySymType) int {
-	return v.offset
-}
-
-func (parser *Parser) endOffset(v *yySymType) int {
-	offset := v.offset
-	for offset > 0 && unicode.IsSpace(rune(parser.src[offset-1])) {
-		offset--
-	}
-	return offset
 }
 
 func toInt(l yyLexer, lval *yySymType, str string) int {

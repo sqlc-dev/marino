@@ -8,6 +8,7 @@ exports_files([
 go_library(
     name = "parser",
     srcs = [
+        "api.go",
         "digester.go",
         "hint_token_kinds.go",
         "hintparserimpl.go",
@@ -45,7 +46,6 @@ go_library(
         "rd_parser.go",
         "redact.go",
         "token_kinds.go",
-        "yy_parser.go",
     ],
     importpath = "github.com/sqlc-dev/marino/parser",
     visibility = ["//visibility:public"],
