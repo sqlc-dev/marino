@@ -243,8 +243,8 @@ func (r *rdParser) parseProcedureStatementStmt() ast.StmtNode {
 	case deleteKwd:
 		return r.parseDeleteStmt(nil)
 	case analyze:
-		// AnalyzeTableStmt has no RD parse function yet.
-		r.unsupported("ANALYZE statement in procedure")
+		// ProcedureStatementStmt: AnalyzeTableStmt
+		return r.parseAnalyzeTableStmt()
 	case truncate:
 		return r.parseTruncateTableStmt()
 	}

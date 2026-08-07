@@ -349,10 +349,14 @@ func (r *rdParser) parseStatement() ast.StmtNode {
 	case deleteKwd:
 		return r.parseDeleteStmt(nil)
 	case load:
-		if r.la(1) != data {
-			r.unsupported("LOAD statement")
+		switch r.la(1) {
+		case data:
+			return r.parseLoadDataStmt()
+		case stats:
+			return r.parseLoadStatsStmt()
 		}
-		return r.parseLoadDataStmt()
+		r.unsupported("LOAD statement")
+		return nil
 	case importKwd:
 		if r.la(1) != into {
 			r.unsupported("IMPORT statement")

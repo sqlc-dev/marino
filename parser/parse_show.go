@@ -84,6 +84,46 @@ func (r *rdParser) parseIfNotExists() bool {
 func (r *rdParser) parseShowStmt() ast.StmtNode {
 	r.expect(show)
 	switch r.tok() {
+	case backup:
+		// BRIEStmt: "SHOW" "BACKUP" "LOGS" "STATUS"
+		//         | "SHOW" "BACKUP" "LOGS" "METADATA" "FROM" stringLit
+		//         | "SHOW" "BACKUP" "METADATA" "FROM" stringLit
+		r.advance()
+		stmt := &ast.BRIEStmt{}
+		if r.accept(logs) {
+			if r.accept(status) {
+				stmt.Kind = ast.BRIEKindStreamStatus
+				return stmt
+			}
+			r.expect(metadata)
+			r.expect(from)
+			stmt.Kind = ast.BRIEKindStreamMetaData
+			stmt.Storage = r.expect(stringLit).lit
+			return stmt
+		}
+		r.expect(metadata)
+		r.expect(from)
+		stmt.Kind = ast.BRIEKindShowBackupMeta
+		stmt.Storage = r.expect(stringLit).lit
+		return stmt
+	case br:
+		// BRIEStmt: "SHOW" "BR" "JOB" Int64Num
+		//         | "SHOW" "BR" "JOB" "QUERY" Int64Num
+		r.advance()
+		r.expect(job)
+		stmt := &ast.BRIEStmt{}
+		if r.accept(query) {
+			stmt.Kind = ast.BRIEKindShowQuery
+		} else {
+			stmt.Kind = ast.BRIEKindShowJob
+		}
+		stmt.JobID = r.parseInt64Num()
+		return stmt
+	case traffic:
+		// TrafficStmt: "SHOW" "TRAFFIC" "JOBS"
+		r.advance()
+		r.expect(jobs)
+		return &ast.TrafficStmt{OpType: ast.TrafficOpShow}
 	case create:
 		return r.parseShowCreate()
 	case masking:

@@ -320,10 +320,10 @@ func (r *rdParser) parseRestartStmt() ast.StmtNode {
 }
 
 // parseLockStmtFamily dispatches LOCK-leading statements: LockTablesStmt
-// is ported here; LockStatsStmt falls back.
+// here, LockStatsStmt in parse_tidb.go.
 func (r *rdParser) parseLockStmtFamily() ast.StmtNode {
 	if r.la(1) == stats {
-		r.unsupported("LOCK STATS statement")
+		return r.parseLockStatsStmt()
 	}
 	// LockTablesStmt: "LOCK" TablesTerminalSym TableLockList
 	r.expect(lock)
@@ -366,10 +366,10 @@ func (r *rdParser) parseTableLock() ast.TableLock {
 }
 
 // parseUnlockStmtFamily dispatches UNLOCK-leading statements:
-// UnlockTablesStmt is ported here; UnlockStatsStmt falls back.
+// UnlockTablesStmt here, UnlockStatsStmt in parse_tidb.go.
 func (r *rdParser) parseUnlockStmtFamily() ast.StmtNode {
 	if r.la(1) == stats {
-		r.unsupported("UNLOCK STATS statement")
+		return r.parseUnlockStatsStmt()
 	}
 	// UnlockTablesStmt: "UNLOCK" TablesTerminalSym
 	r.expect(unlock)
@@ -723,7 +723,8 @@ func (r *rdParser) parseTraceableStmt() ast.StmtNode {
 	case set:
 		return r.parseSetStmt()
 	case analyze:
-		r.unsupported("TRACE ANALYZE TABLE statement")
+		// TraceableStmt: AnalyzeTableStmt
+		return r.parseAnalyzeTableStmt()
 	}
 	r.syntaxError()
 	return nil
