@@ -93,7 +93,7 @@ func (r *rdParser) parseSimpleExprAtom() ast.ExprNode {
 		// is ParenthesesExpr around a scalar subquery), and only when
 		// that route fails — `((select 1) union (select 2))` — is the
 		// SubSelect derivation taken, mirroring the LALR resolution.
-		if r.la(1) == selectKwd || r.la(1) == with {
+		if querySubSelectHead(r.la(1), r.la(2)) {
 			return r.setOrigin(r.parseSubSelect(), start)
 		}
 		var result ast.ExprNode
@@ -454,6 +454,10 @@ func (r *rdParser) parseSimpleExprAtom() ast.ExprNode {
 		return r.setOrigin(&ast.FuncCallExpr{FnName: ast.NewCIStr(name), Args: args}, start)
 	case timestampAdd, timestampDiff:
 		// FunctionCallNonKeyword: "TIMESTAMPADD"/"TIMESTAMPDIFF" '(' TimestampUnit ',' Expression ',' Expression ')'
+		// Both are identifier-class keywords when not followed by '('.
+		if r.la(1) != int('(') {
+			return r.parseSimpleIdentAtom(start)
+		}
 		name := r.cur().lit
 		r.advance()
 		r.expect(int('('))

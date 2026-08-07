@@ -41,6 +41,7 @@ func init() {
 	rdRegister(describe, (*rdParser).parseExplainStmt)
 	rdRegister(desc, (*rdParser).parseExplainStmt)
 	rdRegister(trace, (*rdParser).parseTraceStmt)
+	rdRegister(optimize, (*rdParser).parseOptimizeTableStmt)
 }
 
 // parseUseStmt implements UseStmt: "USE" DBName.
@@ -728,4 +729,22 @@ func (r *rdParser) parseTraceableStmt() ast.StmtNode {
 	}
 	r.syntaxError()
 	return nil
+}
+
+// parseOptimizeTableStmt implements OptimizeTableStmt:
+// "OPTIMIZE" NoWriteToBinLogAliasOpt TableOrTables TableNameList.
+func (r *rdParser) parseOptimizeTableStmt() ast.StmtNode {
+	r.expect(optimize)
+	noWrite := false
+	if r.tok() == noWriteToBinLog || r.tok() == local {
+		noWrite = true
+		r.advance()
+	}
+	if !r.accept(tableKwd) && !r.accept(tables) {
+		r.syntaxError()
+	}
+	return &ast.OptimizeTableStmt{
+		Tables:          r.parseTableNameList(),
+		NoWriteToBinLog: noWrite,
+	}
 }

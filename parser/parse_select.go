@@ -1005,9 +1005,17 @@ func (r *rdParser) parseTableFactor() ast.ResultSetNode {
 	switch {
 	case r.tok() == int('('):
 		if r.subSelectFollows() {
-			// TableFactor: SubSelect TableAsNameOpt
-			sub := r.parseSubSelect()
-			return &ast.TableSource{Source: sub.Query.(ast.ResultSetNode), AsName: r.parseTableAsNameOpt()}
+			// TableFactor: SubSelect TableAsNameOpt — but nested parens
+			// can also be '(' TableRefs ')' whose first factor is a
+			// derived table (`((select ...) t1 join t2)`), so the
+			// subquery route is speculative.
+			var ts ast.ResultSetNode
+			if r.try(func() {
+				sub := r.parseSubSelect()
+				ts = &ast.TableSource{Source: sub.Query.(ast.ResultSetNode), AsName: r.parseTableAsNameOpt()}
+			}) {
+				return ts
+			}
 		}
 		// TableFactor: '(' TableRefs ')'
 		r.advance()

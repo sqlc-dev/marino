@@ -1,6 +1,13 @@
 # marino — replacing the goyacc parser with hand-written recursive descent
 
-marino currently parses MySQL with a goyacc-generated LALR parser:
+> **Status: complete.** The goyacc toolchain, grammars, and generated
+> parsers are removed; the recursive-descent parser is the only parser.
+> This document is kept as the architectural record of the rewrite: how
+> equivalence was established, which decisions carry forward, and the one
+> deliberate deviation (OriginTextPosition). Grammar references in code
+> comments point at the parser.y of the last commit that contained it.
+
+marino previously parsed MySQL with a goyacc-generated LALR parser:
 `parser/parser.y` (17.7k lines, 713 productions, ~100 top-level statement
 families) plus a second grammar, `parser/hintparser.y`, for optimizer hints.
 This plan rewrites both as hand-written recursive descent in the same

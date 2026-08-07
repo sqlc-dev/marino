@@ -13,12 +13,8 @@
 
 package parser
 
-// This file is the core of the hand-written recursive-descent parser that
-// replaces the goyacc-generated one (see PLAN.md). While the goyacc parser
-// is still in-tree it remains the fallback: any construct the RD parser
-// does not implement yet — and, during the migration, any input the RD
-// parser would reject — is re-parsed by goyacc, so behavior is unchanged
-// until coverage is complete.
+// This file is the core of the hand-written recursive-descent parser
+// that replaced the goyacc-generated one (see PLAN.md).
 //
 // Tokens are lexed on demand into a small sliding window rather than
 // eagerly into a slice: parsing must stay O(1) in memory the way the
@@ -76,11 +72,6 @@ type rdParser struct {
 	stmtStart int
 	result    []ast.StmtNode
 
-	// errorMode makes parse failures produce final errors instead of
-	// falling back to goyacc: the post-removal behavior, testable
-	// against the error corpus while goyacc is still the oracle.
-	errorMode bool
-
 	// farthestFail remembers the deepest syntax failure across
 	// speculative attempts: the LALR automaton is a single forward pass,
 	// so its reported error is always at the farthest token reached,
@@ -123,11 +114,12 @@ func (r *rdParser) syntaxError() {
 	panic(e)
 }
 
-// newRDScanner returns a new Scanner over sql carrying the same
-// configuration as the parser's lexer (which ParseSQL has already reset
-// and applied params to).
+// newRDScanner readies the Parser's reusable parse Scanner over sql,
+// carrying the same configuration as the parser's lexer (which ParseSQL
+// has already reset and applied params to).
 func (parser *Parser) newRDScanner(sql string) *Scanner {
-	s := NewScanner(sql)
+	s := &parser.rdScan
+	s.reset(sql)
 	l := &parser.lexer
 	s.client = l.client
 	s.connection = l.connection
@@ -241,88 +233,54 @@ func (r *rdParser) expect(tok int) rdToken {
 // parseRD attempts to parse sql with the recursive-descent parser.
 // handled=false means the caller must run the goyacc parser instead;
 // nothing observable has happened in that case.
-func (parser *Parser) parseRD(sql string) (stmts []ast.StmtNode, warns []error, err error, handled bool) {
-	return parser.parseRDMode(sql, false)
-}
-
-// parseRDMode is parseRD with selectable failure semantics; errorMode
-// (the post-removal behavior) reports final errors instead of falling
-// back to goyacc.
-func (parser *Parser) parseRDMode(sql string, errorMode bool) (stmts []ast.StmtNode, warns []error, err error, handled bool) {
+func (parser *Parser) parseRD(sql string) (stmts []ast.StmtNode, warns []error, err error) {
 	r := &rdParser{
-		p:         parser,
-		sc:        parser.newRDScanner(sql),
-		src:       sql,
-		errorMode: errorMode,
+		p:   parser,
+		sc:  parser.newRDScanner(sql),
+		src: sql,
+		win: parser.rdWin[:0],
 	}
+	defer func() { parser.rdWin = r.win[:0] }()
 	defer panics.Handle(func(e interface{}) {
-		if r.errorMode {
-			// Post-removal semantics: the failure is final. The syntax
-			// error is appended to the scanner's error list the way
-			// yyParse appends Errorf(""), and the first recorded error
-			// wins, with warnings returned alongside (the yaccParseSQL
-			// tail behavior).
-			switch v := e.(type) {
-			case rdUnsupported:
-				err := v.err
-				if r.farthestFail != nil && r.farthestFail.offset > v.offset {
-					err = r.farthestFail.err
-				}
-				r.sc.AppendError(err)
-			case rdSyntaxError:
-				err := v.err
-				if r.farthestFail != nil && r.farthestFail.offset > v.offset {
-					err = r.farthestFail.err
-				}
-				r.sc.AppendError(err)
-			case rdLexError, rdActionAbort:
-				// Errors already recorded on the scanner.
-			default:
-				panic(e)
-			}
-			lexWarns, lexErrs := r.sc.Errors()
-			if len(lexWarns) > 0 {
-				warns = slices.Clone(lexWarns)
-			} else {
-				warns = nil
-			}
-			stmts, err, handled = nil, lexErrs[0], true
-			return
-		}
+		// A parse failure is final: the syntax error is appended to the
+		// scanner's error list the way yyParse appended Errorf(""), and
+		// the first recorded error wins, with warnings returned
+		// alongside. Speculative parsing means the automaton's
+		// farthest-reached failure is the one to report.
 		switch v := e.(type) {
 		case rdUnsupported:
-			logRDFallback(sql, fmt.Sprintf("unsupported %s at %d", v.construct, v.offset))
-			handled = false
+			err := v.err
+			if r.farthestFail != nil && r.farthestFail.offset > v.offset {
+				err = r.farthestFail.err
+			}
+			r.sc.AppendError(err)
 		case rdSyntaxError:
-			logRDFallback(sql, fmt.Sprintf("syntax error at %d", v.offset))
-			handled = false
-		case rdLexError:
-			logRDFallback(sql, "lex error")
-			handled = false
-		case rdActionAbort:
-			// The aborting error lives on the discarded scanner clone;
-			// goyacc re-parses and reports it identically.
-			logRDFallback(sql, "action abort")
-			handled = false
+			err := v.err
+			if r.farthestFail != nil && r.farthestFail.offset > v.offset {
+				err = r.farthestFail.err
+			}
+			r.sc.AppendError(err)
+		case rdLexError, rdActionAbort:
+			// Errors already recorded on the scanner.
 		default:
 			panic(e)
 		}
+		lexWarns, lexErrs := r.sc.Errors()
+		if len(lexWarns) > 0 {
+			warns = slices.Clone(lexWarns)
+		} else {
+			warns = nil
+		}
+		stmts, err = nil, lexErrs[0]
 	})
 	r.parseStatementList()
 
 	lexWarns, lexErrs := r.sc.Errors()
 	if len(lexErrs) > 0 {
-		if r.errorMode {
-			if len(lexWarns) > 0 {
-				warns = slices.Clone(lexWarns)
-			}
-			return nil, warns, lexErrs[0], true
+		if len(lexWarns) > 0 {
+			warns = slices.Clone(lexWarns)
 		}
-		// Errors raised by warning/validation helpers during the parse:
-		// goyacc would report these identically, but routing through it
-		// keeps ordering and messages authoritative during the migration.
-		logRDFallback(sql, "deferred error: "+lexErrs[0].Error())
-		return nil, nil, nil, false
+		return nil, warns, lexErrs[0]
 	}
 	if len(lexWarns) > 0 {
 		warns = slices.Clone(lexWarns)
@@ -330,7 +288,7 @@ func (parser *Parser) parseRDMode(sql string, errorMode bool) (stmts []ast.StmtN
 	for _, stmt := range r.result {
 		ast.SetFlag(stmt)
 	}
-	return r.result, warns, nil, true
+	return r.result, warns, nil
 }
 
 // parseStatementList implements:
@@ -476,19 +434,3 @@ var (
 	rdLogMu   sync.Mutex
 	rdLogPath = os.Getenv("MARINO_RD_LOG")
 )
-
-// logRDFallback records inputs the RD parser could not handle, as the
-// migration's todo list (see cmd/next-test).
-func logRDFallback(sql, reason string) {
-	if rdLogPath == "" {
-		return
-	}
-	rdLogMu.Lock()
-	defer rdLogMu.Unlock()
-	f, err := os.OpenFile(rdLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	fmt.Fprintf(f, "%s\x00%s\x00\n", reason, sql)
-}

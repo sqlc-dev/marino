@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"math"
 	"regexp"
-	"slices"
 	"strconv"
 	"unicode"
 
@@ -85,21 +84,20 @@ type ParserConfig struct {
 
 // Parser represents a parser instance. Some temporary objects are stored in it to reduce object allocation during Parse function.
 type Parser struct {
-	charset    string
-	collation  string
-	result     []ast.StmtNode
-	src        string
-	lexer      Scanner
-	hintParser *hintParser
+	charset   string
+	collation string
+	result    []ast.StmtNode
+	src       string
+	lexer     Scanner
 
 	explicitCharset       bool
 	strictDoubleFieldType bool
 	enableMariaDB         bool
 
-	// the following fields are used by yyParse to reduce allocation.
-	cache  []yySymType
-	yylval yySymType
-	yyVAL  *yySymType
+	// Reused across ParseSQL calls to keep per-parse allocation flat
+	// (the goyacc parser kept its symbol-stack cache the same way).
+	rdScan Scanner
+	rdWin  []rdToken
 }
 
 // setNodeText sets the raw text on a parsed AST node and propagates the
@@ -114,31 +112,19 @@ func (parser *Parser) setNodeText(n interface {
 	}
 }
 
-func yySetOffset(yyVAL *yySymType, offset int) {
-	if yyVAL.expr != nil {
-		yyVAL.expr.SetOriginTextPosition(offset)
-	}
-}
-
-func yyhintSetOffset(_ *yyhintSymType, _ int) {
-}
-
 type stmtTexter interface {
 	stmtText() string
 }
 
 // New returns a Parser object with default SQL mode.
 func New() *Parser {
-	p := &Parser{
-		cache: make([]yySymType, 200),
-	}
+	p := &Parser{}
 	p.reset()
 	return p
 }
 
 // Reset resets the parser.
 func (parser *Parser) Reset() {
-	clear(parser.cache)
 	parser.reset()
 }
 
@@ -178,49 +164,7 @@ func (parser *Parser) ParseSQL(sql string, params ...ParseParam) (stmt []ast.Stm
 		}
 	}
 	parser.src = sql
-
-	// The hand-written recursive-descent parser handles what it has
-	// implemented; anything else falls back to the goyacc parser
-	// (see PLAN.md and rd_parser.go).
-	if stmts, rdWarns, rdErr, handled := parser.parseRD(sql); handled {
-		if rdDifferential && len(sql) <= rdDifferentialMaxLen {
-			parser.rdDifferentialCheck(sql, params, stmts, rdWarns, rdErr)
-		}
-		return stmts, rdWarns, rdErr
-	}
-	return parser.yaccParseSQL(sql, params...)
-}
-
-// yaccParseSQL parses with the goyacc-generated parser. It re-applies the
-// params so that it is also callable on a freshly configured Parser by the
-// differential harness.
-func (parser *Parser) yaccParseSQL(sql string, params ...ParseParam) (stmt []ast.StmtNode, warns []error, err error) {
-	resetParams(parser)
-	parser.lexer.reset(sql)
-	for _, p := range params {
-		if err := p.ApplyOn(parser); err != nil {
-			return nil, nil, err
-		}
-	}
-	parser.src = sql
-	parser.result = parser.result[:0]
-
-	var l yyLexer = &parser.lexer
-	yyParse(l, parser)
-
-	warns, errs := l.Errors()
-	if len(warns) > 0 {
-		warns = slices.Clone(warns)
-	} else {
-		warns = nil
-	}
-	if len(errs) != 0 {
-		return nil, warns, errs[0]
-	}
-	for _, stmt := range parser.result {
-		ast.SetFlag(stmt)
-	}
-	return parser.result, warns, nil
+	return parser.parseRD(sql)
 }
 
 // Parse parses a query string to raw ast.StmtNode.
@@ -288,13 +232,6 @@ func (parser *Parser) endOffset(v *yySymType) int {
 		offset--
 	}
 	return offset
-}
-
-func (parser *Parser) parseHint(input string) ([]*ast.TableOptimizerHint, []error) {
-	if parser.hintParser == nil {
-		parser.hintParser = newHintParser()
-	}
-	return parser.hintParser.parse(input, parser.lexer.GetSQLMode(), parser.lexer.lastHintPos)
 }
 
 func toInt(l yyLexer, lval *yySymType, str string) int {

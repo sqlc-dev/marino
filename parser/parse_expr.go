@@ -282,7 +282,7 @@ func (r *rdParser) parsePredicate() ast.ExprNode {
 		// one-element list holding a scalar subquery) with the subquery
 		// derivation as the fallback (`in ((select 1) union (select 2))`).
 		r.advance()
-		if r.tok() == int('(') && (r.la(1) == selectKwd || r.la(1) == with) {
+		if r.tok() == int('(') && querySubSelectHead(r.la(1), r.la(2)) {
 			sq := r.parseSubSelect()
 			sq.MultiRows = true
 			return r.setOrigin(&ast.PatternInExpr{Expr: v, Not: notFlag, Sel: sq}, start)
@@ -655,14 +655,34 @@ func timeUnitFor(tok int) (ast.TimeUnitType, bool) {
 		return ast.TimeUnitDayHour, true
 	case yearMonth:
 		return ast.TimeUnitYearMonth, true
+	// TimestampUnit's SQL_TSI_* spellings (TimeUnit: TimestampUnit | ...).
+	case sqlTsiSecond:
+		return ast.TimeUnitSecond, true
+	case sqlTsiMinute:
+		return ast.TimeUnitMinute, true
+	case sqlTsiHour:
+		return ast.TimeUnitHour, true
+	case sqlTsiDay:
+		return ast.TimeUnitDay, true
+	case sqlTsiWeek:
+		return ast.TimeUnitWeek, true
+	case sqlTsiMonth:
+		return ast.TimeUnitMonth, true
+	case sqlTsiQuarter:
+		return ast.TimeUnitQuarter, true
+	case sqlTsiYear:
+		return ast.TimeUnitYear, true
 	}
 	return 0, false
 }
 
-// parseTimestampUnit implements TimestampUnit (the single-unit subset).
+// parseTimestampUnit implements TimestampUnit (the single-unit subset,
+// including the SQL_TSI_* spellings).
 func (r *rdParser) parseTimestampUnit() ast.TimeUnitType {
 	switch r.tok() {
-	case microsecond, second, minute, hour, day, week, month, quarter, yearType:
+	case microsecond, second, minute, hour, day, week, month, quarter, yearType,
+		sqlTsiSecond, sqlTsiMinute, sqlTsiHour, sqlTsiDay, sqlTsiWeek,
+		sqlTsiMonth, sqlTsiQuarter, sqlTsiYear:
 		return r.parseTimeUnit()
 	}
 	r.syntaxError()
@@ -759,9 +779,19 @@ func (r *rdParser) subSelectFollows() bool {
 	for r.la(k) == int('(') {
 		k++
 	}
-	switch r.la(k) {
-	case selectKwd, with:
+	return querySubSelectHead(r.la(k), r.la(k+1))
+}
+
+// querySubSelectHead reports whether tokens t1 t2 begin a query inside
+// SubSelect parentheses: SELECT, WITH, the TABLE statement kind, or the
+// VALUES statement kind (which requires ROW — a bare VALUES( is the
+// insert-values function, not a query).
+func querySubSelectHead(t1, t2 int) bool {
+	switch t1 {
+	case selectKwd, with, tableKwd:
 		return true
+	case values:
+		return t2 == row
 	}
 	return false
 }
