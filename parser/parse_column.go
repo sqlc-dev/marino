@@ -90,12 +90,12 @@ func (r *rdParser) parseColumnOptionListOpt() ast.ColumnOptionList {
 		next := r.parseColumnOption()
 		if columnOption, ok := next.(*ast.ColumnOption); ok {
 			if columnOption.Tp == ast.ColumnOptionCollate && columnOptionList.HasCollateOption {
-				r.actionError(ErrParse.GenWithStackByArgs("Multiple COLLATE clauses", r.sc.Errorf("").Error()))
+				r.actionError(ErrParse.GenWithStackByArgs("Multiple COLLATE clauses", r.actionErrorf("").Error()))
 			}
 			columnOptionList.Options = append(columnOptionList.Options, columnOption)
 		} else {
 			if columnOptionList.HasCollateOption && next.(ast.ColumnOptionList).HasCollateOption {
-				r.actionError(ErrParse.GenWithStackByArgs("Multiple COLLATE clauses", r.sc.Errorf("").Error()))
+				r.actionError(ErrParse.GenWithStackByArgs("Multiple COLLATE clauses", r.actionErrorf("").Error()))
 			}
 			columnOptionList.Options = append(columnOptionList.Options, next.(ast.ColumnOptionList).Options...)
 		}
@@ -396,10 +396,8 @@ func (r *rdParser) parseDefaultValueExpr() ast.ExprNode {
 	case next, nextval:
 		v = r.parseNextValueForSequence()
 	case identifier:
-		// BuiltinFunction: identifier '(' [ExpressionList] ')'
-		if r.la(1) != int('(') {
-			r.syntaxError()
-		}
+		// BuiltinFunction: identifier '(' [ExpressionList] ')' — the
+		// identifier is always shifted; a missing '(' errors after it.
 		v = r.parseBuiltinFunction()
 	case replace:
 		// BuiltinFunction: "REPLACE" '(' ExpressionList ')'

@@ -1023,7 +1023,7 @@ func (r *rdParser) parseAlterTableSpecModify() *ast.AlterTableSpec {
 			r.expect(eq)
 			expr := r.parseExpression()
 			if !strings.EqualFold(opt, "expression") {
-				r.actionError(r.sc.Errorf("unsupported masking policy modify option: %s", opt))
+				r.actionError(r.actionErrorf("unsupported masking policy modify option: %s", opt))
 			}
 			return &ast.AlterTableSpec{
 				Tp:                ast.AlterTableModifyMaskingPolicyExpression,

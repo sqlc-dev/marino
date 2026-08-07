@@ -419,7 +419,17 @@ func (r *rdParser) parseShowTable() ast.StmtNode {
 func (r *rdParser) parseShowTableTarget() ast.StmtNode {
 	r.expect(tableKwd)
 	tn := r.parseTableName()
-	partitions := r.parsePartitionNameListOpt()
+	// PartitionNameListOpt: PARTITION is always shifted here, so a
+	// missing '(' errors after it.
+	partitions := []ast.CIStr{}
+	if r.accept(partition) {
+		r.expect(int('('))
+		partitions = append(partitions, ast.NewCIStr(r.parseIdentifier()))
+		for r.accept(int(',')) {
+			partitions = append(partitions, ast.NewCIStr(r.parseIdentifier()))
+		}
+		r.expect(int(')'))
+	}
 	switch r.tok() {
 	case regions:
 		// "SHOW" "TABLE" TableName PartitionNameListOpt "REGIONS" WhereClauseOptional

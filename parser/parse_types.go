@@ -328,7 +328,7 @@ func (r *rdParser) parseStringOrDateAndTimeType() *types.FieldType {
 		elementType := r.parseOptVectorElementType()
 		flen := r.parseOptFieldLen()
 		if elementType.Tp != mysql.TypeFloat {
-			r.sc.AppendError(r.sc.Errorf("Only VECTOR is supported for now"))
+			r.sc.AppendError(r.actionErrorf("Only VECTOR is supported for now"))
 		}
 		tp := types.NewFieldType(mysql.TypeTiDBVectorFloat32)
 		tp.SetFlen(flen)

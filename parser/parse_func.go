@@ -875,7 +875,7 @@ func (r *rdParser) parseSignedNum() int64 {
 		t := r.expect(intLit)
 		unsigned := getUint64FromNUM(t.item)
 		if unsigned > 9223372036854775808 {
-			r.actionError(r.sc.Errorf("the Signed Value should be at the range of [-9223372036854775808, 9223372036854775807]."))
+			r.actionError(r.actionErrorf("the Signed Value should be at the range of [-9223372036854775808, 9223372036854775807]."))
 		} else if unsigned == 9223372036854775808 {
 			return -9223372036854775808
 		}
@@ -891,7 +891,7 @@ func (r *rdParser) parseInt64Num() int64 {
 	t := r.expect(intLit)
 	v, errMsg := getInt64FromNUM(t.item)
 	if errMsg != "" {
-		r.actionError(r.sc.Errorf("%s", errMsg))
+		r.actionError(r.actionErrorf("%s", errMsg))
 	}
 	return v
 }
@@ -1277,7 +1277,7 @@ func (r *rdParser) parseCastType() *types.FieldType {
 		} else if tp.GetCharset() != "" {
 			co, err := charset.GetDefaultCollation(tp.GetCharset())
 			if err != nil {
-				r.actionError(r.sc.Errorf("Get collation error for charset: %s", tp.GetCharset()))
+				r.actionError(r.actionErrorf("Get collation error for charset: %s", tp.GetCharset()))
 			}
 			tp.SetCollate(co)
 			r.p.explicitCharset = true
@@ -1424,7 +1424,7 @@ func (r *rdParser) parseCastType() *types.FieldType {
 		}
 		flen := r.parseOptFieldLen()
 		if elemTp != mysql.TypeFloat {
-			r.sc.AppendError(r.sc.Errorf("Only VECTOR is supported for now"))
+			r.sc.AppendError(r.actionErrorf("Only VECTOR is supported for now"))
 		}
 		tp := types.NewFieldType(mysql.TypeTiDBVectorFloat32)
 		tp.SetFlen(flen)

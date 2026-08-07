@@ -266,8 +266,10 @@ func (r *rdParser) parsePredicate() ast.ExprNode {
 	start := r.cur().offset
 	v := r.parseBitExpr(0)
 	notFlag := false
-	if (r.tok() == not || r.tok() == not2) && predicateFollows(r.la(1)) {
-		// NotSym in InOrNotOp/BetweenOrNotOp/LikeOrNotOp/...
+	if r.tok() == not || r.tok() == not2 {
+		// NotSym in InOrNotOp/BetweenOrNotOp/LikeOrNotOp/...: after a
+		// BitExpr the automaton always shifts NOT here, so a following
+		// non-predicate token reports its error after the NOT.
 		notFlag = true
 		r.advance()
 	}
@@ -335,7 +337,11 @@ func (r *rdParser) parsePredicate() ast.ExprNode {
 		pattern := r.parseSimpleExpr()
 		return r.setOrigin(&ast.PatternRegexpExpr{Expr: v, Pattern: pattern, Not: notFlag}, start)
 	case memberof:
-		// PredicateExpr: BitExpr memberof '(' SimpleExpr ')'
+		// PredicateExpr: BitExpr memberof '(' SimpleExpr ')' — there is
+		// no NotSym form, so a preceding NOT makes this token the error.
+		if notFlag {
+			r.syntaxError()
+		}
 		r.advance()
 		r.expect(int('('))
 		arg := r.parseSimpleExpr()
@@ -347,14 +353,6 @@ func (r *rdParser) parsePredicate() ast.ExprNode {
 		}
 		return v
 	}
-}
-
-func predicateFollows(tok int) bool {
-	switch tok {
-	case in, between, like, ilike, regexpKwd, rlike:
-		return true
-	}
-	return false
 }
 
 // Binding powers of the BitExpr operators, from the %left ladder:
@@ -709,16 +707,18 @@ func (r *rdParser) parseCollationName() string {
 	return info.Name
 }
 
-// parseTableName implements TableName.
+// parseTableName implements TableName. The '.'-qualified continuations
+// are consumed greedily the way the LALR automaton shifts them, so a
+// malformed qualifier reports its error at the token after the dot.
 func (r *rdParser) parseTableName() *ast.TableName {
-	if r.tok() == int('*') && r.la(1) == int('.') {
+	if r.tok() == int('*') {
 		// TableName: '*' '.' Identifier
 		r.advance()
-		r.advance()
+		r.expect(int('.'))
 		return &ast.TableName{Schema: ast.NewCIStr("*"), Name: ast.NewCIStr(r.parseIdentifier())}
 	}
 	first := r.parseIdentifier()
-	if r.tok() == int('.') && isIdentifierTok(r.la(1)) {
+	if r.tok() == int('.') {
 		r.advance()
 		if isInCorrectIdentifierName(first) {
 			r.actionError(ErrWrongDBName.GenWithStackByArgs(first))

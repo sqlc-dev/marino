@@ -58,7 +58,7 @@ func (r *rdParser) parseFlashbackStmtFamily() ast.StmtNode {
 					FlashbackTSO: tsoValue,
 				}
 			}
-			r.actionError(r.sc.Errorf("Invalid TSO value provided: %d", tsoValue))
+			r.actionError(r.actionErrorf("Invalid TSO value provided: %d", tsoValue))
 		}
 		r.syntaxError()
 	case tableKwd:
@@ -81,7 +81,7 @@ func (r *rdParser) parseFlashbackStmtFamily() ast.StmtNode {
 					FlashbackTSO: tsoValue,
 				}
 			}
-			r.actionError(r.sc.Errorf("Invalid TSO value provided: %d", tsoValue))
+			r.actionError(r.actionErrorf("Invalid TSO value provided: %d", tsoValue))
 		}
 		// FlashbackTableStmt takes a single TableName.
 		if len(tables) != 1 {
@@ -111,7 +111,7 @@ func (r *rdParser) parseFlashbackStmtFamily() ast.StmtNode {
 					FlashbackTSO: tsoValue,
 				}
 			}
-			r.actionError(r.sc.Errorf("Invalid TSO value provided: %d", tsoValue))
+			r.actionError(r.actionErrorf("Invalid TSO value provided: %d", tsoValue))
 		}
 		return &ast.FlashBackDatabaseStmt{
 			DBName:  ast.NewCIStr(dbName),

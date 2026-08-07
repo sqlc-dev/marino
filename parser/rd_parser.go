@@ -75,6 +75,17 @@ type rdParser struct {
 	// stmtStart mirrors Scanner.stmtStartPos bookkeeping for stmtText().
 	stmtStart int
 	result    []ast.StmtNode
+
+	// errorMode makes parse failures produce final errors instead of
+	// falling back to goyacc: the post-removal behavior, testable
+	// against the error corpus while goyacc is still the oracle.
+	errorMode bool
+
+	// farthestFail remembers the deepest syntax failure across
+	// speculative attempts: the LALR automaton is a single forward pass,
+	// so its reported error is always at the farthest token reached,
+	// which a backtracking parser must reconstruct.
+	farthestFail *rdSyntaxError
 }
 
 // rdUnsupported unwinds the RD parse when it reaches grammar that is not
@@ -82,14 +93,16 @@ type rdParser struct {
 type rdUnsupported struct {
 	construct string
 	offset    int
+	err       error
 }
 
-// rdSyntaxError unwinds the RD parse on invalid input. While goyacc is
-// in-tree it is treated exactly like rdUnsupported so that error messages
-// keep coming from goyacc; when goyacc is removed it becomes the real
-// error path.
+// rdSyntaxError unwinds the RD parse on invalid input, carrying the
+// goyacc-identical error built at the offending token. While goyacc is
+// in-tree (and outside errorMode) it is treated like rdUnsupported so
+// that reported messages keep coming from goyacc.
 type rdSyntaxError struct {
 	offset int
+	err    error
 }
 
 // rdLexError unwinds the RD parse when the scanner reports an error while
@@ -98,12 +111,16 @@ type rdLexError struct{}
 
 // unsupported aborts the RD parse for a construct that is not implemented.
 func (r *rdParser) unsupported(construct string) {
-	panic(rdUnsupported{construct: construct, offset: r.cur().offset})
+	panic(rdUnsupported{construct: construct, offset: r.cur().offset, err: r.buildSyntaxError(r.cur())})
 }
 
 // syntaxError aborts the RD parse at the current token.
 func (r *rdParser) syntaxError() {
-	panic(rdSyntaxError{offset: r.cur().offset})
+	e := rdSyntaxError{offset: r.cur().offset, err: r.buildSyntaxError(r.cur())}
+	if r.farthestFail == nil || e.offset > r.farthestFail.offset {
+		r.farthestFail = &e
+	}
+	panic(e)
 }
 
 // newRDScanner returns a new Scanner over sql carrying the same
@@ -134,9 +151,14 @@ func (r *rdParser) lexOne() {
 	if tok == hintComment {
 		t.hintPos = r.sc.lastHintPos
 	}
-	if tok == invalid || len(r.sc.errs) > 0 {
-		// A lexing problem: let goyacc redo the parse and report it.
+	if len(r.sc.errs) > 0 {
+		// A lexing problem already recorded its error(s).
 		panic(rdLexError{})
+	}
+	if tok == invalid {
+		// The parser side of an invalid token is a plain syntax error at
+		// its position.
+		panic(rdSyntaxError{offset: t.offset, err: r.buildSyntaxError(&t)})
 	}
 	r.win = append(r.win, t)
 	if tok == 0 {
@@ -220,12 +242,53 @@ func (r *rdParser) expect(tok int) rdToken {
 // handled=false means the caller must run the goyacc parser instead;
 // nothing observable has happened in that case.
 func (parser *Parser) parseRD(sql string) (stmts []ast.StmtNode, warns []error, err error, handled bool) {
+	return parser.parseRDMode(sql, false)
+}
+
+// parseRDMode is parseRD with selectable failure semantics; errorMode
+// (the post-removal behavior) reports final errors instead of falling
+// back to goyacc.
+func (parser *Parser) parseRDMode(sql string, errorMode bool) (stmts []ast.StmtNode, warns []error, err error, handled bool) {
 	r := &rdParser{
-		p:   parser,
-		sc:  parser.newRDScanner(sql),
-		src: sql,
+		p:         parser,
+		sc:        parser.newRDScanner(sql),
+		src:       sql,
+		errorMode: errorMode,
 	}
 	defer panics.Handle(func(e interface{}) {
+		if r.errorMode {
+			// Post-removal semantics: the failure is final. The syntax
+			// error is appended to the scanner's error list the way
+			// yyParse appends Errorf(""), and the first recorded error
+			// wins, with warnings returned alongside (the yaccParseSQL
+			// tail behavior).
+			switch v := e.(type) {
+			case rdUnsupported:
+				err := v.err
+				if r.farthestFail != nil && r.farthestFail.offset > v.offset {
+					err = r.farthestFail.err
+				}
+				r.sc.AppendError(err)
+			case rdSyntaxError:
+				err := v.err
+				if r.farthestFail != nil && r.farthestFail.offset > v.offset {
+					err = r.farthestFail.err
+				}
+				r.sc.AppendError(err)
+			case rdLexError, rdActionAbort:
+				// Errors already recorded on the scanner.
+			default:
+				panic(e)
+			}
+			lexWarns, lexErrs := r.sc.Errors()
+			if len(lexWarns) > 0 {
+				warns = slices.Clone(lexWarns)
+			} else {
+				warns = nil
+			}
+			stmts, err, handled = nil, lexErrs[0], true
+			return
+		}
 		switch v := e.(type) {
 		case rdUnsupported:
 			logRDFallback(sql, fmt.Sprintf("unsupported %s at %d", v.construct, v.offset))
@@ -249,6 +312,12 @@ func (parser *Parser) parseRD(sql string) (stmts []ast.StmtNode, warns []error, 
 
 	lexWarns, lexErrs := r.sc.Errors()
 	if len(lexErrs) > 0 {
+		if r.errorMode {
+			if len(lexWarns) > 0 {
+				warns = slices.Clone(lexWarns)
+			}
+			return nil, warns, lexErrs[0], true
+		}
 		// Errors raised by warning/validation helpers during the parse:
 		// goyacc would report these identically, but routing through it
 		// keeps ordering and messages authoritative during the migration.

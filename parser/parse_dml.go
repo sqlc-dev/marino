@@ -405,7 +405,8 @@ func (r *rdParser) parseLoadDataStmt() ast.StmtNode {
 	}
 	x.FieldsInfo = r.parseFieldsClause()
 	x.LinesInfo = r.parseLinesClause()
-	if r.tok() == ignore && r.la(1) == intLit {
+	if r.tok() == ignore {
+		// IgnoreLines: "IGNORE" NUM "LINES" — always shifted here.
 		r.advance()
 		v := getUint64FromNUM(r.expect(intLit).item)
 		r.expect(lines)
@@ -589,11 +590,11 @@ func (r *rdParser) parseImportIntoStmt() ast.StmtNode {
 	st.Select = sel.(ast.ResultSetNode)
 	for _, cu := range st.ColumnsAndUserVars {
 		if cu.ColumnName == nil {
-			r.actionError(r.sc.Errorf("Cannot use user variable(%s) in IMPORT INTO FROM SELECT statement.", cu.UserVar.Name))
+			r.actionError(r.actionErrorf("Cannot use user variable(%s) in IMPORT INTO FROM SELECT statement.", cu.UserVar.Name))
 		}
 	}
 	if st.ColumnAssignments != nil {
-		r.actionError(r.sc.Errorf("Cannot use SET clause in IMPORT INTO FROM SELECT statement."))
+		r.actionError(r.actionErrorf("Cannot use SET clause in IMPORT INTO FROM SELECT statement."))
 	}
 	st.Options = r.parseLoadDataOptionListOpt()
 	return st

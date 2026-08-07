@@ -192,7 +192,7 @@ func (r *rdParser) parseDynamicCalibrateOptionList() []*ast.DynamicCalibrateReso
 		opt := r.parseDynamicCalibrateResourceOption()
 		if list[0].Tp == opt.Tp ||
 			(len(list) > 1 && list[1].Tp == opt.Tp) {
-			r.actionError(r.sc.Errorf("Dupliated options specified"))
+			r.actionError(r.actionErrorf("Dupliated options specified"))
 		}
 		list = append(list, opt)
 	}
@@ -223,7 +223,7 @@ func (r *rdParser) parseDynamicCalibrateResourceOption() *ast.DynamicCalibrateRe
 		// "DURATION" EqOpt stringLit
 		dur := r.expect(stringLit).lit
 		if _, err := duration.ParseDuration(dur); err != nil {
-			r.actionError(r.sc.Errorf("The DURATION option is not a valid duration: %s", err.Error()))
+			r.actionError(r.actionErrorf("The DURATION option is not a valid duration: %s", err.Error()))
 		}
 		return &ast.DynamicCalibrateResourceOption{Tp: ast.CalibrateDuration, StrValue: dur}
 	}
@@ -365,7 +365,7 @@ func (r *rdParser) parseQueryWatchOptionList() []*ast.QueryWatchOption {
 		}
 		opt := r.parseQueryWatchOption()
 		if !ast.CheckQueryWatchAppend(list, opt) {
-			r.actionError(r.sc.Errorf("Dupliated options specified"))
+			r.actionError(r.actionErrorf("Dupliated options specified"))
 		}
 		list = append(list, opt)
 	}
@@ -517,7 +517,7 @@ func (r *rdParser) parseTrafficCaptureOpt() *ast.TrafficOption {
 		r.parseEqOpt()
 		dur := r.expect(stringLit).lit
 		if _, err := time.ParseDuration(dur); err != nil {
-			r.actionError(r.sc.Errorf("The DURATION option is not a valid duration: %s", err.Error()))
+			r.actionError(r.actionErrorf("The DURATION option is not a valid duration: %s", err.Error()))
 		}
 		return &ast.TrafficOption{OptionType: ast.TrafficOptionDuration, StrValue: dur}
 	case encryptionMethod:

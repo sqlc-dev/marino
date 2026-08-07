@@ -85,8 +85,10 @@ func (r *rdParser) parseCreateStmtFamily() ast.StmtNode {
 	case procedure:
 		return r.parseCreateProcedureStmt()
 	default:
-		// CREATE IMPORT and anything else are not ported.
-		r.unsupported(fmt.Sprintf("CREATE %s", r.at(r.i+1).lit))
+		// No production continues here; the automaton shifts CREATE and
+		// errors at the lookahead, so advance before reporting.
+		r.advance()
+		r.unsupported(fmt.Sprintf("CREATE %s", r.cur().lit))
 	}
 	return nil
 }
@@ -97,8 +99,7 @@ func (r *rdParser) parseCreateStmtFamily() ast.StmtNode {
 // action runs, so the current token is force-lexed first to give Errorf
 // the identical scanner position.
 func (r *rdParser) appendWarnf(format string, a ...interface{}) {
-	r.cur()
-	r.sc.AppendError(r.sc.Errorf(format, a...))
+	r.sc.AppendError(r.actionErrorf(format, a...))
 	r.sc.lastErrorAsWarn()
 }
 
@@ -133,7 +134,7 @@ func (r *rdParser) parseCreateTableStmt() ast.StmtNode {
 		}
 		onCommit := r.parseOnCommitOpt()
 		if (onCommit != nil && tmp.TemporaryKeyword != ast.TemporaryGlobal) || (tmp.TemporaryKeyword == ast.TemporaryGlobal && onCommit == nil) {
-			r.sc.AppendError(r.sc.Errorf("GLOBAL TEMPORARY and ON COMMIT DELETE ROWS must appear together"))
+			r.sc.AppendError(r.actionErrorf("GLOBAL TEMPORARY and ON COMMIT DELETE ROWS must appear together"))
 		} else {
 			if tmp.TemporaryKeyword == ast.TemporaryGlobal {
 				tmp.OnCommitDelete = *onCommit
@@ -162,7 +163,7 @@ func (r *rdParser) parseCreateTableStmt() ast.StmtNode {
 	stmt.Select = r.parseCreateTableSelectOpt().Select
 	onCommit := r.parseOnCommitOpt()
 	if (onCommit != nil && stmt.TemporaryKeyword != ast.TemporaryGlobal) || (stmt.TemporaryKeyword == ast.TemporaryGlobal && onCommit == nil) {
-		r.sc.AppendError(r.sc.Errorf("GLOBAL TEMPORARY and ON COMMIT DELETE ROWS must appear together"))
+		r.sc.AppendError(r.actionErrorf("GLOBAL TEMPORARY and ON COMMIT DELETE ROWS must appear together"))
 	} else {
 		if stmt.TemporaryKeyword == ast.TemporaryGlobal {
 			stmt.OnCommitDelete = *onCommit
@@ -451,7 +452,7 @@ func (r *rdParser) parseTableOption() *ast.TableOption {
 		}
 		n := r.parseLengthNum()
 		if n != 0 && n != 1 {
-			r.actionError(r.sc.Errorf("The value of STATS_AUTO_RECALC must be one of [0|1|DEFAULT]."))
+			r.actionError(r.actionErrorf("The value of STATS_AUTO_RECALC must be one of [0|1|DEFAULT]."))
 		}
 		opt := &ast.TableOption{Tp: ast.TableOptionStatsAutoRecalc, UintValue: n}
 		r.appendWarnf("The STATS_AUTO_RECALC is parsed but ignored by all storage engines.")
@@ -589,14 +590,14 @@ func (r *rdParser) parseTableOption() *ast.TableOption {
 		} else if onOrOff == "off" {
 			return &ast.TableOption{Tp: ast.TableOptionTTLEnable, BoolValue: false}
 		}
-		r.actionError(r.sc.Errorf("The TTL_ENABLE option has to be set 'ON' or 'OFF'"))
+		r.actionError(r.actionErrorf("The TTL_ENABLE option has to be set 'ON' or 'OFF'"))
 	case ttlJobInterval:
 		r.advance()
 		r.parseEqOpt()
 		s := r.expect(stringLit).lit
 		_, err := duration.ParseDuration(s)
 		if err != nil {
-			r.actionError(r.sc.Errorf("The TTL_JOB_INTERVAL option is not a valid duration: %s", err.Error()))
+			r.actionError(r.actionErrorf("The TTL_JOB_INTERVAL option is not a valid duration: %s", err.Error()))
 		}
 		return &ast.TableOption{Tp: ast.TableOptionTTLJobInterval, StrValue: s}
 	case autoextendSize:
@@ -856,9 +857,26 @@ func (r *rdParser) parsePartitionOpt() *ast.PartitionOptions {
 		UpdateIndexes:   updateIndexes,
 	}
 	if err := opt.Validate(); err != nil {
+		// yacc runs Validate at the PartitionOpt reduce, which only
+		// happens when the lookahead can follow the partition clause;
+		// otherwise the syntax error at the lookahead comes first.
+		if !partitionOptFollow(r.tok()) {
+			r.syntaxError()
+		}
 		r.actionError(err)
 	}
 	return opt
+}
+
+// partitionOptFollow approximates FOLLOW(PartitionOpt) across its two
+// contexts (CREATE TABLE tail and ALTER TABLE spec list).
+func partitionOptFollow(tok int) bool {
+	switch tok {
+	case ignore, replace, as, selectKwd, with, int('('), tableKwd, values,
+		on, int(';'), 0, int(','):
+		return true
+	}
+	return false
 }
 
 // parsePartitionMethod implements PartitionMethod.

@@ -585,7 +585,7 @@ func (r *rdParser) parseDirectPlacementOption() *ast.PlacementOption {
 		r.parseEqOpt()
 		cnt := r.parseLengthNum()
 		if cnt == 0 {
-			r.actionError(r.sc.Errorf("FOLLOWERS must be positive"))
+			r.actionError(r.actionErrorf("FOLLOWERS must be positive"))
 		}
 		return &ast.PlacementOption{Tp: ast.PlacementOptionFollowerCount, UintValue: cnt}
 	case voters:
@@ -666,7 +666,7 @@ func (r *rdParser) parseResourceGroupOptionList() []*ast.ResourceGroupOption {
 		}
 		next := r.parseDirectResourceGroupOption()
 		if !ast.CheckAppend(opts, next) {
-			r.actionError(r.sc.Errorf("Dupliated options specified"))
+			r.actionError(r.actionErrorf("Dupliated options specified"))
 		}
 		opts = append(opts, next)
 	}
@@ -767,7 +767,7 @@ func (r *rdParser) parseResourceGroupRunawayOptionList() []*ast.ResourceGroupRun
 		}
 		next := r.parseDirectResourceGroupRunawayOption()
 		if !ast.CheckRunawayAppend(opts, next) {
-			r.actionError(r.sc.Errorf("Dupliated runaway options specified"))
+			r.actionError(r.actionErrorf("Dupliated runaway options specified"))
 		}
 		opts = append(opts, next)
 	}
@@ -784,7 +784,7 @@ func (r *rdParser) parseDirectResourceGroupRunawayOption() *ast.ResourceGroupRun
 		s := r.expect(stringLit).lit
 		_, err := time.ParseDuration(s)
 		if err != nil {
-			r.actionError(r.sc.Errorf("The EXEC_ELAPSED option is not a valid duration: %s", err.Error()))
+			r.actionError(r.actionErrorf("The EXEC_ELAPSED option is not a valid duration: %s", err.Error()))
 		}
 		return &ast.ResourceGroupRunawayOption{
 			Tp:         ast.RunawayRule,
@@ -847,7 +847,7 @@ func (r *rdParser) parseDirectResourceGroupRunawayOption() *ast.ResourceGroupRun
 		if len(dur) > 0 {
 			_, err := time.ParseDuration(dur)
 			if err != nil {
-				r.actionError(r.sc.Errorf("The WATCH DURATION option is not a valid duration: %s", err.Error()))
+				r.actionError(r.actionErrorf("The WATCH DURATION option is not a valid duration: %s", err.Error()))
 			}
 		}
 		return &ast.ResourceGroupRunawayOption{
@@ -904,7 +904,7 @@ func (r *rdParser) parseResourceGroupBackgroundOptionList() []*ast.ResourceGroup
 		}
 		next := r.parseDirectResourceGroupBackgroundOption()
 		if !ast.CheckBackgroundAppend(opts, next) {
-			r.actionError(r.sc.Errorf("Dupliated background options specified"))
+			r.actionError(r.actionErrorf("Dupliated background options specified"))
 		}
 		opts = append(opts, next)
 	}
@@ -956,7 +956,7 @@ func (r *rdParser) parseCreateMaskingPolicyStmt() ast.StmtNode {
 	restrictOps := r.parseMaskingPolicyRestrictOnOpt()
 	state := r.parseMaskingPolicyStateOpt()
 	if orReplace && ifNotExists {
-		r.actionError(r.sc.Errorf("'OR REPLACE' and 'IF NOT EXISTS' are mutually exclusive"))
+		r.actionError(r.actionErrorf("'OR REPLACE' and 'IF NOT EXISTS' are mutually exclusive"))
 	}
 	return &ast.CreateMaskingPolicyStmt{
 		OrReplace:          orReplace,
@@ -997,7 +997,7 @@ func (r *rdParser) parseMaskingPolicyRestrictOperation() ast.MaskingPolicyRestri
 	name := r.parseIdentifier()
 	op, ok := getMaskingPolicyRestrictOp(name)
 	if !ok {
-		r.actionError(r.sc.Errorf("unsupported masking policy restrict operation: %s", name))
+		r.actionError(r.actionErrorf("unsupported masking policy restrict operation: %s", name))
 	}
 	return op
 }
