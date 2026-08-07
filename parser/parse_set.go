@@ -50,7 +50,7 @@ func (r *rdParser) parseSetStmtFamily() ast.StmtNode {
 		// SetBindingStmt: "SET" "BINDING" BindingStatusType "FOR" ... —
 		// unless `binding` is a variable name.
 		if r.la(2) != eq && r.la(2) != assignmentEq && r.la(2) != int('.') {
-			r.unsupported("SET BINDING statement")
+			return r.parseSetBindingStmt()
 		}
 	}
 	return r.parseSetStmt()

@@ -45,9 +45,8 @@ func (r *rdParser) parseCreateStmtFamily() ast.StmtNode {
 			// "CREATE" "GLOBAL" "TEMPORARY" "TABLE" ...
 			return r.parseCreateTableStmt()
 		}
-		// CreateBindingStmt: "CREATE" GlobalScope "BINDING" — bindings
-		// record source text of two bindable statements; later pass.
-		r.unsupported("CREATE BINDING")
+		// CreateBindingStmt: "CREATE" GlobalScope "BINDING" ...
+		return r.parseCreateBindingStmt()
 	case database:
 		return r.parseCreateDatabaseStmt()
 	case index, unique, spatial, fulltext, vectorType, columnar:
@@ -81,11 +80,10 @@ func (r *rdParser) parseCreateStmtFamily() ast.StmtNode {
 	case resource:
 		return r.parseCreateResourceGroupStmt()
 	case binding, session:
-		// CreateBindingStmt ("CREATE" ["SESSION"] "BINDING") — later pass.
-		r.unsupported("CREATE BINDING")
+		// CreateBindingStmt: "CREATE" GlobalScope "BINDING" ...
+		return r.parseCreateBindingStmt()
 	case procedure:
-		// CreateProcedureStmt — procedures are a later pass.
-		r.unsupported("CREATE PROCEDURE")
+		return r.parseCreateProcedureStmt()
 	default:
 		// CREATE IMPORT and anything else are not ported.
 		r.unsupported(fmt.Sprintf("CREATE %s", r.at(r.i+1).lit))

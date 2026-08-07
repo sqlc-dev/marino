@@ -41,8 +41,8 @@ func (r *rdParser) parseDropStmtFamily() ast.StmtNode {
 		if r.la(2) == temporary {
 			return r.parseDropTableStmt()
 		}
-		// DropBindingStmt: "DROP" GlobalScope "BINDING" — later pass.
-		r.unsupported("DROP BINDING")
+		// DropBindingStmt: "DROP" GlobalScope "BINDING" ...
+		return r.parseDropBindingStmt()
 	case view:
 		return r.parseDropViewStmt()
 	case index, hypo:
@@ -91,11 +91,10 @@ func (r *rdParser) parseDropStmtFamily() ast.StmtNode {
 		r.advance()
 		return &ast.DeallocateStmt{Name: r.parseIdentifier()}
 	case binding, session:
-		// DropBindingStmt — bindings are a later pass.
-		r.unsupported("DROP BINDING")
+		// DropBindingStmt: "DROP" GlobalScope "BINDING" ...
+		return r.parseDropBindingStmt()
 	case procedure:
-		// DropProcedureStmt — procedures are a later pass.
-		r.unsupported("DROP PROCEDURE")
+		return r.parseDropProcedureStmt()
 	default:
 		r.unsupported(fmt.Sprintf("DROP %s", r.at(r.i+1).lit))
 	}
