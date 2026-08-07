@@ -32,28 +32,65 @@ func init() {
 }
 
 // parseCreateStmtFamily dispatches the CREATE statement family on the
-// token(s) after "CREATE". Only CREATE [TEMPORARY | GLOBAL TEMPORARY]
-// TABLE is implemented so far; every other CREATE kind falls back to
-// goyacc. Structured as a switch so later families can slot in.
+// token(s) after "CREATE". The "CREATE OR REPLACE" prefix (OrReplace)
+// belongs to CreateViewStmt, CreatePolicyStmt, and
+// CreateMaskingPolicyStmt, told apart by the token after "REPLACE".
 func (r *rdParser) parseCreateStmtFamily() ast.StmtNode {
-	// OptTemporary lookahead: "TEMPORARY" or "GLOBAL" "TEMPORARY".
-	k := 1
 	switch r.la(1) {
-	case temporary:
-		k = 2
+	case tableKwd, temporary:
+		// "CREATE" OptTemporary "TABLE" ...
+		return r.parseCreateTableStmt()
 	case global:
 		if r.la(2) == temporary {
-			k = 3
+			// "CREATE" "GLOBAL" "TEMPORARY" "TABLE" ...
+			return r.parseCreateTableStmt()
 		}
-	}
-	switch r.la(k) {
-	case tableKwd:
-		return r.parseCreateTableStmt()
+		// CreateBindingStmt: "CREATE" GlobalScope "BINDING" — bindings
+		// record source text of two bindable statements; later pass.
+		r.unsupported("CREATE BINDING")
+	case database:
+		return r.parseCreateDatabaseStmt()
+	case index, unique, spatial, fulltext, vectorType, columnar:
+		// IndexKeyTypeOpt "INDEX"
+		return r.parseCreateIndexStmt()
+	case view, algorithm, definer, sql:
+		// ViewAlgorithm/ViewDefiner/ViewSQLSecurity ... "VIEW"
+		return r.parseCreateViewStmt()
+	case or:
+		// "CREATE" "OR" "REPLACE" ...
+		switch r.la(3) {
+		case placement:
+			return r.parseCreatePolicyStmt()
+		case masking:
+			return r.parseCreateMaskingPolicyStmt()
+		default:
+			return r.parseCreateViewStmt()
+		}
+	case user:
+		return r.parseCreateUserStmt()
+	case role:
+		return r.parseCreateRoleStmt()
+	case sequence:
+		return r.parseCreateSequenceStmt()
+	case statistics:
+		return r.parseCreateStatisticsStmt()
+	case placement:
+		return r.parseCreatePolicyStmt()
+	case masking:
+		return r.parseCreateMaskingPolicyStmt()
+	case resource:
+		return r.parseCreateResourceGroupStmt()
+	case binding, session:
+		// CreateBindingStmt ("CREATE" ["SESSION"] "BINDING") — later pass.
+		r.unsupported("CREATE BINDING")
+	case procedure:
+		// CreateProcedureStmt — procedures are a later pass.
+		r.unsupported("CREATE PROCEDURE")
 	default:
-		// CREATE DATABASE/INDEX/VIEW/USER/SEQUENCE/... are not ported yet.
-		r.unsupported(fmt.Sprintf("CREATE %s", r.at(r.i+k).lit))
-		return nil
+		// CREATE IMPORT and anything else are not ported.
+		r.unsupported(fmt.Sprintf("CREATE %s", r.at(r.i+1).lit))
 	}
+	return nil
 }
 
 // appendWarnf reproduces the `yylex.AppendError(yylex.Errorf(...));
