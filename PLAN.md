@@ -1,0 +1,409 @@
+# marino — replacing the goyacc parser with hand-written recursive descent
+
+> **Status: complete.** The goyacc toolchain, grammars, and generated
+> parsers are removed; the recursive-descent parser is the only parser.
+> This document is kept as the architectural record of the rewrite: how
+> equivalence was established, which decisions carry forward, and the one
+> deliberate deviation (OriginTextPosition). Grammar references in code
+> comments point at the parser.y of the last commit that contained it.
+
+marino previously parsed MySQL with a goyacc-generated LALR parser:
+`parser/parser.y` (17.7k lines, 713 productions, ~100 top-level statement
+families) plus a second grammar, `parser/hintparser.y`, for optimizer hints.
+This plan rewrites both as hand-written recursive descent in the same
+architecture as the sibling parsers:
+
+- [sqlc-dev/zetajones](https://github.com/sqlc-dev/zetajones) — GoogleSQL (BigQuery)
+- [sqlc-dev/doubleclick](https://github.com/sqlc-dev/doubleclick) — ClickHouse
+- [sqlc-dev/meyer](https://github.com/sqlc-dev/meyer) — SQLite
+- [sqlc-dev/teesql](https://github.com/sqlc-dev/teesql) — T-SQL (SQL Server)
+
+When this plan is complete, `goyacc/`, `parser/parser.y`,
+`parser/hintparser.y`, and every generated artifact are gone, and `make all`
+involves no code generation beyond `keywords.go`.
+
+## Ground rules
+
+1. **The AST does not change.** The `ast` package is frozen: no new node
+   types, no renamed fields, no changed semantics of `Offset`, `Text()`,
+   flags, or `Restore`. The new parser produces byte-for-byte the same trees
+   the goyacc parser produces today, verified mechanically (see
+   [Corpus and testing](#corpus-and-testing)).
+2. **The public API does not change.** `parser.New`, `Parser.Parse/ParseSQL/
+   ParseOneStmt`, `ParserConfig`, `ParseParam` and friends, `Scanner`/
+   `NewScanner`, `Pos`, the digester functions (`Normalize*`, `Digest*`),
+   `ParseHint`, and the exported error variables all keep their signatures
+   and behavior. Downstream (sqlc) recompiles without edits.
+3. **No parser generators.** The grammar lives in Go functions, one
+   `parse*` method per production, each carrying a comment naming the
+   `parser.y` rule(s) it implements. A test enforces that every nonterminal
+   of the vendored grammar is named by some parse function.
+4. **Never hand-edit golden files.** Corpus expectations come from the
+   oracle; metadata sidecars are updated by tooling only.
+5. **The existing Go test suite is the acceptance gate.** `parser_test.go`
+   (~9.9k lines, 96 test functions), `lexer_test.go`, `hintparser_test.go`,
+   `digester_test.go`, `lateral_test.go`, and the `ast` package tests keep
+   passing unmodified (the two exceptions, `consistent_test.go` and
+   `keywords_test.go`, are rewritten because they read `parser.y` — see
+   [Keyword bookkeeping](#8-keyword-bookkeeping)).
+
+## What carries over from the sibling parsers
+
+These decisions worked in zetajones/teesql/doubleclick/meyer and are adopted
+unchanged:
+
+1. **Hand-written recursive descent** with rule-attribution comments
+   (zetajones-style), e.g. `// SelectStmtBasic: "SELECT" SelectStmtOpts
+   SelectStmtFieldList ...`.
+2. **Corpus-driven development loop**: consolidated golden corpus + per-file
+   `metadata.json` sidecars with todo tracking, `cmd/next-test` to pick the
+   next failing case, a `-check-parse` test flag that re-runs todos and
+   rewrites metadata when they start passing, and a hard rule that expected
+   outputs are never edited by hand.
+3. **Consolidated corpus format** (meyer's correction of doubleclick's
+   layout): one `.test` file per source group, cases separated by `==`,
+   SQL / expectation separated by `--`.
+4. **Precedence-climbing expression parser** (doubleclick/meyer-style Pratt
+   loop) rather than a cascade of functions, with the precedence table
+   transcribed verbatim from the grammar's `%left`/`%right`/`%precedence`
+   block.
+5. **Fail-fast, single-error reporting**, exactly like the yacc parser today
+   (first syntax error aborts the parse; warnings accumulate).
+6. **Fuzzing + differential testing + benchmarks** as the hardening layer.
+7. **A `CLAUDE.md` dev-loop guide** (written in Milestone 0) so the
+   next-test → implement → check-parse cycle is self-documenting.
+
+## How marino differs from the siblings
+
+### 1. The AST and public API already exist and are frozen
+
+The siblings designed their own AST as they went. marino's `ast` package
+(~20k lines across ddl.go, dml.go, expressions.go, misc.go, …) is the
+product contract — sqlc's MySQL engine consumes it. This removes a whole
+category of design work and adds a whole category of fidelity work: every
+field the yacc actions set (`Offset`, `SetText`, `SetOriginTextPosition`,
+flags via `ast.SetFlag`, `TexprNode` charsets, `SelectStmt.Kind`, the
+`setLastSelectFieldText` end-of-input fixup, …) must be set identically by
+the new parse functions. The corpus dump format is designed to make a missed
+field visible (see below).
+
+Package layout is also frozen where the siblings had freedom: `Scanner` and
+the digester are exported from `parser` itself, so there are no separate
+`token`/`lexer` packages. The family layout maps onto marino as *files*
+inside `parser/` plus `internal/` and `cmd/` helpers.
+
+### 2. The oracle is the parser being replaced
+
+| repo | golden output | generated by |
+|---|---|---|
+| zetajones | `ASTNode::DebugString` trees | vendored upstream testdata |
+| teesql | ScriptDom JSON | Microsoft's NuGet parser |
+| doubleclick | `EXPLAIN AST` text | pinned ClickHouse binary |
+| meyer | accept/reject + error + offset | pinned SQLite build |
+| **marino** | **full AST dump + exact error strings** | **the goyacc parser at a pinned commit** |
+
+This is the strongest oracle in the family: it emits the *same Go types* the
+new parser must produce, so goldens can pin the entire tree — every struct
+field, offset, and flag — not a lossy rendering of it. Concretely:
+
+- `internal/dump` renders an `[]ast.StmtNode` as a deterministic,
+  human-reviewable tree via reflection over the `ast` structs: every
+  exported field, including `Offset`, text/`OriginalText`, `FieldType`
+  details, and flags. No field is excluded — if the yacc parser sets it,
+  the dump shows it, and the new parser must match it.
+- `cmd/regenerate-parse` produces goldens by running the **pinned oracle**:
+  a `git worktree` of the last commit that still contains the goyacc parser
+  (recorded as a constant), with a small driver that imports that tree's
+  `parser` package and the *current* `internal/dump`. Because the `ast`
+  package is frozen, the dump format is identical across the pin. Each
+  corpus case records, per input: the dump of the parse result **or** the
+  exact `err.Error()` string, for each parser configuration the case
+  requests (SQL mode, charset/collation params, window-func flag, MariaDB
+  mode — encoded as case directives).
+- Milestone 0 runs the generator while the goyacc parser is still in-tree
+  and commits the corpus. After removal, regeneration still works via the
+  worktree pin, and the pin is documented in `parser/testdata/README.md`.
+
+### 3. The corpus is harvested, not designed
+
+The best available inventory of marino's dialect surface is its own test
+suite: the `RunTest`/`RunRestoreTest` tables in `parser_test.go` alone hold
+thousands of SQL strings that were each added for a reason. `cmd/harvest`
+(Milestone 0, later deleted or kept as documentation) extracts every SQL
+literal from the existing `parser` test files into corpus `.test` files
+grouped by source test function (`select.test`, `ddl.test`,
+`hint.test`, …). On top of that:
+
+- a hand-written *grammar tour* file per statement family, walking every
+  alternative of the corresponding `parser.y` productions (the attribution
+  comments make gaps visible), added as implementation of each family
+  proceeds;
+- the negative cases from the existing tests (`{src, ok: false}` table
+  entries) carry the oracle's exact error strings;
+- `cmd/difftest` (hardening) mutates corpus SQL token-wise — truncate,
+  delete, duplicate, replace — and checks that the new parser and the
+  pinned oracle agree on accept/reject, the error string, and the resulting
+  tree. This is what protects the long tail that no curated corpus reaches.
+
+### 4. An LALR grammar with unusually heavy disambiguation machinery
+
+`parser.y` resolves its conflicts with ~40 precedence pseudo-tokens
+(`lowerThanSelectOpt`/`sqlBufferResult`, `lowerThanValueKeyword`/`value`,
+`lowerThanCreateTableSelect`/`createTableSelect`, `tableRefPriority`,
+`lowerThanOn`/`on`, …) and 85 `%prec` annotations. None of these exist in
+recursive descent — each one encodes a decision ("shift the `ON` onto the
+join", "bind `VALUES` to the nearest `INSERT`") that must be replicated as
+explicit lookahead and documented at the site with a comment naming the
+pseudo-token it replaces. The known hot spots, each getting dedicated tests:
+
+- **Reserved vs. unreserved keywords.** The `UnReservedKeyword`,
+  `NotKeywordToken`, and `TiDBKeyword` productions let hundreds of keywords
+  appear as identifiers, column names, and even function names. All
+  identifier-position consumption is routed through a small set of helpers
+  (`expectIdent`, `expectIdentNoKeyword`, …) encoding exactly these sets,
+  mirroring meyer's `%fallback` treatment.
+- **Lexer feedback hacks**: `not2` (HIGH_NOT_PRECEDENCE mode), `pipes` vs
+  `pipesAsOr` (PIPES_AS_CONCAT mode), `hintComment` tokens, `/*! ... */`
+  and `/*M! ... */` version-gated comment unwrapping (`inBangComment`),
+  the `_charset` introducer tokens, and `builtin*` function tokens that the
+  lexer only emits when followed by `(`. These all stay in the lexer; the
+  new parser consumes them as-is.
+- **`SELECT ... INTO OUTFILE`**, **`INSERT ... SELECT`**,
+  **`CREATE TABLE ... SELECT`**, **set-operation nesting with parentheses**
+  (`(SELECT ...) UNION (SELECT ...) ORDER BY ...`), **join trees**
+  (left-deep association, `tableRefPriority`), **`STRAIGHT_JOIN`**, and the
+  window-function vs. aggregate `OVER` split controlled by
+  `EnableWindowFunc` at runtime.
+- **Expression precedence**: transcribed from the `%left`/`%right` ladder
+  (assignment `:=` < `OR`/`||`ₐₛ ₒᵣ < `XOR` < `AND` < `NOT` < comparison/
+  `IS`/`LIKE`/`IN`/`BETWEEN` < `|` < `&` < shifts < `+ -` < `* / % DIV MOD`
+  < `^` < unary < `COLLATE` < `INTERVAL` …) into one Pratt table, with the
+  SQL-mode-dependent rows (`not2`, `pipes`) switching on scanner state.
+- **Grammar actions with semantics**: the yacc actions also *validate*
+  (year column lengths, `REVOKE ALL ... GRANT OPTION` special case, illegal
+  alter algorithms, deprecated-syntax warnings via `lastErrorAsWarn`, int
+  overflow fallback to decimal). These move into the corresponding parse
+  functions unchanged; the corpus (which records warnings-affecting error
+  strings) and the existing unit tests pin them.
+
+### 5. Runtime grammar switches
+
+A single `Parser` instance re-parses under different SQL modes, charsets,
+window-func settings, and MariaDB mode. Unlike the siblings, parser options
+are not a constructor-time concern: the corpus format carries per-case
+directives (`-- mode: ANSI_QUOTES`, `-- no-window-func`, `-- mariadb`) and
+the harness runs each case with exactly the configuration the original test
+used.
+
+### 6. Two parsers
+
+`hintparser.y` (857 lines) parses the contents of `/*+ ... */` comments into
+`ast.TableOptimizerHint`. It is rewritten as a second, small recursive
+descent parser (`parse_hint.go`) behind the unchanged `ParseHint` entry
+point and the same lazily-initialized `Parser.hintParser` hook, keeping
+`hintparser_test.go` green. Same corpus treatment, tiny scale.
+
+### 7. Error fidelity
+
+Errors surface through `Scanner.Errors()` today, with yacc contributing
+`syntax error` plus a `near "…"` window and line/column. The corpus records
+`err.Error()` byte-for-byte, so the new parser reproduces the *user-visible
+strings*, not yacc's internals: a `syntaxError(near…)` helper formats the
+message from the failing token's `Pos` exactly as the current output reads.
+Special errors raised in actions (`ErrWrongValue`, `ErrTooBigDisplayWidth`,
+…) are re-raised from the equivalent parse functions. `errors_test.go`
+collects the cases where difftest finds divergence.
+
+### 8. Keyword bookkeeping
+
+Two artifacts are currently *derived from `parser.y`* and need a new source
+of truth:
+
+- `parser/keywords.go` is generated by `generate_keyword/genkeyword`, which
+  scrapes section comments out of `parser.y`.
+- `parser/consistent_test.go` cross-checks `parser.y`'s token declarations
+  against `tokenMap`.
+
+The new single source of truth is a hand-maintained classification table in
+the parser (`keyword_table.go`: spelling → token kind + reserved /
+unreserved / not-keyword / tidb-keyword section), from which `genkeyword` is
+reworked to regenerate `keywords.go` (the `go:generate` workflow survives).
+`consistent_test.go` is rewritten to check the three-way agreement between
+`keyword_table.go`, `tokenMap`, and `keywords.go`, and `keywords_test.go`
+follows. The token *constants* themselves (`selectKwd`, `intLit`, `not2`,
+…) move from the generated `parser.go` into a hand-written `token_kinds.go`
+that keeps every current name, so `lexer.go`, `misc.go`, and `digester.go`
+compile with near-zero diff.
+
+## Target layout
+
+```
+marino/
+├── PLAN.md, CLAUDE.md            # this plan; dev-loop guide
+├── parser/
+│   ├── token_kinds.go            # hand-written token constants (replaces yacc %token)
+│   ├── keyword_table.go          # keyword classification: the single source of truth
+│   ├── keywords.go               # still generated, now from keyword_table.go
+│   ├── lexer.go, misc.go         # existing hand-written lexer, minimally re-homed
+│   ├── yy_parser.go              # public API shell (renamed api.go once yacc is gone)
+│   ├── parser_rd.go              # parser core: token cursor, lookahead, error helpers
+│   ├── parse_expr.go             # Pratt loop + special forms (CASE, CAST, INTERVAL, …)
+│   ├── parse_select.go           # select core, set ops, CTEs, windows, table refs/joins
+│   ├── parse_dml.go              # insert/replace/update/delete/load data/import into
+│   ├── parse_ddl.go              # create/alter/drop table,index,view,sequence,database
+│   ├── parse_types.go            # column types, options, constraints, partitioning
+│   ├── parse_stmt.go             # statement dispatch + small statements (use, do, kill, …)
+│   ├── parse_set_show.go         # SET (all forms), SHOW (all forms)
+│   ├── parse_account.go          # users/roles/grants/revokes
+│   ├── parse_admin.go            # admin, brie, flashback, split, plan replayer, tidb-isms
+│   ├── parse_procedure.go        # stored procedures
+│   ├── parse_hint.go             # optimizer-hint parser (replaces hintparser.y)
+│   ├── digester.go, redact.go    # unchanged
+│   ├── *_test.go                 # existing suite, unchanged
+│   ├── corpus_test.go            # corpus harness (-check-parse), span/round-trip checks
+│   ├── grammar_test.go           # every parser.y nonterminal is named somewhere
+│   └── testdata/
+│       ├── README.md             # provenance + oracle pin (commit hash)
+│       ├── *.test                # consolidated corpus (== / -- format, mode directives)
+│       └── *.metadata.json      # todo/skip sidecars
+├── internal/
+│   ├── dump/                     # reflective AST renderer (golden format)
+│   ├── testfile/                 # corpus reader/writer
+│   └── reference/parser.y        # vendored grammars, documentation only
+│       └── hintparser.y
+└── cmd/
+    ├── next-test/                # pick next todo case
+    ├── debug-parse/              # parse argv SQL, print dump or error
+    ├── regenerate-parse/         # run pinned-commit oracle over the corpus
+    └── difftest/                 # mutation differential testing vs the oracle
+```
+
+Deleted at the end: `goyacc/`, `bin/`, `parser/parser.y`,
+`parser/hintparser.y`, generated `parser/parser.go` +
+`parser/hintparser.go` (54.8k lines), `parser/hintparserimpl.go` (folded
+into `parse_hint.go`), the goyacc targets in `Makefile` and `BUILD.bazel`,
+and the "generated by goyacc" claims in `README.md`.
+
+## Corpus and testing
+
+Layered, in order of authority:
+
+1. **Existing Go test suite, unmodified** — the acceptance gate
+   (`test.sh`: `go test -p 1 -race ./...`). It asserts restore round-trips,
+   AST structure, error cases, digests, and API behavior.
+2. **In-process differential harness** (an upgrade over the plan's
+   original golden-corpus mechanics, possible because the oracle is
+   in-tree): while goyacc is present, `ParseSQL` under `go test` re-parses
+   every RD-handled input with goyacc and compares the full `internal/dump`
+   renderings plus error and warning strings, panicking on divergence
+   (`rd_differential.go`). The entire existing suite therefore doubles as
+   the differential corpus, with `MARINO_RD_LOG` + `cmd/next-test` as the
+   todo tracker:
+   ```sh
+   rm -f /tmp/rd.log
+   MARINO_RD_LOG=/tmp/rd.log go test ./parser/ -count=1
+   go run ./cmd/next-test /tmp/rd.log      # ranked remaining fallbacks
+   # implement in parser/parse_*.go
+   go test ./... -timeout 120s             # everything still green
+   ```
+   Committed dump goldens (regenerable from the pinned oracle commit)
+   land at removal time as the post-goyacc regression layer.
+
+   One deliberate deviation surfaced by this harness:
+   `OriginTextPosition` values from goyacc depended on parser-stack slot
+   reuse (empty reductions restamp stale expressions), so they are not
+   reproduced; the RD parser stamps deterministic production-start
+   offsets, which is what every explicit test assertion expects.
+3. **Round trip** — every corpus case that parses is restored
+   (`format.RestoreCtx`) and re-parsed; the two dumps must agree, mirroring
+   the existing `RunRestoreTest` but over the whole corpus.
+4. **Differential testing** (`cmd/difftest`) — token-level mutations of
+   corpus SQL judged by the oracle worktree; not part of `go test ./...`,
+   run in a scheduled workflow. Divergences graduate into
+   `errors_test.go`/corpus cases.
+5. **Fuzzing** — `FuzzParse` (never panic, single-error contract holds,
+   round-trip stability on accepted inputs), seeded from the corpus.
+6. **Benchmarks** — the existing `bench_test.go` runs on both parsers
+   before the switch; the rewrite must not regress `BenchmarkParse` by more
+   than ~10% and is expected to win on allocation count (no `yySymType`
+   stack, no table-driven reductions).
+
+## Milestones
+
+Each milestone is a reviewable PR-sized unit ending with the full suite
+green (corpus todos shrinking monotonically; `-check-parse` enforces no
+regressions on previously-passing cases).
+
+0. **Scaffolding + corpus.** `token_kinds.go` + `keyword_table.go` (token
+   constants stop being generated; `parser.go` still present and
+   authoritative), `internal/dump`, `internal/testfile`, `cmd/harvest` →
+   committed corpus with 100% oracle goldens, `corpus_test.go` harness with
+   everything todo, `cmd/next-test`, `cmd/regenerate-parse` with the oracle
+   pin, `CLAUDE.md`. The new parser exists as a stub that fails over to
+   nothing — the goyacc parser still serves `Parse`.
+1. **Expressions.** Pratt core, literals (int/decimal/float/hex/bit,
+   charset introducers), identifiers/qualified names, functions (builtin
+   token forms, generic calls, aggregates, `CAST`/`CONVERT`, `CASE`,
+   `INTERVAL`, subqueries, `EXISTS`, row constructors, variables
+   (`@a`, `@@global.x`), param markers.
+2. **SELECT.** Field lists, `FROM`/joins/index hints, `WHERE`/`GROUP BY`/
+   `HAVING`/windows/`ORDER BY`/`LIMIT`, locking clauses, set operations,
+   CTEs, `VALUES` lists, `TABLE` statement, `SELECT INTO`. Switch
+   `Parse` to route `SELECT`-led statements through the new parser behind a
+   temporary internal flag; flip per-family as coverage lands.
+3. **DML.** `INSERT`/`REPLACE` (incl. `ON DUPLICATE KEY`, `SET` form, row
+   alias), `UPDATE`, `DELETE` (single/multi-table), `LOAD DATA`,
+   `IMPORT INTO`, non-transactional DML.
+4. **DDL part 1: CREATE/ALTER TABLE.** Column types (`parse_types.go`),
+   column options, constraints, table options, partitioning — the single
+   largest chunk of the grammar.
+5. **DDL part 2.** Indexes, views, sequences, databases, placement
+   policies, resource groups, `RENAME`, `TRUNCATE`, `DROP`, `FLASHBACK`,
+   `RECOVER`.
+6. **SET/SHOW/transactions/misc.** All `SET` forms (variables, names,
+   charset, transaction, config), every `SHOW` variant, transactions,
+   prepared statements, `USE`/`DO`/`KILL`/`EXPLAIN`/`DESC`/`TRACE`/`HELP`.
+7. **Accounts + admin + TiDB statements.** Users/roles/grants, `ADMIN`,
+   `ANALYZE`, `BRIE`, `SPLIT`, bindings, stats, plan replayer, query watch,
+   procedures (`CREATE PROCEDURE` body statements).
+8. **Hint parser.** `parse_hint.go` replaces `hintparser.go`/`.y`.
+9. **Hardening + removal.** difftest sweep, fuzz, error fidelity pass,
+   benchmark comparison; then delete the yacc artifacts, re-home the
+   helpers left in `yy_parser.go`, rework `genkeyword` +
+   `consistent_test.go`, update `Makefile`/`BUILD.bazel`/`README.md`.
+
+The corpus makes progress measurable at every step (`cmd/next-test` prints
+file-level completion), and the per-family flag in milestone 2–8 means the
+goyacc parser keeps serving anything not yet implemented — `main` stays
+shippable throughout.
+
+## Non-goals
+
+- No AST redesign, no new dialect features, no dropped statements — the
+  grammar surface is exactly what `parser.y` accepts today, including the
+  TiDB-specific statements sqlc doesn't use.
+- No error recovery / multi-error reporting (matches today's behavior).
+- No formatter; `Restore` fidelity is owned by the (unchanged) `ast`
+  package.
+- No performance work beyond the no-regression gate until the rewrite is
+  complete.
+
+## Risks
+
+- **Scale.** This grammar is larger than any sibling port (713 productions;
+  expect a parser in the 25–30k LOC range, comparable to zetajones/teesql).
+  The corpus + per-family routing keeps the work incremental and the tree
+  always green; nothing lands dark.
+- **Tree-shape fidelity beyond accept/reject.** Field-complete dumps are
+  deliberately unforgiving; expect the first weeks of corpus failures to be
+  offsets and `SetText` details rather than structure. That is the point.
+- **Error-string fidelity.** yacc's `near "…"` window derivation has quirks
+  (trailing-whitespace trimming via `endOffset`, truncation limits). The
+  corpus pins every negative case from the existing tests; difftest patrols
+  the rest. Where a string is genuinely unreproducible without emulating
+  yacc internals, the case is surfaced for an explicit decision rather than
+  silently changed.
+- **Oracle drift.** The pin is a commit hash in this repo; `ast` is frozen,
+  so oracle and HEAD dumps stay comparable. If `ast` must change for an
+  unrelated reason during the migration, the corpus is regenerated first
+  and the diff reviewed.

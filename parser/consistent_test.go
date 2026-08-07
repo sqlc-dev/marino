@@ -13,103 +13,123 @@
 
 package parser
 
-import (
-	gio "io"
-	"os"
-	"sort"
-	"strings"
-	"testing"
+// Keyword bookkeeping consistency. Before the goyacc removal this test
+// cross-checked parser.y's token sections; the sources of truth are now
+// the hand-maintained tables themselves: the lexer's tokenMap (misc.go),
+// the identifier-position keyword classes (keyword_classes.go), and the
+// exported Keywords catalogue (keywords.go). This test keeps the three
+// in exact agreement so an edit to one surfaces immediately.
 
-	"reflect"
+import (
+	"testing"
 )
 
 func TestKeywordConsistent(t *testing.T) {
-	parserFilename := "parser.y"
-	parserFile, err := os.Open(parserFilename)
-	if err != nil {
-		t.Fatal(err)
-	}
-	data, err := gio.ReadAll(parserFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	content := string(data)
-
-	reservedKeywordStartMarker := "\t/* The following tokens belong to ReservedKeyword. Notice: make sure these tokens are contained in ReservedKeyword. */"
-	unreservedKeywordStartMarker := "\t/* The following tokens belong to UnReservedKeyword. Notice: make sure these tokens are contained in UnReservedKeyword. */"
-	notKeywordTokenStartMarker := "\t/* The following tokens belong to NotKeywordToken. Notice: make sure these tokens are contained in NotKeywordToken. */"
-	tidbKeywordStartMarker := "\t/* The following tokens belong to TiDBKeyword. Notice: make sure these tokens are contained in TiDBKeyword. */"
-	identTokenEndMarker := "%token\t<item>"
-
-	reservedKeywords := extractKeywords(content, reservedKeywordStartMarker, unreservedKeywordStartMarker)
-	unreservedKeywords := extractKeywords(content, unreservedKeywordStartMarker, notKeywordTokenStartMarker)
-	notKeywordTokens := extractKeywords(content, notKeywordTokenStartMarker, tidbKeywordStartMarker)
-	tidbKeywords := extractKeywords(content, tidbKeywordStartMarker, identTokenEndMarker)
-
+	// Aliases map distinct spellings onto the same token.
 	for k, v := range aliases {
-		if reflect.DeepEqual(k, v) {
-			t.Fatalf("expected values to differ, both are %v", v)
+		if k == v {
+			t.Fatalf("alias %q maps to itself", k)
 		}
-		if !reflect.DeepEqual(tokenMap[v], tokenMap[k]) {
-			t.Fatalf("got %v, want %v", tokenMap[k], tokenMap[v])
+		if tokenMap[k] != tokenMap[v] {
+			t.Fatalf("alias %q (%d) and %q (%d) have different tokens", k, tokenMap[k], v, tokenMap[v])
 		}
 	}
-	keywordCount := len(reservedKeywords) + len(unreservedKeywords) + len(notKeywordTokens) + len(tidbKeywords)
-	if !reflect.DeepEqual(keywordCount-len(windowFuncTokenMap), len(tokenMap)-len(aliases)) {
-		t.Fatalf("got %v, want %v", len(tokenMap)-len(aliases), keywordCount-len(windowFuncTokenMap))
-	}
 
-	unreservedCollectionDef := extractKeywordsFromCollectionDef(content, "\nUnReservedKeyword:")
-	if !reflect.DeepEqual(unreservedCollectionDef, unreservedKeywords) {
-		t.Fatalf("%v: got %v, want %v", "UnReservedKeyword", unreservedKeywords, unreservedCollectionDef)
-	}
-
-	notKeywordTokensCollectionDef := extractKeywordsFromCollectionDef(content, "\nNotKeywordToken:")
-	if !reflect.DeepEqual(notKeywordTokensCollectionDef, notKeywordTokens) {
-		t.Fatalf("%v: got %v, want %v", "NotKeywordToken", notKeywordTokens, notKeywordTokensCollectionDef)
-	}
-
-	tidbKeywordsCollectionDef := extractKeywordsFromCollectionDef(content, "\nTiDBKeyword:")
-	if !reflect.DeepEqual(tidbKeywordsCollectionDef, tidbKeywords) {
-		t.Fatalf("%v: got %v, want %v", "TiDBKeyword", tidbKeywords, tidbKeywordsCollectionDef)
-	}
-}
-
-func extractMiddle(str, startMarker, endMarker string) string {
-	startIdx := strings.Index(str, startMarker)
-	if startIdx == -1 {
-		return ""
-	}
-	str = str[startIdx+len(startMarker):]
-	before, _, ok := strings.Cut(str, endMarker)
-	if !ok {
-		return ""
-	}
-	return before
-}
-
-func extractQuotedWords(strs []string) []string {
-	//nolint: prealloc
-	var words []string
-	for _, str := range strs {
-		word := extractMiddle(str, "\"", "\"")
-		if word == "" {
-			continue
+	toSet := func(names []string) map[string]bool {
+		s := make(map[string]bool, len(names))
+		for _, n := range names {
+			if s[n] {
+				t.Fatalf("duplicate keyword-class entry %q", n)
+			}
+			s[n] = true
 		}
-		words = append(words, word)
+		return s
 	}
-	sort.Strings(words)
-	return words
-}
+	unreserved := toSet(unReservedKeywordNames)
+	notKeyword := toSet(notKeywordTokenNames)
+	tidb := toSet(tiDBKeywordNames)
 
-func extractKeywords(content, startMarker, endMarker string) []string {
-	keywordSection := extractMiddle(content, startMarker, endMarker)
-	lines := strings.Split(keywordSection, "\n")
-	return extractQuotedWords(lines)
-}
+	// The classes are disjoint.
+	for n := range unreserved {
+		if notKeyword[n] || tidb[n] {
+			t.Fatalf("%q appears in more than one keyword class", n)
+		}
+	}
+	for n := range notKeyword {
+		if tidb[n] {
+			t.Fatalf("%q appears in more than one keyword class", n)
+		}
+	}
 
-func extractKeywordsFromCollectionDef(content, startMarker string) []string {
-	keywordSection := extractMiddle(content, startMarker, "\n\n")
-	words := strings.Split(keywordSection, "|")
-	return extractQuotedWords(words)
+	// Partition the Keywords catalogue by section.
+	sections := map[string]map[string]bool{}
+	for _, kw := range Keywords {
+		m := sections[kw.Section]
+		if m == nil {
+			m = map[string]bool{}
+			sections[kw.Section] = m
+		}
+		if m[kw.Word] {
+			t.Fatalf("duplicate Keywords entry %q", kw.Word)
+		}
+		m[kw.Word] = true
+		if kw.Reserved != (kw.Section == "reserved") {
+			t.Fatalf("Keywords entry %q: Reserved=%v inconsistent with Section=%q", kw.Word, kw.Reserved, kw.Section)
+		}
+	}
+	reserved := sections["reserved"]
+
+	// Reserved keywords can never appear in identifier position.
+	for n := range reserved {
+		if unreserved[n] || notKeyword[n] || tidb[n] {
+			t.Fatalf("reserved keyword %q also appears in an identifier keyword class", n)
+		}
+	}
+
+	// The TiDB section matches its class exactly.
+	for n := range tidb {
+		if !sections["tidb"][n] {
+			t.Fatalf("TiDBKeyword %q missing from Keywords", n)
+		}
+	}
+	for n := range sections["tidb"] {
+		if !tidb[n] {
+			t.Fatalf("Keywords tidb entry %q missing from tiDBKeywordNames", n)
+		}
+	}
+
+	// The unreserved section matches its class except MONITOR, a
+	// MariaDB-gated keyword the historical generator omitted.
+	for n := range sections["unreserved"] {
+		if !unreserved[n] {
+			t.Fatalf("Keywords unreserved entry %q missing from unReservedKeywordNames", n)
+		}
+	}
+	for n := range unreserved {
+		if !sections["unreserved"][n] && n != "MONITOR" {
+			t.Fatalf("unreserved keyword %q missing from Keywords", n)
+		}
+	}
+
+	// Every keyword the lexer knows is classified somewhere, and every
+	// classified keyword is known to a lexer table (tokenMap, or
+	// windowFuncTokenMap for the window-function keywords).
+	classified := map[string]bool{}
+	for _, set := range []map[string]bool{reserved, unreserved, notKeyword, tidb} {
+		for n := range set {
+			classified[n] = true
+		}
+	}
+	for n := range tokenMap {
+		if !classified[n] && aliases[n] == "" {
+			t.Fatalf("tokenMap keyword %q is not classified anywhere", n)
+		}
+	}
+	for n := range classified {
+		if _, inTok := tokenMap[n]; !inTok {
+			if _, inWin := windowFuncTokenMap[n]; !inWin {
+				t.Fatalf("classified keyword %q is in neither tokenMap nor windowFuncTokenMap", n)
+			}
+		}
+	}
 }

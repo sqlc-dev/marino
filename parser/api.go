@@ -17,9 +17,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
-	"slices"
 	"strconv"
-	"unicode"
 
 	"github.com/sqlc-dev/marino/ast"
 	"github.com/sqlc-dev/marino/auth"
@@ -85,21 +83,20 @@ type ParserConfig struct {
 
 // Parser represents a parser instance. Some temporary objects are stored in it to reduce object allocation during Parse function.
 type Parser struct {
-	charset    string
-	collation  string
-	result     []ast.StmtNode
-	src        string
-	lexer      Scanner
-	hintParser *hintParser
+	charset   string
+	collation string
+	result    []ast.StmtNode
+	src       string
+	lexer     Scanner
 
 	explicitCharset       bool
 	strictDoubleFieldType bool
 	enableMariaDB         bool
 
-	// the following fields are used by yyParse to reduce allocation.
-	cache  []yySymType
-	yylval yySymType
-	yyVAL  *yySymType
+	// Reused across ParseSQL calls to keep per-parse allocation flat
+	// (the goyacc parser kept its symbol-stack cache the same way).
+	rdScan Scanner
+	rdWin  []rdToken
 }
 
 // setNodeText sets the raw text on a parsed AST node and propagates the
@@ -114,31 +111,15 @@ func (parser *Parser) setNodeText(n interface {
 	}
 }
 
-func yySetOffset(yyVAL *yySymType, offset int) {
-	if yyVAL.expr != nil {
-		yyVAL.expr.SetOriginTextPosition(offset)
-	}
-}
-
-func yyhintSetOffset(_ *yyhintSymType, _ int) {
-}
-
-type stmtTexter interface {
-	stmtText() string
-}
-
 // New returns a Parser object with default SQL mode.
 func New() *Parser {
-	p := &Parser{
-		cache: make([]yySymType, 200),
-	}
+	p := &Parser{}
 	p.reset()
 	return p
 }
 
 // Reset resets the parser.
 func (parser *Parser) Reset() {
-	clear(parser.cache)
 	parser.reset()
 }
 
@@ -178,34 +159,13 @@ func (parser *Parser) ParseSQL(sql string, params ...ParseParam) (stmt []ast.Stm
 		}
 	}
 	parser.src = sql
-	parser.result = parser.result[:0]
-
-	var l yyLexer = &parser.lexer
-	yyParse(l, parser)
-
-	warns, errs := l.Errors()
-	if len(warns) > 0 {
-		warns = slices.Clone(warns)
-	} else {
-		warns = nil
-	}
-	if len(errs) != 0 {
-		return nil, warns, errs[0]
-	}
-	for _, stmt := range parser.result {
-		ast.SetFlag(stmt)
-	}
-	return parser.result, warns, nil
+	return parser.parseRD(sql)
 }
 
 // Parse parses a query string to raw ast.StmtNode.
 // If charset or collation is "", default charset and collation will be used.
 func (parser *Parser) Parse(sql, charset, collation string) (stmt []ast.StmtNode, warns []error, err error) {
 	return parser.ParseSQL(sql, CharsetConnection(charset), CollationConnection(collation))
-}
-
-func (parser *Parser) lastErrorAsWarn() {
-	parser.lexer.lastErrorAsWarn()
 }
 
 // ParseOneStmt parses a query and returns an ast.StmtNode.
@@ -251,25 +211,6 @@ func (parser *Parser) setLastSelectFieldText(st *ast.SelectStmt, lastEnd int) {
 	if lastField.Offset+len(lastField.OriginalText()) >= len(parser.src)-1 {
 		lastField.SetText(parser.lexer.client, parser.src[lastField.Offset:lastEnd])
 	}
-}
-
-func (*Parser) startOffset(v *yySymType) int {
-	return v.offset
-}
-
-func (parser *Parser) endOffset(v *yySymType) int {
-	offset := v.offset
-	for offset > 0 && unicode.IsSpace(rune(parser.src[offset-1])) {
-		offset--
-	}
-	return offset
-}
-
-func (parser *Parser) parseHint(input string) ([]*ast.TableOptimizerHint, []error) {
-	if parser.hintParser == nil {
-		parser.hintParser = newHintParser()
-	}
-	return parser.hintParser.parse(input, parser.lexer.GetSQLMode(), parser.lexer.lastHintPos)
 }
 
 func toInt(l yyLexer, lval *yySymType, str string) int {

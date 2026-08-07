@@ -114,51 +114,7 @@ func (hs *hintScanner) Lex(lval *yyhintSymType) int {
 	return hintInvalid
 }
 
-type hintParser struct {
-	lexer  hintScanner
-	result []*ast.TableOptimizerHint
-
-	// the following fields are used by yyParse to reduce allocation.
-	cache  []yyhintSymType
-	yylval yyhintSymType
-	yyVAL  *yyhintSymType
-}
-
-func newHintParser() *hintParser {
-	return &hintParser{cache: make([]yyhintSymType, 50)}
-}
-
-func (hp *hintParser) parse(input string, sqlMode mysql.SQLMode, initPos Pos) ([]*ast.TableOptimizerHint, []error) {
-	hp.result = nil
-	hp.lexer.reset(input[3:])
-	hp.lexer.SetSQLMode(sqlMode)
-	hp.lexer.r.updatePos(Pos{
-		Line:   initPos.Line,
-		Col:    initPos.Col + 3, // skipped the initial '/*+'
-		Offset: 0,
-	})
-	hp.lexer.inBangComment = true // skip the final '*/' (we need the '*/' for reporting warnings)
-
-	yyhintParse(&hp.lexer, hp)
-
-	warns, errs := hp.lexer.Errors()
-	if len(errs) == 0 {
-		errs = warns
-	}
-	return hp.result, errs
-}
-
 // ParseHint parses an optimizer hint (the interior of `/*+ ... */`).
 func ParseHint(input string, sqlMode mysql.SQLMode, initPos Pos) ([]*ast.TableOptimizerHint, []error) {
-	hp := newHintParser()
-	return hp.parse(input, sqlMode, initPos)
-}
-
-func (hp *hintParser) warnUnsupportedHint(name string) {
-	warn := ErrWarnOptimizerHintUnsupportedHint.FastGenByArgs(name)
-	hp.lexer.warns = append(hp.lexer.warns, warn)
-}
-
-func (hp *hintParser) lastErrorAsWarn() {
-	hp.lexer.lastErrorAsWarn()
+	return rdParseHint(input, sqlMode, initPos)
 }
