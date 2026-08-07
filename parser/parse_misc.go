@@ -621,7 +621,8 @@ func (r *rdParser) parseExplainableStmt() ast.StmtNode {
 		}
 		return r.finishSelectFamily(withClause)
 	case alter:
-		r.unsupported("EXPLAIN ALTER TABLE statement")
+		// ExplainableStmt: AlterTableStmt
+		return r.parseAlterTableStmt()
 	case importKwd:
 		return r.parseImportIntoStmt()
 	}
