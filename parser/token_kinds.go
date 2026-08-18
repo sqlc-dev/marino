@@ -205,6 +205,7 @@ const (
 	compressionLevel           = 57662
 	compressionType            = 57663
 	concurrency                = 57664
+	concurrent                 = 58292
 	config                     = 57665
 	connection                 = 57666
 	consistency                = 57667
@@ -290,6 +291,7 @@ const (
 	dryRun                     = 58017
 	dual                       = 57416
 	dump                       = 58018
+	dumpfile                   = 58293
 	duplicate                  = 57695
 	dynamic                    = 57696
 	elseIfKwd                  = 57418
@@ -664,6 +666,7 @@ const (
 	predicate                  = 58061
 	prepare                    = 57843
 	preserve                   = 57844
+	prev                       = 58294
 	primary                    = 57519
 	primaryRegion              = 58062
 	priority                   = 58063
@@ -995,6 +998,7 @@ const (
 	x509                       = 57993
 	xa                         = 58284
 	xid                        = 58285
+	xml                        = 58295
 	xor                        = 57593
 	yearMonth                  = 57594
 	yearType                   = 57994

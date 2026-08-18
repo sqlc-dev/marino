@@ -558,6 +558,16 @@ const (
 	StartGroupReplicationCommand = "START GROUP_REPLICATION"
 	// StopGroupReplicationCommand represents STOP GROUP_REPLICATION statement
 	StopGroupReplicationCommand = "STOP GROUP_REPLICATION"
+	// HandlerOpenCommand represents HANDLER ... OPEN statement
+	HandlerOpenCommand = "HANDLER OPEN"
+	// HandlerReadCommand represents HANDLER ... READ statement
+	HandlerReadCommand = "HANDLER READ"
+	// HandlerCloseCommand represents HANDLER ... CLOSE statement
+	HandlerCloseCommand = "HANDLER CLOSE"
+	// ImportTableCommand represents IMPORT TABLE statement
+	ImportTableCommand = "IMPORT TABLE"
+	// LoadXMLCommand represents LOAD XML statement
+	LoadXMLCommand = "LOAD XML"
 	// UnknownCommand represents unknown statements
 	UnknownCommand = "UNKNOWN"
 	// SetOprCommand represents UNION/INTERSECT/EXCEPT statement
@@ -1602,4 +1612,29 @@ func (n *StartGroupReplicationStmt) SEMCommand() string {
 // SEMCommand returns the command string for the statement.
 func (n *StopGroupReplicationStmt) SEMCommand() string {
 	return StopGroupReplicationCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *HandlerOpenStmt) SEMCommand() string {
+	return HandlerOpenCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *HandlerReadStmt) SEMCommand() string {
+	return HandlerReadCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *HandlerCloseStmt) SEMCommand() string {
+	return HandlerCloseCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *ImportTableStmt) SEMCommand() string {
+	return ImportTableCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *LoadXMLStmt) SEMCommand() string {
+	return LoadXMLCommand
 }

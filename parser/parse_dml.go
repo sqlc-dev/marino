@@ -434,6 +434,90 @@ func (r *rdParser) parseLoadDataStmt() ast.StmtNode {
 	return x
 }
 
+// parseImportTableStmt implements ImportTableStmt (MySQL 26.7 §15.2.6):
+// "IMPORT" "TABLE" "FROM" stringLit (',' stringLit)*.
+// The statement postdates the goyacc grammar; the shape follows the
+// MySQL 26.7 reference manual.
+func (r *rdParser) parseImportTableStmt() ast.StmtNode {
+	r.expect(importKwd)
+	r.expect(tableKwd)
+	r.expect(from)
+	stmt := &ast.ImportTableStmt{SdiFiles: []string{r.expect(stringLit).lit}}
+	for r.accept(int(',')) {
+		stmt.SdiFiles = append(stmt.SdiFiles, r.expect(stringLit).lit)
+	}
+	return stmt
+}
+
+// parseLoadXMLStmt implements LoadXMLStmt (MySQL 26.7 §15.2.10):
+//
+//	"LOAD" "XML" ["LOW_PRIORITY" | "CONCURRENT"] ["LOCAL"] "INFILE"
+//	    stringLit ["REPLACE" | "IGNORE"] "INTO" "TABLE" TableName
+//	    [CharsetKw CharsetName] ["ROWS" "IDENTIFIED" "BY" stringLit]
+//	    ["IGNORE" NUM ("LINES" | "ROWS")]
+//	    ColumnNameOrUserVarListOptWithBrackets ["SET" LoadDataSetList]
+//
+// The statement postdates the goyacc grammar; the shape follows the
+// MySQL 26.7 reference manual, reusing the LOAD DATA helpers.
+func (r *rdParser) parseLoadXMLStmt() ast.StmtNode {
+	r.expect(load)
+	r.expect(xml)
+	x := &ast.LoadXMLStmt{FileLocRef: ast.FileLocServerOrRemote}
+	switch r.tok() {
+	case lowPriority:
+		r.advance()
+		x.LowPriority = true
+	case concurrent:
+		r.advance()
+		x.Concurrent = true
+	}
+	if r.accept(local) {
+		x.FileLocRef = ast.FileLocClient
+	}
+	r.expect(infile)
+	x.Path = r.expect(stringLit).lit
+	x.OnDuplicate = ast.OnDuplicateKeyHandlingError
+	switch r.tok() {
+	case ignore:
+		r.advance()
+		x.OnDuplicate = ast.OnDuplicateKeyHandlingIgnore
+	case replace:
+		r.advance()
+		x.OnDuplicate = ast.OnDuplicateKeyHandlingReplace
+	}
+	r.expect(into)
+	r.expect(tableKwd)
+	x.Table = r.parseTableName()
+	if (r.tok() == character || r.tok() == charType) && r.la(1) == set {
+		r.advance()
+		r.advance()
+		cs := r.parseCharsetName()
+		x.Charset = &cs
+	}
+	if r.tok() == rows && r.la(1) == identified {
+		r.advance()
+		r.advance()
+		r.expect(by)
+		x.RowsIdentifiedBy = r.expect(stringLit).lit
+	}
+	if r.tok() == ignore {
+		// "IGNORE" NUM ("LINES" | "ROWS"); Restore() canonicalizes the
+		// LINES spelling to ROWS.
+		r.advance()
+		v := getUint64FromNUM(r.expect(intLit).item)
+		if r.tok() != lines && r.tok() != rows {
+			r.syntaxError()
+		}
+		r.advance()
+		x.IgnoreRows = &v
+	}
+	x.ColumnsAndUserVars = r.parseColumnNameOrUserVarListOptWithBrackets()
+	if r.accept(set) {
+		x.ColumnAssignments = r.parseLoadDataSetList()
+	}
+	return x
+}
+
 // parseColumnNameOrUserVarListOptWithBrackets implements the production
 // of the same name.
 func (r *rdParser) parseColumnNameOrUserVarListOptWithBrackets() []*ast.ColumnNameOrUserVar {

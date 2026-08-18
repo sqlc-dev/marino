@@ -256,16 +256,28 @@ func (r *rdParser) parseSelectStmt() *ast.SelectStmt {
 	switch r.tok() {
 	case selectKwd:
 		st := r.parseSelectStmtBasic()
+		// MySQL also accepts the SelectStmtIntoOption between the field
+		// list and FROM (the trailing position is handled by
+		// parseSelectTail, which skips it once one is set). The INTO
+		// token bounds the last field's recorded text in that case.
+		fieldEnd := rdToken{offset: -1}
+		if r.tok() == into && st.Having == nil {
+			fieldEnd = *r.cur()
+			st.SelectIntoOpt = r.parseSelectStmtIntoOption()
+		}
 		switch {
 		case r.tok() == from && st.Having == nil && r.la(1) == dual:
 			// SelectStmtFromDualTable: SelectStmtBasic FromDual
 			// WhereClauseOptional, then SelectStmtGroup OrderByOptional ...
 			fromTok := *r.cur()
+			if fieldEnd.offset < 0 {
+				fieldEnd = fromTok
+			}
 			r.advance()
 			r.expect(dual)
 			lastField := st.Fields.Fields[len(st.Fields.Fields)-1]
 			if lastField.Expr != nil && lastField.AsName.O == "" {
-				r.p.setNodeText(lastField, r.src[lastField.Offset:fromTok.offset-1])
+				r.p.setNodeText(lastField, r.src[lastField.Offset:fieldEnd.offset-1])
 			}
 			if r.accept(where) {
 				st.Where = r.parseExpression()
@@ -279,11 +291,14 @@ func (r *rdParser) parseSelectStmt() *ast.SelectStmt {
 			// WhereClauseOptional SelectStmtGroup HavingClause
 			// WindowClauseOptional, then OrderByOptional ...
 			fromTok := *r.cur()
+			if fieldEnd.offset < 0 {
+				fieldEnd = fromTok
+			}
 			r.advance()
 			st.From = &ast.TableRefsClause{TableRefs: r.parseTableRefs()}
 			lastField := st.Fields.Fields[len(st.Fields.Fields)-1]
 			if lastField.Expr != nil && lastField.AsName.O == "" {
-				r.p.setNodeText(lastField, r.src[lastField.Offset:r.endOffsetAt(fromTok.offset)])
+				r.p.setNodeText(lastField, r.src[lastField.Offset:r.endOffsetAt(fieldEnd.offset)])
 			}
 			if r.accept(where) {
 				st.Where = r.parseExpression()
@@ -351,8 +366,10 @@ func (r *rdParser) parseSelectTail(st *ast.SelectStmt) {
 	if lock := r.parseSelectLockOpt(); lock != nil {
 		st.LockInfo = lock
 	}
-	if opt := r.parseSelectStmtIntoOption(); opt != nil {
-		st.SelectIntoOpt = opt
+	if st.SelectIntoOpt == nil {
+		if opt := r.parseSelectStmtIntoOption(); opt != nil {
+			st.SelectIntoOpt = opt
+		}
 	}
 }
 
@@ -670,21 +687,53 @@ func (r *rdParser) parseSelectLockOpt() *ast.SelectLockInfo {
 	return nil
 }
 
-// parseSelectStmtIntoOption implements SelectStmtIntoOption.
+// parseSelectStmtIntoOption implements SelectStmtIntoOption:
+//
+//	"INTO" "OUTFILE" stringLit Fields Lines
+//	| "INTO" "DUMPFILE" stringLit
+//	| "INTO" IntoVar (',' IntoVar)*
+//
+// with IntoVar: UserVariable | Identifier (a stored program variable,
+// only meaningful inside a routine body).
 func (r *rdParser) parseSelectStmtIntoOption() *ast.SelectIntoOption {
 	if r.tok() != into {
 		return nil
 	}
 	r.advance()
-	r.expect(outfile)
-	x := &ast.SelectIntoOption{Tp: ast.SelectIntoOutfile, FileName: r.expect(stringLit).lit}
-	if fields := r.parseFieldsClause(); fields != nil {
-		x.FieldsInfo = fields
+	switch r.tok() {
+	case outfile:
+		r.advance()
+		x := &ast.SelectIntoOption{Tp: ast.SelectIntoOutfile, FileName: r.expect(stringLit).lit}
+		if fields := r.parseFieldsClause(); fields != nil {
+			x.FieldsInfo = fields
+		}
+		if lines := r.parseLinesClause(); lines != nil {
+			x.LinesInfo = lines
+		}
+		return x
+	case dumpfile:
+		r.advance()
+		return &ast.SelectIntoOption{Tp: ast.SelectIntoDumpfile, FileName: r.expect(stringLit).lit}
 	}
-	if lines := r.parseLinesClause(); lines != nil {
-		x.LinesInfo = lines
+	x := &ast.SelectIntoOption{Tp: ast.SelectIntoVars, Vars: []ast.ExprNode{r.parseSelectIntoVar()}}
+	for r.accept(int(',')) {
+		x.Vars = append(x.Vars, r.parseSelectIntoVar())
 	}
 	return x
+}
+
+// parseSelectIntoVar implements IntoVar. The variable expressions carry
+// no origin position: SelectStmt.Accept does not traverse
+// SelectIntoOpt, so a recorded position could never be normalized by
+// visitors.
+func (r *rdParser) parseSelectIntoVar() ast.ExprNode {
+	if r.tok() == singleAtIdentifier {
+		t := r.expect(singleAtIdentifier)
+		return &ast.VariableExpr{Name: strings.TrimPrefix(t.lit, "@")}
+	}
+	return &ast.ColumnNameExpr{
+		Name: &ast.ColumnName{Name: ast.NewCIStr(r.parseIdentifier())},
+	}
 }
 
 // parseFieldsClause implements Fields: FieldsOrColumns FieldItemList.

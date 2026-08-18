@@ -3896,12 +3896,32 @@ type SelectIntoOption struct {
 	FileName   string
 	FieldsInfo *FieldsClause
 	LinesInfo  *LinesClause
+	// Vars is the variable list of the SelectIntoVars form: user
+	// variables and, in stored programs, program variables (restored as
+	// plain names).
+	Vars []ExprNode
 }
 
 // Restore implements Node interface.
 func (n *SelectIntoOption) Restore(ctx *format.RestoreCtx) error {
-	if n.Tp != SelectIntoOutfile {
-		// only support SELECT/TABLE/VALUES ... INTO OUTFILE statement now
+	switch n.Tp {
+	case SelectIntoOutfile:
+	case SelectIntoDumpfile:
+		ctx.WriteKeyWord("INTO DUMPFILE ")
+		ctx.WriteString(n.FileName)
+		return nil
+	case SelectIntoVars:
+		ctx.WriteKeyWord("INTO ")
+		for i, v := range n.Vars {
+			if i != 0 {
+				ctx.WritePlain(", ")
+			}
+			if err := v.Restore(ctx); err != nil {
+				return annotatef(err, "An error occurred while restore SelectInto.Vars[%d]", i)
+			}
+		}
+		return nil
+	default:
 		return errors.New("Unsupported SelectionInto type")
 	}
 
@@ -3925,6 +3945,14 @@ func (n *SelectIntoOption) Accept(v Visitor) (Node, bool) {
 	newNode, skipChildren := v.Enter(n)
 	if skipChildren {
 		return v.Leave(newNode)
+	}
+	n = newNode.(*SelectIntoOption)
+	for i, v2 := range n.Vars {
+		node, ok := v2.Accept(v)
+		if !ok {
+			return n, false
+		}
+		n.Vars[i] = node.(ExprNode)
 	}
 	return v.Leave(n)
 }
