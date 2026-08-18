@@ -29,7 +29,11 @@ architecture of that rewrite and the decisions that survive it.
 
 ## Rules
 
-- The `ast` package is frozen, and the public `parser` API is stable.
+- The `ast` package may only change in backwards-compatible ways: new
+  node types and new fields are okay; existing nodes, fields, and their
+  semantics (`Offset`, `Text()`, flags, `Restore` output) must not be
+  renamed, removed, or changed — sqlc's MySQL engine consumes them.
+- The public `parser` API is stable.
 - Error messages are part of the contract: `line N column M near "..."`
   built from the offending token's recorded position; action errors use
   `r.actionErrorf` (reduce-time lookahead position). Failures during
