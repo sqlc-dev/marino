@@ -2067,18 +2067,51 @@ func (n *AlterUserStmt) Accept(v Visitor) (Node, bool) {
 
 // AlterInstanceStmt modifies instance.
 // See https://dev.mysql.com/doc/refman/8.0/en/alter-instance.html
+// Exactly one of the action fields is set: ReloadTLS (with optional
+// Channel and NoRollbackOnError), RotateInnoDBMasterKey,
+// RotateBinlogMasterKey, ReloadKeyring, EnableInnoDBRedoLog, or
+// DisableInnoDBRedoLog.
 type AlterInstanceStmt struct {
 	stmtNode
 
 	ReloadTLS         bool
 	NoRollbackOnError bool
+	// Channel is the FOR CHANNEL name of RELOAD TLS (mysql_main or
+	// mysql_admin); empty when absent.
+	Channel               string
+	RotateInnoDBMasterKey bool
+	RotateBinlogMasterKey bool
+	ReloadKeyring         bool
+	EnableInnoDBRedoLog   bool
+	DisableInnoDBRedoLog  bool
 }
 
 // Restore implements Node interface.
 func (n *AlterInstanceStmt) Restore(ctx *format.RestoreCtx) error {
 	ctx.WriteKeyWord("ALTER INSTANCE")
+	switch {
+	case n.RotateInnoDBMasterKey:
+		ctx.WriteKeyWord(" ROTATE INNODB MASTER KEY")
+		return nil
+	case n.RotateBinlogMasterKey:
+		ctx.WriteKeyWord(" ROTATE BINLOG MASTER KEY")
+		return nil
+	case n.ReloadKeyring:
+		ctx.WriteKeyWord(" RELOAD KEYRING")
+		return nil
+	case n.EnableInnoDBRedoLog:
+		ctx.WriteKeyWord(" ENABLE INNODB REDO_LOG")
+		return nil
+	case n.DisableInnoDBRedoLog:
+		ctx.WriteKeyWord(" DISABLE INNODB REDO_LOG")
+		return nil
+	}
 	if n.ReloadTLS {
 		ctx.WriteKeyWord(" RELOAD TLS")
+		if n.Channel != "" {
+			ctx.WriteKeyWord(" FOR CHANNEL ")
+			ctx.WriteName(n.Channel)
+		}
 	}
 	if n.NoRollbackOnError {
 		ctx.WriteKeyWord(" NO ROLLBACK ON ERROR")

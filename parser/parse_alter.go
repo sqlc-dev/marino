@@ -57,6 +57,31 @@ func (r *rdParser) parseAlterStmtFamily() ast.StmtNode {
 		return r.parseAlterPolicyStmt()
 	case resource:
 		return r.parseAlterResourceGroupStmt()
+	case event:
+		return r.parseAlterEventStmt()
+	case view, algorithm, sql:
+		return r.parseAlterViewStmt()
+	case definer:
+		// "ALTER" "DEFINER" eq Username prefixes views and events; the
+		// token after the clause decides.
+		if r.peekPastDefiner() == event {
+			return r.parseAlterEventStmt()
+		}
+		return r.parseAlterViewStmt()
+	case procedure:
+		return r.parseAlterProcedureStmt()
+	case function:
+		return r.parseAlterFunctionStmt()
+	case server:
+		return r.parseAlterServerStmt()
+	case tablespace, undo:
+		return r.parseAlterTablespaceStmt()
+	case logfile:
+		return r.parseAlterLogfileGroupStmt()
+	case library:
+		return r.parseAlterLibraryStmt()
+	case jsonType:
+		return r.parseAlterJSONDualityViewStmt()
 	default:
 		r.unsupported(fmt.Sprintf("ALTER %s", r.at(r.i+1).lit))
 		return nil
@@ -1498,25 +1523,62 @@ func (r *rdParser) parseAlterUserStmt() ast.StmtNode {
 
 /**************************************Other ALTER kinds***************************************/
 
-// parseAlterInstanceStmt implements AlterInstanceStmt and InstanceOption.
+// parseAlterInstanceStmt implements AlterInstanceStmt and
+// InstanceOption:
+//
+//	"ROTATE" ("INNODB" | "BINLOG") "MASTER" "KEY"
+//	| "RELOAD" "TLS" ["FOR" "CHANNEL" Identifier]
+//	    ["NO" "ROLLBACK" "ON" "ERROR"]
+//	| "RELOAD" "KEYRING"
+//	| ("ENABLE" | "DISABLE") "INNODB" "REDO_LOG"
+//
+// KEYRING and REDO_LOG are not keywords and are matched in identifier
+// position.
 func (r *rdParser) parseAlterInstanceStmt() ast.StmtNode {
 	r.expect(alter)
 	r.expect(instance)
-	// InstanceOption: "RELOAD" "TLS" ["NO" "ROLLBACK" "ON" "ERROR"]
+	switch r.tok() {
+	case rotate:
+		r.advance()
+		stmt := &ast.AlterInstanceStmt{}
+		switch r.tok() {
+		case innodb:
+			stmt.RotateInnoDBMasterKey = true
+		case binlog:
+			stmt.RotateBinlogMasterKey = true
+		default:
+			r.syntaxError()
+		}
+		r.advance()
+		r.expect(master)
+		r.expect(key)
+		return stmt
+	case enable, disable:
+		stmt := &ast.AlterInstanceStmt{EnableInnoDBRedoLog: r.tok() == enable}
+		stmt.DisableInnoDBRedoLog = !stmt.EnableInnoDBRedoLog
+		r.advance()
+		r.expect(innodb)
+		r.expectIdentLit("REDO_LOG")
+		return stmt
+	}
 	r.expect(reload)
-	r.expect(tls)
+	if r.tok() != tls {
+		r.expectIdentLit("KEYRING")
+		return &ast.AlterInstanceStmt{ReloadKeyring: true}
+	}
+	r.advance()
+	stmt := &ast.AlterInstanceStmt{ReloadTLS: true}
+	if r.accept(forKwd) {
+		r.expect(channel)
+		stmt.Channel = r.parseIdentifier()
+	}
 	if r.accept(no) {
 		r.expect(rollback)
 		r.expect(on)
 		r.expect(errorKwd)
-		return &ast.AlterInstanceStmt{
-			ReloadTLS:         true,
-			NoRollbackOnError: true,
-		}
+		stmt.NoRollbackOnError = true
 	}
-	return &ast.AlterInstanceStmt{
-		ReloadTLS: true,
-	}
+	return stmt
 }
 
 // parseAlterRangeStmt implements AlterRangeStmt:

@@ -95,6 +95,77 @@ func (r *rdParser) parseDropStmtFamily() ast.StmtNode {
 		return r.parseDropBindingStmt()
 	case procedure:
 		return r.parseDropProcedureStmt()
+	case event:
+		// DropEventStmt: "DROP" "EVENT" IfExists TableName
+		r.advance()
+		r.advance()
+		ifExists := r.parseIfExists()
+		return &ast.DropEventStmt{IfExists: ifExists, EventName: r.parseTableName()}
+	case trigger:
+		// DropTriggerStmt: "DROP" "TRIGGER" IfExists TableName
+		r.advance()
+		r.advance()
+		ifExists := r.parseIfExists()
+		return &ast.DropTriggerStmt{IfExists: ifExists, TriggerName: r.parseTableName()}
+	case function:
+		// DropFunctionStmt: "DROP" "FUNCTION" IfExists TableName
+		r.advance()
+		r.advance()
+		ifExists := r.parseIfExists()
+		return &ast.DropFunctionStmt{IfExists: ifExists, FunctionName: r.parseTableName()}
+	case server:
+		// DropServerStmt: "DROP" "SERVER" IfExists Identifier
+		r.advance()
+		r.advance()
+		ifExists := r.parseIfExists()
+		return &ast.DropServerStmt{IfExists: ifExists, ServerName: ast.NewCIStr(r.parseIdentifier())}
+	case tablespace, undo:
+		// DropTablespaceStmt: "DROP" ["UNDO"] "TABLESPACE" Identifier
+		// TablespaceOptions
+		r.advance()
+		stmt := &ast.DropTablespaceStmt{Undo: r.accept(undo)}
+		r.expect(tablespace)
+		stmt.Name = ast.NewCIStr(r.parseIdentifier())
+		stmt.Options = r.parseTablespaceOptions()
+		return stmt
+	case logfile:
+		// DropLogfileGroupStmt: "DROP" "LOGFILE" "GROUP" Identifier
+		// TablespaceOptions
+		r.advance()
+		r.advance()
+		r.expect(group)
+		stmt := &ast.DropLogfileGroupStmt{GroupName: ast.NewCIStr(r.parseIdentifier())}
+		stmt.Options = r.parseTablespaceOptions()
+		return stmt
+	case library:
+		// DropLibraryStmt: "DROP" "LIBRARY" IfExists TableName
+		r.advance()
+		r.advance()
+		ifExists := r.parseIfExists()
+		return &ast.DropLibraryStmt{IfExists: ifExists, LibraryName: r.parseTableName()}
+	case spatial:
+		// DropSpatialReferenceSystemStmt: "DROP" "SPATIAL" "REFERENCE"
+		// "SYSTEM" IfExists NUM
+		r.advance()
+		r.advance()
+		r.expectIdentLit("REFERENCE")
+		r.expect(system)
+		ifExists := r.parseIfExists()
+		return &ast.DropSpatialReferenceSystemStmt{
+			IfExists: ifExists,
+			Srid:     getUint64FromNUM(r.expect(intLit).item),
+		}
+	case masking:
+		// DropMaskingPolicyStmt: "DROP" "MASKING" "POLICY" IfExists
+		// PolicyName
+		r.advance()
+		r.advance()
+		r.expect(policy)
+		ifExists := r.parseIfExists()
+		return &ast.DropMaskingPolicyStmt{
+			IfExists:   ifExists,
+			PolicyName: ast.NewCIStr(r.parseIdentifier()),
+		}
 	default:
 		r.unsupported(fmt.Sprintf("DROP %s", r.at(r.i+1).lit))
 	}

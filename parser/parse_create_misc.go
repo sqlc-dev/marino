@@ -995,8 +995,9 @@ func (r *rdParser) parseDirectResourceGroupBackgroundOption() *ast.ResourceGroup
 // parseCreateMaskingPolicyStmt implements:
 //
 //	CreateMaskingPolicyStmt: "CREATE" OrReplace "MASKING" "POLICY"
-//	    IfNotExists PolicyName "ON" TableName '(' Identifier ')' "AS"
-//	    Expression MaskingPolicyRestrictOnOpt MaskingPolicyStateOpt
+//	    IfNotExists PolicyName "ON" TableName '(' Identifier ')'
+//	    ("AS" Expression | "USING" '(' Expression ')')
+//	    MaskingPolicyRestrictOnOpt MaskingPolicyStateOpt
 func (r *rdParser) parseCreateMaskingPolicyStmt() ast.StmtNode {
 	r.expect(create)
 	orReplace := false
@@ -1014,8 +1015,17 @@ func (r *rdParser) parseCreateMaskingPolicyStmt() ast.StmtNode {
 	r.expect(int('('))
 	column := r.parseIdentifier()
 	r.expect(int(')'))
-	r.expect(as)
-	expr := r.parseExpression()
+	var expr ast.ExprNode
+	usingForm := false
+	if r.accept(using) {
+		usingForm = true
+		r.expect(int('('))
+		expr = r.parseExpression()
+		r.expect(int(')'))
+	} else {
+		r.expect(as)
+		expr = r.parseExpression()
+	}
 	restrictOps := r.parseMaskingPolicyRestrictOnOpt()
 	state := r.parseMaskingPolicyStateOpt()
 	if orReplace && ifNotExists {
@@ -1030,6 +1040,7 @@ func (r *rdParser) parseCreateMaskingPolicyStmt() ast.StmtNode {
 		Expr:               expr,
 		RestrictOps:        restrictOps,
 		MaskingPolicyState: *state,
+		Using:              usingForm,
 	}
 }
 

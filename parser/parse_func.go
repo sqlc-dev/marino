@@ -101,6 +101,25 @@ func (r *rdParser) parseSimpleExprAtom() ast.ExprNode {
 			return result
 		}
 		return r.setOrigin(r.parseSubSelect(), start)
+	case jsonDualityObject:
+		// SimpleExpr: "JSON_DUALITY_OBJECT" '(' [stringLit ':' Expression
+		// (',' stringLit ':' Expression)*] ')' — the select-list
+		// constructor of JSON duality views (MySQL 26.7 §15.1.14).
+		r.advance()
+		r.expect(int('('))
+		x := &ast.JSONDualityObjectExpr{}
+		if r.tok() != int(')') {
+			for {
+				key := r.expect(stringLit).lit
+				r.expect(int(':'))
+				x.Items = append(x.Items, &ast.JSONDualityObjectItem{Key: key, Value: r.parseExpression()})
+				if !r.accept(int(',')) {
+					break
+				}
+			}
+		}
+		r.expect(int(')'))
+		return r.setOrigin(x, start)
 	case row:
 		// SimpleExpr: "ROW" '(' ExpressionList ',' Expression ')'
 		r.advance()

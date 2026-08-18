@@ -73,14 +73,15 @@ func (r *rdParser) parseProcedureCall() *ast.FuncCallExpr {
 
 // parseCreateProcedureStmt implements:
 //
-//	CreateProcedureStmt: "CREATE" "PROCEDURE" IfNotExists TableName '('
-//	    OptSpPdparams ')' ProcedureProcStmt
+//	CreateProcedureStmt: "CREATE" DefinerOpt "PROCEDURE" IfNotExists
+//	    TableName '(' OptSpPdparams ')' ProcedureProcStmt
 //
 // The action records the body statement's source text — from the body's
 // first token through the reduce-time lookahead (parser.yylval.offset) —
 // and the parameter list's source text between the parentheses.
 func (r *rdParser) parseCreateProcedureStmt() ast.StmtNode {
 	r.expect(create)
+	definerV := r.parseDefinerOpt()
 	r.expect(procedure)
 	ifNotExists := r.parseIfNotExists()
 	procName := r.parseTableName()
@@ -94,6 +95,7 @@ func (r *rdParser) parseCreateProcedureStmt() ast.StmtNode {
 		ProcedureName:  procName,
 		ProcedureParam: params,
 		ProcedureBody:  body,
+		Definer:        definerV,
 	}
 	r.p.setNodeText(body, strings.TrimSpace(r.src[bodyStart:r.cur().offset]))
 	startOffset := lparen.offset
@@ -192,6 +194,11 @@ func (r *rdParser) parseProcedureProcStmt() ast.StmtNode {
 		// ProcedureLeave: "LEAVE" identifier
 		r.advance()
 		return &ast.ProcedureJump{Name: r.expect(identifier).lit, IsLeave: true}
+	case returnKwd:
+		// ReturnStmt: "RETURN" Expression — the routine_body form of
+		// stored functions; MySQL rejects it elsewhere at a later stage.
+		r.advance()
+		return &ast.ReturnStmt{Expr: r.parseExpression()}
 	case identifier:
 		if r.la(1) == int(':') {
 			return r.parseProcedureLabeled()
