@@ -527,6 +527,7 @@ const (
 	ColumnOptionStorage
 	ColumnOptionAutoRandom
 	ColumnOptionSecondaryEngineAttribute
+	ColumnOptionSrid
 )
 
 var (
@@ -564,6 +565,8 @@ type ColumnOption struct {
 	ConstraintName      string
 	PrimaryKeyTp        PrimaryKeyType
 	SecondaryEngineAttr string
+	// UintValue is only for ColumnOptionSrid.
+	UintValue uint64
 }
 
 // Restore implements Node interface.
@@ -686,6 +689,9 @@ func (n *ColumnOption) Restore(ctx *format.RestoreCtx) error {
 		ctx.WriteKeyWord("SECONDARY_ENGINE_ATTRIBUTE")
 		ctx.WritePlain(" = ")
 		ctx.WriteString(n.StrValue)
+	case ColumnOptionSrid:
+		ctx.WriteKeyWord("SRID ")
+		ctx.WritePlainf("%d", n.UintValue)
 	default:
 		return errors.New("An error occurred while splicing ColumnOption")
 	}
@@ -933,6 +939,8 @@ const (
 	// It will be rewritten into ConstraintColumnar after preprocessor phase.
 	ConstraintVector
 	ConstraintColumnar
+	// ConstraintSpatial is only used in AST.
+	ConstraintSpatial
 )
 
 // Constraint is constraint for table definition.
@@ -987,6 +995,8 @@ func (n *Constraint) Restore(ctx *format.RestoreCtx) error {
 		ctx.WriteKeyWord("UNIQUE INDEX")
 	case ConstraintFulltext:
 		ctx.WriteKeyWord("FULLTEXT")
+	case ConstraintSpatial:
+		ctx.WriteKeyWord("SPATIAL")
 	case ConstraintCheck:
 		if n.Name != "" {
 			ctx.WriteKeyWord("CONSTRAINT ")

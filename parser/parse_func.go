@@ -1428,6 +1428,17 @@ func (r *rdParser) parseCastType() *types.FieldType {
 		tp.SetCharset(charset.CharsetBin)
 		tp.SetCollate(charset.CollationBin)
 		return tp
+	case geometryType, point, linestringType, polygonType, multipointType,
+		multilinestringType, multipolygonType, geometryCollectionType:
+		// CastType: the spatial types — castable since MySQL 8.0.24
+		// (MySQL 26.7 §14.10); postdates the goyacc grammar.
+		b := spatialTypeByte(r.tok())
+		r.advance()
+		tp := types.NewFieldType(b)
+		tp.SetCharset(charset.CharsetBin)
+		tp.SetCollate(charset.CollationBin)
+		tp.AddFlag(mysql.BinaryFlag)
+		return tp
 	case vectorType:
 		// "VECTOR" OptVectorElementType OptFieldLen
 		r.advance()

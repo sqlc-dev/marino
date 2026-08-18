@@ -320,6 +320,20 @@ func (r *rdParser) parseStringOrDateAndTimeType() *types.FieldType {
 		tp.SetCharset(charset.CharsetBin)
 		tp.SetCollate(charset.CollationBin)
 		return tp
+	case geometryType, point, linestringType, polygonType, multipointType,
+		multilinestringType, multipolygonType, geometryCollectionType:
+		// SpatialType: "GEOMETRY" | "POINT" | "LINESTRING" | "POLYGON"
+		// | "MULTIPOINT" | "MULTILINESTRING" | "MULTIPOLYGON"
+		// | "GEOMETRYCOLLECTION" — MySQL 26.7 §13.4.1. The spatial types
+		// postdate the goyacc grammar; GEOMCOLLECTION lexes as its
+		// GEOMETRYCOLLECTION synonym. Spatial values are stored in a
+		// binary format, like JSON.
+		b := spatialTypeByte(r.tok())
+		r.advance()
+		tp := types.NewFieldType(b)
+		tp.SetCharset(charset.CharsetBin)
+		tp.SetCollate(charset.CollationBin)
+		return tp
 	case long:
 		return r.parseLongType()
 	case vectorType:
@@ -388,6 +402,29 @@ func (r *rdParser) parseStringOrDateAndTimeType() *types.FieldType {
 	}
 	r.syntaxError()
 	return nil
+}
+
+// spatialTypeByte maps a spatial type keyword token to its type byte.
+func spatialTypeByte(tok int) byte {
+	switch tok {
+	case geometryType:
+		return mysql.TypeGeometry
+	case point:
+		return mysql.TypePoint
+	case linestringType:
+		return mysql.TypeLineString
+	case polygonType:
+		return mysql.TypePolygon
+	case multipointType:
+		return mysql.TypeMultiPoint
+	case multilinestringType:
+		return mysql.TypeMultiLineString
+	case multipolygonType:
+		return mysql.TypeMultiPolygon
+	case geometryCollectionType:
+		return mysql.TypeGeometryCollection
+	}
+	return 0
 }
 
 // parseCharTail finishes `Char/NChar FieldLen OptBinary` and

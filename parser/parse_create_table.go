@@ -331,7 +331,7 @@ func (r *rdParser) parseTableElementList() []interface{} {
 // ConstraintWithColumnarIndex.
 func (r *rdParser) parseTableElement() interface{} {
 	switch r.tok() {
-	case constraint, primary, unique, fulltext, foreign, check, key, index:
+	case constraint, primary, unique, fulltext, spatial, foreign, check, key, index:
 		// Constraint: ConstraintKeywordOpt ConstraintElem
 		return r.parseConstraint()
 	case vectorType, columnar:

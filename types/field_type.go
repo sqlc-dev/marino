@@ -678,6 +678,10 @@ func (ft *FieldType) RestoreAsCastType(ctx *format.RestoreCtx, explicitCharset b
 		ctx.WriteKeyWord("YEAR")
 	case mysql.TypeTiDBVectorFloat32:
 		ctx.WriteKeyWord("VECTOR")
+	case mysql.TypeGeometry, mysql.TypePoint, mysql.TypeLineString,
+		mysql.TypePolygon, mysql.TypeMultiPoint, mysql.TypeMultiLineString,
+		mysql.TypeMultiPolygon, mysql.TypeGeometryCollection:
+		ctx.WriteKeyWord(TypeStr(ft.tp))
 	}
 	if ft.array {
 		ctx.WritePlain(" ")

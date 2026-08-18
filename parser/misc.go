@@ -450,6 +450,9 @@ var tokenMap = map[string]int{
 	"GC_TTL":                         gcTTL,
 	"GENERAL":                        general,
 	"GENERATED":                      generated,
+	"GEOMCOLLECTION":                 geometryCollectionType,
+	"GEOMETRY":                       geometryType,
+	"GEOMETRYCOLLECTION":             geometryCollectionType,
 	"GET":                            get,
 	"GET_FORMAT":                     getFormat,
 	"GLOBAL":                         global,
@@ -557,6 +560,7 @@ var tokenMap = map[string]int{
 	"LITE":                           lite,
 	"LINEAR":                         linear,
 	"LINES":                          lines,
+	"LINESTRING":                     linestringType,
 	"LIST":                           list,
 	"LOAD":                           load,
 	"LOCAL":                          local,
@@ -608,6 +612,9 @@ var tokenMap = map[string]int{
 	"MODIFY":                         modify,
 	"MONITOR":                        monitor,
 	"MONTH":                          month,
+	"MULTILINESTRING":                multilinestringType,
+	"MULTIPOINT":                     multipointType,
+	"MULTIPOLYGON":                   multipolygonType,
 	"MUTEX":                          mutex,
 	"NAMES":                          names,
 	"NATIONAL":                       national,
@@ -688,6 +695,7 @@ var tokenMap = map[string]int{
 	"POINT":                          point,
 	"POLICIES":                       policies,
 	"POLICY":                         policy,
+	"POLYGON":                        polygonType,
 	"POSITION":                       position,
 	"PRE_SPLIT_REGIONS":              preSplitRegions,
 	"PRECEDES":                       precedes,
@@ -847,6 +855,7 @@ var tokenMap = map[string]int{
 	"SQLEXCEPTION":                   sqlexception,
 	"SQLSTATE":                       sqlstate,
 	"SQLWARNING":                     sqlwarning,
+	"SRID":                           srid,
 	"SSL":                            ssl,
 	"STACKED":                        stacked,
 	"STALENESS":                      staleness,
@@ -1087,10 +1096,11 @@ var windowFuncTokenMap = map[string]int{
 
 // aliases are strings directly map to another string and use the same token.
 var aliases = map[string]string{
-	"SCHEMA":  "DATABASE",
-	"SCHEMAS": "DATABASES",
-	"DEC":     "DECIMAL",
-	"SUBSTR":  "SUBSTRING",
+	"SCHEMA":         "DATABASE",
+	"SCHEMAS":        "DATABASES",
+	"DEC":            "DECIMAL",
+	"GEOMCOLLECTION": "GEOMETRYCOLLECTION",
+	"SUBSTR":         "SUBSTRING",
 }
 
 // hintedTokens is a set of tokens which recognizes a hint.
