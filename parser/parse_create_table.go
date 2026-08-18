@@ -49,12 +49,34 @@ func (r *rdParser) parseCreateStmtFamily() ast.StmtNode {
 		return r.parseCreateBindingStmt()
 	case database:
 		return r.parseCreateDatabaseStmt()
-	case index, unique, spatial, fulltext, vectorType, columnar:
+	case spatial:
+		if r.la(2) != index {
+			// "CREATE" "SPATIAL" "REFERENCE" "SYSTEM" ...
+			return r.parseCreateSpatialReferenceSystemStmt()
+		}
+		return r.parseCreateIndexStmt()
+	case index, unique, fulltext, vectorType, columnar:
 		// IndexKeyTypeOpt "INDEX"
 		return r.parseCreateIndexStmt()
-	case view, algorithm, definer, sql:
-		// ViewAlgorithm/ViewDefiner/ViewSQLSecurity ... "VIEW"
+	case view, algorithm, sql:
+		// ViewAlgorithm/ViewSQLSecurity ... "VIEW"
 		return r.parseCreateViewStmt()
+	case definer:
+		// "CREATE" "DEFINER" eq Username prefixes views, events,
+		// triggers, and stored routines; the token after the clause
+		// decides.
+		switch r.peekPastDefiner() {
+		case event:
+			return r.parseCreateEventStmt()
+		case trigger:
+			return r.parseCreateTriggerStmt()
+		case procedure:
+			return r.parseCreateProcedureStmt()
+		case function:
+			return r.parseCreateFunctionFamily()
+		default:
+			return r.parseCreateViewStmt()
+		}
 	case or:
 		// "CREATE" "OR" "REPLACE" ...
 		switch r.la(3) {
@@ -62,6 +84,12 @@ func (r *rdParser) parseCreateStmtFamily() ast.StmtNode {
 			return r.parseCreatePolicyStmt()
 		case masking:
 			return r.parseCreateMaskingPolicyStmt()
+		case spatial:
+			return r.parseCreateSpatialReferenceSystemStmt()
+		case library:
+			return r.parseCreateLibraryStmt()
+		case jsonType:
+			return r.parseCreateJSONDualityViewStmt()
 		default:
 			return r.parseCreateViewStmt()
 		}
@@ -85,9 +113,21 @@ func (r *rdParser) parseCreateStmtFamily() ast.StmtNode {
 	case procedure:
 		return r.parseCreateProcedureStmt()
 	case function, aggregate:
-		// Only the loadable function form parses; a stored function
-		// fails inside (at its parameter list).
-		return r.parseCreateLoadableFunctionStmt()
+		return r.parseCreateFunctionFamily()
+	case event:
+		return r.parseCreateEventStmt()
+	case trigger:
+		return r.parseCreateTriggerStmt()
+	case server:
+		return r.parseCreateServerStmt()
+	case tablespace, undo:
+		return r.parseCreateTablespaceStmt()
+	case logfile:
+		return r.parseCreateLogfileGroupStmt()
+	case library:
+		return r.parseCreateLibraryStmt()
+	case jsonType:
+		return r.parseCreateJSONDualityViewStmt()
 	default:
 		// No production continues here; the automaton shifts CREATE and
 		// errors at the lookahead, so advance before reporting.

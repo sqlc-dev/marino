@@ -81,6 +81,7 @@ const (
 	as                         = 57369
 	asc                        = 57370
 	ascii                      = 57608
+	at                         = 58296
 	asof                       = 57347
 	assignmentEq               = 58207
 	attribute                  = 57609
@@ -98,6 +99,7 @@ const (
 	backups                    = 57620
 	batch                      = 58126
 	bdr                        = 57621
+	before                     = 58286
 	begin                      = 57622
 	bernoulli                  = 57623
 	between                    = 57371
@@ -197,6 +199,7 @@ const (
 	commit                     = 57657
 	committed                  = 57658
 	compact                    = 57659
+	completion                 = 58297
 	component                  = 58261
 	compress                   = 58007
 	compressed                 = 57660
@@ -204,12 +207,14 @@ const (
 	compressionLevel           = 57662
 	compressionType            = 57663
 	concurrency                = 57664
+	concurrent                 = 58292
 	config                     = 57665
 	connection                 = 57666
 	consistency                = 57667
 	consistent                 = 57668
 	constraint                 = 57386
 	constraints                = 58008
+	contains                   = 58298
 	context                    = 57669
 	continueKwd                = 57387
 	convert                    = 57388
@@ -244,6 +249,7 @@ const (
 	databases                  = 57399
 	dateAdd                    = 58013
 	dateSub                    = 58014
+	datafile                   = 58299
 	dateType                   = 57681
 	datetimeType               = 57682
 	day                        = 57683
@@ -267,6 +273,7 @@ const (
 	depth                      = 58163
 	desc                       = 57409
 	describe                   = 57410
+	deterministic              = 58300
 	diagnostics                = 58253
 	digest                     = 57688
 	directory                  = 57689
@@ -288,10 +295,13 @@ const (
 	dry                        = 58167
 	dryRun                     = 58017
 	dual                       = 57416
+	duality                    = 58301
 	dump                       = 58018
+	dumpfile                   = 58293
 	duplicate                  = 57695
 	dynamic                    = 57696
 	elseIfKwd                  = 57418
+	each                       = 58302
 	elseKwd                    = 57417
 	empty                      = 58220
 	enable                     = 57697
@@ -301,6 +311,7 @@ const (
 	encryptionKeyFile          = 57700
 	encryptionMethod           = 57701
 	end                        = 57702
+	ends                       = 58303
 	endTime                    = 58019
 	enforced                   = 57703
 	engine                     = 57704
@@ -314,6 +325,7 @@ const (
 	escaped                    = 57420
 	event                      = 57711
 	events                     = 57712
+	every                      = 58304
 	evolve                     = 57713
 	exact                      = 58020
 	except                     = 57421
@@ -338,6 +350,7 @@ const (
 	fetch                      = 57426
 	fields                     = 57723
 	file                       = 57724
+	filter                     = 58287
 	first                      = 57725
 	firstValue                 = 57427
 	fixed                      = 57726
@@ -351,6 +364,7 @@ const (
 	followerConstraints        = 58026
 	followers                  = 58027
 	following                  = 57728
+	follows                    = 58305
 	forKwd                     = 57431
 	force                      = 57432
 	foreign                    = 57433
@@ -373,6 +387,8 @@ const (
 	group                      = 57438
 	groupConcat                = 58031
 	groups                     = 57439
+	groupReplication           = 58288
+	gtids                      = 58289
 	handler                    = 57736
 	hash                       = 57737
 	having                     = 57440
@@ -410,6 +426,7 @@ const (
 	indexes                    = 57751
 	infile                     = 57450
 	inner                      = 57451
+	innodb                     = 58306
 	inout                      = 57452
 	inplace                    = 58033
 	insert                     = 57453
@@ -434,6 +451,7 @@ const (
 	inverted                   = 58036
 	invisible                  = 57754
 	invoker                    = 57755
+	ioThread                   = 58290
 	io                         = 57756
 	ioReadBandwidth            = 58037
 	ioWriteBandwidth           = 58038
@@ -448,6 +466,7 @@ const (
 	jsonArrayagg               = 58039
 	jsonObjectAgg              = 58040
 	jsonSumCrc32               = 58041
+	jsonDualityObject          = 58307
 	jsonType                   = 57760
 	jss                        = 58211
 	juss                       = 58212
@@ -492,6 +511,7 @@ const (
 	lock                       = 57484
 	locked                     = 57773
 	log                        = 58047
+	logfile                    = 58308
 	logs                       = 57774
 	long                       = 57485
 	longblobType               = 57486
@@ -543,6 +563,7 @@ const (
 	metadata                   = 58051
 	microsecond                = 57788
 	middleIntType              = 57494
+	migrate                    = 58280
 	min                        = 58052
 	minRows                    = 57791
 	minValue                   = 57790
@@ -552,6 +573,7 @@ const (
 	mod                        = 57497
 	mode                       = 57792
 	moderated                  = 58114
+	modifies                   = 58309
 	modify                     = 57793
 	monitor                    = 57794
 	month                      = 57795
@@ -601,6 +623,7 @@ const (
 	oltpWriteOnly              = 57817
 	on                         = 57506
 	onDuplicate                = 57820
+	one                        = 58281
 	online                     = 57818
 	only                       = 57819
 	open                       = 57821
@@ -610,6 +633,7 @@ const (
 	option                     = 57508
 	optional                   = 57822
 	optionally                 = 57509
+	options                    = 58310
 	optionallyEnclosedBy       = 57351
 	or                         = 57510
 	order                      = 57511
@@ -639,6 +663,7 @@ const (
 	percentRank                = 57517
 	persist                    = 58265
 	pessimistic                = 58176
+	phase                      = 58282
 	pipes                      = 57359
 	pipesAsOr                  = 57838
 	placement                  = 58057
@@ -651,11 +676,13 @@ const (
 	policy                     = 57841
 	position                   = 58060
 	preSplitRegions            = 57845
+	precedes                   = 58311
 	preceding                  = 57842
 	precisionType              = 57518
 	predicate                  = 58061
 	prepare                    = 57843
 	preserve                   = 57844
+	prev                       = 58294
 	primary                    = 57519
 	primaryRegion              = 58062
 	priority                   = 58063
@@ -679,6 +706,7 @@ const (
 	rateLimit                  = 57857
 	raw                        = 58178
 	read                       = 57523
+	reads                      = 58312
 	readOnly                   = 58066
 	realType                   = 57524
 	rebuild                    = 57858
@@ -719,6 +747,7 @@ const (
 	restores                   = 57876
 	restrict                   = 57533
 	resume                     = 57877
+	returnKwd                  = 58313
 	returns                    = 58267
 	reuse                      = 57878
 	reverse                    = 57879
@@ -728,6 +757,7 @@ const (
 	role                       = 57880
 	rollback                   = 57881
 	rollup                     = 57882
+	rotate                     = 58314
 	routine                    = 57883
 	row                        = 57537
 	rowCount                   = 57884
@@ -761,6 +791,7 @@ const (
 	sequence                   = 57899
 	serial                     = 57900
 	serializable               = 57901
+	server                     = 58315
 	session                    = 57902
 	sessionStates              = 58185
 	set                        = 57542
@@ -794,6 +825,7 @@ const (
 	sqlCalcFoundRows           = 57551
 	sqlNoCache                 = 57919
 	sqlSmallResult             = 57552
+	sqlThread                  = 58291
 	sqlTsiDay                  = 57920
 	sqlTsiHour                 = 57921
 	sqlTsiMinute               = 57922
@@ -812,6 +844,7 @@ const (
 	startTS                    = 58080
 	startTime                  = 58079
 	starting                   = 57554
+	starts                     = 58316
 	statistics                 = 58187
 	stats                      = 58188
 	statsAutoRecalc            = 57929
@@ -851,6 +884,7 @@ const (
 	sum                        = 58090
 	super                      = 57942
 	survivalPreferences        = 58091
+	suspend                    = 58283
 	swaps                      = 57943
 	switchGroup                = 58092
 	switchesSym                = 57944
@@ -924,6 +958,8 @@ const (
 	uncommitted                = 57973
 	undefined                  = 57974
 	underscoreCS               = 57352
+	undo                       = 58317
+	undofile                   = 58318
 	unicodeSym                 = 57975
 	uninstall                  = 58271
 	union                      = 57569
@@ -981,8 +1017,12 @@ const (
 	withSysTable               = 57991
 	without                    = 57990
 	workload                   = 57992
+	wrapper                    = 58319
 	write                      = 57592
 	x509                       = 57993
+	xa                         = 58284
+	xid                        = 58285
+	xml                        = 58295
 	xor                        = 57593
 	yearMonth                  = 57594
 	yearType                   = 57994

@@ -526,6 +526,104 @@ const (
 	LoadIndexCommand = "LOAD INDEX INTO CACHE"
 	// ResetPersistCommand represents RESET PERSIST statement
 	ResetPersistCommand = "RESET PERSIST"
+	// XAStartCommand represents XA START statement
+	XAStartCommand = "XA START"
+	// XAEndCommand represents XA END statement
+	XAEndCommand = "XA END"
+	// XAPrepareCommand represents XA PREPARE statement
+	XAPrepareCommand = "XA PREPARE"
+	// XACommitCommand represents XA COMMIT statement
+	XACommitCommand = "XA COMMIT"
+	// XARollbackCommand represents XA ROLLBACK statement
+	XARollbackCommand = "XA ROLLBACK"
+	// XARecoverCommand represents XA RECOVER statement
+	XARecoverCommand = "XA RECOVER"
+	// LockInstanceCommand represents LOCK INSTANCE FOR BACKUP statement
+	LockInstanceCommand = "LOCK INSTANCE"
+	// UnlockInstanceCommand represents UNLOCK INSTANCE statement
+	UnlockInstanceCommand = "UNLOCK INSTANCE"
+	// PurgeBinaryLogsCommand represents PURGE BINARY LOGS statement
+	PurgeBinaryLogsCommand = "PURGE BINARY LOGS"
+	// ResetBinaryLogsAndGtidsCommand represents RESET BINARY LOGS AND GTIDS statement
+	ResetBinaryLogsAndGtidsCommand = "RESET BINARY LOGS AND GTIDS"
+	// ChangeReplicationFilterCommand represents CHANGE REPLICATION FILTER statement
+	ChangeReplicationFilterCommand = "CHANGE REPLICATION FILTER"
+	// ResetReplicaCommand represents RESET REPLICA statement
+	ResetReplicaCommand = "RESET REPLICA"
+	// StartReplicaCommand represents START REPLICA statement
+	StartReplicaCommand = "START REPLICA"
+	// StopReplicaCommand represents STOP REPLICA statement
+	StopReplicaCommand = "STOP REPLICA"
+	// StartGroupReplicationCommand represents START GROUP_REPLICATION statement
+	StartGroupReplicationCommand = "START GROUP_REPLICATION"
+	// StopGroupReplicationCommand represents STOP GROUP_REPLICATION statement
+	StopGroupReplicationCommand = "STOP GROUP_REPLICATION"
+	// HandlerOpenCommand represents HANDLER ... OPEN statement
+	HandlerOpenCommand = "HANDLER OPEN"
+	// HandlerReadCommand represents HANDLER ... READ statement
+	HandlerReadCommand = "HANDLER READ"
+	// HandlerCloseCommand represents HANDLER ... CLOSE statement
+	HandlerCloseCommand = "HANDLER CLOSE"
+	// ImportTableCommand represents IMPORT TABLE statement
+	ImportTableCommand = "IMPORT TABLE"
+	// LoadXMLCommand represents LOAD XML statement
+	LoadXMLCommand = "LOAD XML"
+	// CreateEventCommand represents CREATE EVENT statement
+	CreateEventCommand = "CREATE EVENT"
+	// AlterEventCommand represents ALTER EVENT statement
+	AlterEventCommand = "ALTER EVENT"
+	// DropEventCommand represents DROP EVENT statement
+	DropEventCommand = "DROP EVENT"
+	// CreateTriggerCommand represents CREATE TRIGGER statement
+	CreateTriggerCommand = "CREATE TRIGGER"
+	// DropTriggerCommand represents DROP TRIGGER statement
+	DropTriggerCommand = "DROP TRIGGER"
+	// CreateFunctionCommand represents CREATE FUNCTION statement for stored functions
+	CreateFunctionCommand = "CREATE FUNCTION"
+	// AlterFunctionCommand represents ALTER FUNCTION statement
+	AlterFunctionCommand = "ALTER FUNCTION"
+	// DropFunctionCommand represents DROP FUNCTION statement
+	DropFunctionCommand = "DROP FUNCTION"
+	// AlterProcedureCommand represents ALTER PROCEDURE statement
+	AlterProcedureCommand = "ALTER PROCEDURE"
+	// ReturnCommand represents RETURN statement
+	ReturnCommand = "RETURN"
+	// AlterViewCommand represents ALTER VIEW statement
+	AlterViewCommand = "ALTER VIEW"
+	// CreateServerCommand represents CREATE SERVER statement
+	CreateServerCommand = "CREATE SERVER"
+	// AlterServerCommand represents ALTER SERVER statement
+	AlterServerCommand = "ALTER SERVER"
+	// DropServerCommand represents DROP SERVER statement
+	DropServerCommand = "DROP SERVER"
+	// CreateTablespaceCommand represents CREATE TABLESPACE statement
+	CreateTablespaceCommand = "CREATE TABLESPACE"
+	// AlterTablespaceCommand represents ALTER TABLESPACE statement
+	AlterTablespaceCommand = "ALTER TABLESPACE"
+	// DropTablespaceCommand represents DROP TABLESPACE statement
+	DropTablespaceCommand = "DROP TABLESPACE"
+	// CreateLogfileGroupCommand represents CREATE LOGFILE GROUP statement
+	CreateLogfileGroupCommand = "CREATE LOGFILE GROUP"
+	// AlterLogfileGroupCommand represents ALTER LOGFILE GROUP statement
+	AlterLogfileGroupCommand = "ALTER LOGFILE GROUP"
+	// DropLogfileGroupCommand represents DROP LOGFILE GROUP statement
+	DropLogfileGroupCommand = "DROP LOGFILE GROUP"
+	// CreateSpatialReferenceSystemCommand represents CREATE SPATIAL REFERENCE SYSTEM statement
+	CreateSpatialReferenceSystemCommand = "CREATE SPATIAL REFERENCE SYSTEM"
+	// DropSpatialReferenceSystemCommand represents DROP SPATIAL REFERENCE SYSTEM statement
+	DropSpatialReferenceSystemCommand = "DROP SPATIAL REFERENCE SYSTEM"
+	// CreateLibraryCommand represents CREATE LIBRARY statement
+	CreateLibraryCommand = "CREATE LIBRARY"
+	// AlterLibraryCommand represents ALTER LIBRARY statement
+	AlterLibraryCommand = "ALTER LIBRARY"
+	// DropLibraryCommand represents DROP LIBRARY statement
+	DropLibraryCommand = "DROP LIBRARY"
+	// CreateJSONDualityViewCommand represents CREATE JSON DUALITY VIEW statement
+	CreateJSONDualityViewCommand = "CREATE JSON DUALITY VIEW"
+	// AlterJSONDualityViewCommand represents ALTER JSON DUALITY VIEW statement
+	AlterJSONDualityViewCommand = "ALTER JSON DUALITY VIEW"
+	// DropMaskingPolicyCommand represents DROP MASKING POLICY statement
+	DropMaskingPolicyCommand = "DROP MASKING POLICY"
 	// UnknownCommand represents unknown statements
 	UnknownCommand = "UNKNOWN"
 	// SetOprCommand represents UNION/INTERSECT/EXCEPT statement
@@ -1501,4 +1599,238 @@ func (n *LoadIndexStmt) SEMCommand() string {
 // SEMCommand returns the command string for the statement.
 func (n *ResetPersistStmt) SEMCommand() string {
 	return ResetPersistCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *XAStmt) SEMCommand() string {
+	switch n.Op {
+	case XAOpStart:
+		return XAStartCommand
+	case XAOpEnd:
+		return XAEndCommand
+	case XAOpPrepare:
+		return XAPrepareCommand
+	case XAOpCommit:
+		return XACommitCommand
+	case XAOpRollback:
+		return XARollbackCommand
+	case XAOpRecover:
+		return XARecoverCommand
+	}
+	return UnknownCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *LockInstanceStmt) SEMCommand() string {
+	return LockInstanceCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *UnlockInstanceStmt) SEMCommand() string {
+	return UnlockInstanceCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *PurgeBinaryLogsStmt) SEMCommand() string {
+	return PurgeBinaryLogsCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *ResetBinaryLogsAndGtidsStmt) SEMCommand() string {
+	return ResetBinaryLogsAndGtidsCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *ChangeReplicationFilterStmt) SEMCommand() string {
+	return ChangeReplicationFilterCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *ResetReplicaStmt) SEMCommand() string {
+	return ResetReplicaCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *StartReplicaStmt) SEMCommand() string {
+	return StartReplicaCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *StopReplicaStmt) SEMCommand() string {
+	return StopReplicaCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *StartGroupReplicationStmt) SEMCommand() string {
+	return StartGroupReplicationCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *StopGroupReplicationStmt) SEMCommand() string {
+	return StopGroupReplicationCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *HandlerOpenStmt) SEMCommand() string {
+	return HandlerOpenCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *HandlerReadStmt) SEMCommand() string {
+	return HandlerReadCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *HandlerCloseStmt) SEMCommand() string {
+	return HandlerCloseCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *ImportTableStmt) SEMCommand() string {
+	return ImportTableCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *LoadXMLStmt) SEMCommand() string {
+	return LoadXMLCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *CreateEventStmt) SEMCommand() string {
+	return CreateEventCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *AlterEventStmt) SEMCommand() string {
+	return AlterEventCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *DropEventStmt) SEMCommand() string {
+	return DropEventCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *CreateTriggerStmt) SEMCommand() string {
+	return CreateTriggerCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *DropTriggerStmt) SEMCommand() string {
+	return DropTriggerCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *CreateFunctionStmt) SEMCommand() string {
+	return CreateFunctionCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *AlterFunctionStmt) SEMCommand() string {
+	return AlterFunctionCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *DropFunctionStmt) SEMCommand() string {
+	return DropFunctionCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *AlterProcedureStmt) SEMCommand() string {
+	return AlterProcedureCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *ReturnStmt) SEMCommand() string {
+	return ReturnCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *AlterViewStmt) SEMCommand() string {
+	return AlterViewCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *CreateServerStmt) SEMCommand() string {
+	return CreateServerCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *AlterServerStmt) SEMCommand() string {
+	return AlterServerCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *DropServerStmt) SEMCommand() string {
+	return DropServerCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *CreateTablespaceStmt) SEMCommand() string {
+	return CreateTablespaceCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *AlterTablespaceStmt) SEMCommand() string {
+	return AlterTablespaceCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *DropTablespaceStmt) SEMCommand() string {
+	return DropTablespaceCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *CreateLogfileGroupStmt) SEMCommand() string {
+	return CreateLogfileGroupCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *AlterLogfileGroupStmt) SEMCommand() string {
+	return AlterLogfileGroupCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *DropLogfileGroupStmt) SEMCommand() string {
+	return DropLogfileGroupCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *CreateSpatialReferenceSystemStmt) SEMCommand() string {
+	return CreateSpatialReferenceSystemCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *DropSpatialReferenceSystemStmt) SEMCommand() string {
+	return DropSpatialReferenceSystemCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *CreateLibraryStmt) SEMCommand() string {
+	return CreateLibraryCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *AlterLibraryStmt) SEMCommand() string {
+	return AlterLibraryCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *DropLibraryStmt) SEMCommand() string {
+	return DropLibraryCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *CreateJSONDualityViewStmt) SEMCommand() string {
+	return CreateJSONDualityViewCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *AlterJSONDualityViewStmt) SEMCommand() string {
+	return AlterJSONDualityViewCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *DropMaskingPolicyStmt) SEMCommand() string {
+	return DropMaskingPolicyCommand
 }

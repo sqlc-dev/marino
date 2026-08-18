@@ -321,10 +321,18 @@ func (r *rdParser) parseRestartStmt() ast.StmtNode {
 }
 
 // parseLockStmtFamily dispatches LOCK-leading statements: LockTablesStmt
-// here, LockStatsStmt in parse_tidb.go.
+// and LockInstanceStmt here, LockStatsStmt in parse_tidb.go.
 func (r *rdParser) parseLockStmtFamily() ast.StmtNode {
 	if r.la(1) == stats {
 		return r.parseLockStatsStmt()
+	}
+	if r.la(1) == instance {
+		// LockInstanceStmt: "LOCK" "INSTANCE" "FOR" "BACKUP"
+		r.advance()
+		r.advance()
+		r.expect(forKwd)
+		r.expect(backup)
+		return &ast.LockInstanceStmt{}
 	}
 	// LockTablesStmt: "LOCK" TablesTerminalSym TableLockList
 	r.expect(lock)
@@ -367,10 +375,17 @@ func (r *rdParser) parseTableLock() ast.TableLock {
 }
 
 // parseUnlockStmtFamily dispatches UNLOCK-leading statements:
-// UnlockTablesStmt here, UnlockStatsStmt in parse_tidb.go.
+// UnlockTablesStmt and UnlockInstanceStmt here, UnlockStatsStmt in
+// parse_tidb.go.
 func (r *rdParser) parseUnlockStmtFamily() ast.StmtNode {
 	if r.la(1) == stats {
 		return r.parseUnlockStatsStmt()
+	}
+	if r.la(1) == instance {
+		// UnlockInstanceStmt: "UNLOCK" "INSTANCE"
+		r.advance()
+		r.advance()
+		return &ast.UnlockInstanceStmt{}
 	}
 	// UnlockTablesStmt: "UNLOCK" TablesTerminalSym
 	r.expect(unlock)

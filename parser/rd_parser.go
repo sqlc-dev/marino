@@ -383,14 +383,20 @@ func (r *rdParser) parseStatement() ast.StmtNode {
 			return r.parseLoadStatsStmt()
 		case index:
 			return r.parseLoadIndexStmt()
+		case xml:
+			return r.parseLoadXMLStmt()
 		}
 		r.unsupported("LOAD statement")
 		return nil
 	case importKwd:
-		if r.la(1) != into {
-			r.unsupported("IMPORT statement")
+		switch r.la(1) {
+		case into:
+			return r.parseImportIntoStmt()
+		case tableKwd:
+			return r.parseImportTableStmt()
 		}
-		return r.parseImportIntoStmt()
+		r.unsupported("IMPORT statement")
+		return nil
 	case batch:
 		return r.parseNonTransactionalDMLStmt()
 	default:

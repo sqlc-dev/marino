@@ -126,19 +126,15 @@ func (r *rdParser) parseRepairTablesStmt() ast.StmtNode {
 	}
 }
 
-// parseCreateLoadableFunctionStmt implements CreateLoadableFunctionStmt
-// (the CREATE FUNCTION statement for loadable functions; stored
-// functions do not parse):
+// finishCreateLoadableFunctionStmt implements the rest of
+// CreateLoadableFunctionStmt (the CREATE FUNCTION statement for
+// loadable functions) after parseCreateFunctionFamily has parsed
+// through the function name:
 //
 //	"CREATE" ["AGGREGATE"] "FUNCTION" IfNotExists Identifier
 //	    "RETURNS" ("STRING" | "INTEGER" | "INT" | "REAL" | "DECIMAL")
 //	    "SONAME" stringLit
-func (r *rdParser) parseCreateLoadableFunctionStmt() ast.StmtNode {
-	r.expect(create)
-	aggregateOpt := r.accept(aggregate)
-	r.expect(function)
-	ifNotExists := r.parseIfNotExists()
-	name := r.parseIdentifier()
+func (r *rdParser) finishCreateLoadableFunctionStmt(aggregateOpt, ifNotExists bool, name ast.CIStr) ast.StmtNode {
 	r.expect(returns)
 	var returnType ast.LoadableFunctionReturnType
 	switch r.tok() {
@@ -158,7 +154,7 @@ func (r *rdParser) parseCreateLoadableFunctionStmt() ast.StmtNode {
 	return &ast.CreateLoadableFunctionStmt{
 		IfNotExists:  ifNotExists,
 		Aggregate:    aggregateOpt,
-		FunctionName: ast.NewCIStr(name),
+		FunctionName: name,
 		ReturnType:   returnType,
 		SoName:       r.expect(stringLit).lit,
 	}
@@ -355,11 +351,18 @@ func (r *rdParser) parseCacheIndexName() ast.CIStr {
 	return ast.NewCIStr(r.parseIdentifier())
 }
 
-// parseResetStmt implements the RESET statement family, of which only
-// ResetPersistStmt is supported:
-// "RESET" "PERSIST" [["IF" "EXISTS"] Identifier].
+// parseResetStmt implements the RESET statement family:
+// ResetPersistStmt ("RESET" "PERSIST" [["IF" "EXISTS"] Identifier])
+// here, with ResetReplicaStmt and ResetBinaryLogsAndGtidsStmt in
+// parse_replication.go.
 func (r *rdParser) parseResetStmt() ast.StmtNode {
-	if r.la(1) != persist {
+	switch r.la(1) {
+	case replica:
+		return r.parseResetReplicaStmt()
+	case binaryType:
+		return r.parseResetBinaryLogsAndGtidsStmt()
+	case persist:
+	default:
 		// The other RESET forms do not parse; fail at RESET the way an
 		// unregistered statement head does.
 		r.syntaxError()

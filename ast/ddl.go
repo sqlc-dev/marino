@@ -1853,6 +1853,9 @@ type CreateMaskingPolicyStmt struct {
 	Expr               ExprNode
 	RestrictOps        MaskingPolicyRestrictOps
 	MaskingPolicyState MaskingPolicyState
+	// Using selects the USING (expr) spelling of the masking expression
+	// clause over AS expr.
+	Using bool
 }
 
 // Restore implements Node interface.
@@ -1875,9 +1878,18 @@ func (n *CreateMaskingPolicyStmt) Restore(ctx *format.RestoreCtx) error {
 		return annotate(err, "An error occurred while restore CreateMaskingPolicyStmt.Column")
 	}
 	ctx.WritePlain(") ")
-	ctx.WriteKeyWord("AS ")
-	if err := n.Expr.Restore(ctx); err != nil {
-		return annotate(err, "An error occurred while restore CreateMaskingPolicyStmt.Expr")
+	if n.Using {
+		ctx.WriteKeyWord("USING ")
+		ctx.WritePlain("(")
+		if err := n.Expr.Restore(ctx); err != nil {
+			return annotate(err, "An error occurred while restore CreateMaskingPolicyStmt.Expr")
+		}
+		ctx.WritePlain(")")
+	} else {
+		ctx.WriteKeyWord("AS ")
+		if err := n.Expr.Restore(ctx); err != nil {
+			return annotate(err, "An error occurred while restore CreateMaskingPolicyStmt.Expr")
+		}
 	}
 	if n.RestrictOps != MaskingPolicyRestrictOpNone {
 		ctx.WritePlain(" ")
@@ -1922,6 +1934,35 @@ func (n *CreateMaskingPolicyStmt) Accept(v Visitor) (Node, bool) {
 		}
 		n.Expr = node.(ExprNode)
 	}
+	return v.Leave(n)
+}
+
+// DropMaskingPolicyStmt is a statement to drop a masking policy:
+// DROP MASKING POLICY [IF EXISTS] policy_name.
+type DropMaskingPolicyStmt struct {
+	ddlNode
+
+	IfExists   bool
+	PolicyName CIStr
+}
+
+// Restore implements Node interface.
+func (n *DropMaskingPolicyStmt) Restore(ctx *format.RestoreCtx) error {
+	ctx.WriteKeyWord("DROP MASKING POLICY ")
+	if n.IfExists {
+		ctx.WriteKeyWord("IF EXISTS ")
+	}
+	ctx.WriteName(n.PolicyName.O)
+	return nil
+}
+
+// Accept implements Node Accept interface.
+func (n *DropMaskingPolicyStmt) Accept(v Visitor) (Node, bool) {
+	newNode, skipChildren := v.Enter(n)
+	if skipChildren {
+		return v.Leave(newNode)
+	}
+	n = newNode.(*DropMaskingPolicyStmt)
 	return v.Leave(n)
 }
 

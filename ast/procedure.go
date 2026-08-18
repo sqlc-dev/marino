@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/sqlc-dev/marino/auth"
 	"github.com/sqlc-dev/marino/format"
 	"github.com/sqlc-dev/marino/types"
 )
@@ -238,11 +239,22 @@ type ProcedureInfo struct {
 	ProcedureParam    []*StoreParameter //procedure param
 	ProcedureBody     StmtNode          //procedure body statement
 	ProcedureParamStr string            //procedure parameter string
+	// Definer is the DEFINER = user clause; nil when absent.
+	Definer *auth.UserIdentity
 }
 
 // Restore implements Node interface.
 func (n *ProcedureInfo) Restore(ctx *format.RestoreCtx) error {
-	ctx.WriteKeyWord("CREATE PROCEDURE ")
+	ctx.WriteKeyWord("CREATE ")
+	if n.Definer != nil {
+		ctx.WriteKeyWord("DEFINER ")
+		ctx.WritePlain("= ")
+		if err := n.Definer.Restore(ctx); err != nil {
+			return annotate(err, "An error occurred while restore ProcedureInfo.Definer")
+		}
+		ctx.WritePlain(" ")
+	}
+	ctx.WriteKeyWord("PROCEDURE ")
 	if n.IfNotExists {
 		ctx.WriteKeyWord("IF NOT EXISTS ")
 	}
