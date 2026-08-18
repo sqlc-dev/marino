@@ -430,6 +430,11 @@ var unReservedKeywordNames = []string{
 	"UPGRADE",
 	"USE_FRM",
 	"VCPU",
+	"CODE",
+	"LIBRARY",
+	"MUTEX",
+	"PARSE_TREE",
+	"RELAYLOG",
 }
 
 // notKeywordTokenNames lists the NotKeywordToken production alternatives of parser.y.

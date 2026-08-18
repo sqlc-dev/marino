@@ -3174,6 +3174,21 @@ const (
 	ShowDistributions
 	ShowDistributionJobs
 	ShowAffinity
+	ShowBinaryLogs
+	ShowBinlogEvents
+	ShowRelaylogEvents
+	ShowReplicas
+	ShowEngineStatus
+	ShowEngineMutex
+	ShowCreateEvent
+	ShowCreateFunction
+	ShowCreateTrigger
+	ShowCreateLibrary
+	ShowCreateMaskingPolicy
+	ShowFunctionCode
+	ShowProcedureCode
+	ShowLibraryStatus
+	ShowParseTree
 	// showTpCount is the count of all kinds of `SHOW` statements.
 	showTpCount
 )
@@ -3230,6 +3245,14 @@ type ShowStmt struct {
 	ImportJobRaw bool   // Used for `SHOW RAW IMPORT JOB(S)` syntax
 
 	DistributionJobID *int64 // Used for `SHOW DISTRIBUTION JOB <ID>` syntax
+
+	Engine string // Used for `SHOW ENGINE <name> STATUS|MUTEX` syntax
+
+	LogName     string // Used for `SHOW BINLOG|RELAYLOG EVENTS IN '<log>'` syntax
+	Position    *int64 // Used for `SHOW BINLOG|RELAYLOG EVENTS ... FROM <pos>` syntax
+	ChannelName string // Used for `SHOW BINLOG|RELAYLOG EVENTS ... FOR CHANNEL '<channel>'` syntax
+
+	ParseTreeStmt StmtNode // Used for `SHOW PARSE_TREE <statement>` syntax
 }
 
 // Restore implements Node interface.
@@ -3272,6 +3295,57 @@ func (n *ShowStmt) Restore(ctx *format.RestoreCtx) error {
 	switch n.Tp {
 	case ShowBinlogStatus:
 		ctx.WriteKeyWord("BINARY LOG STATUS")
+	case ShowBinaryLogs:
+		ctx.WriteKeyWord("BINARY LOGS")
+	case ShowBinlogEvents, ShowRelaylogEvents:
+		if n.Tp == ShowBinlogEvents {
+			ctx.WriteKeyWord("BINLOG EVENTS")
+		} else {
+			ctx.WriteKeyWord("RELAYLOG EVENTS")
+		}
+		if n.LogName != "" {
+			ctx.WriteKeyWord(" IN ")
+			ctx.WriteString(n.LogName)
+		}
+		if n.Position != nil {
+			ctx.WriteKeyWord(" FROM ")
+			ctx.WritePlainf("%d", *n.Position)
+		}
+		if n.Limit != nil {
+			ctx.WritePlain(" ")
+			if err := n.Limit.Restore(ctx); err != nil {
+				return annotate(err, "An error occurred while restore ShowStmt.Limit")
+			}
+		}
+		if n.ChannelName != "" {
+			ctx.WriteKeyWord(" FOR CHANNEL ")
+			ctx.WriteString(n.ChannelName)
+		}
+	case ShowReplicas:
+		ctx.WriteKeyWord("REPLICAS")
+	case ShowEngineStatus:
+		ctx.WriteKeyWord("ENGINE ")
+		ctx.WriteName(n.Engine)
+		ctx.WriteKeyWord(" STATUS")
+	case ShowEngineMutex:
+		ctx.WriteKeyWord("ENGINE ")
+		ctx.WriteName(n.Engine)
+		ctx.WriteKeyWord(" MUTEX")
+	case ShowFunctionCode:
+		ctx.WriteKeyWord("FUNCTION CODE ")
+		if err := n.Procedure.Restore(ctx); err != nil {
+			return annotate(err, "An error occurred while restore ShowStmt.Procedure")
+		}
+	case ShowProcedureCode:
+		ctx.WriteKeyWord("PROCEDURE CODE ")
+		if err := n.Procedure.Restore(ctx); err != nil {
+			return annotate(err, "An error occurred while restore ShowStmt.Procedure")
+		}
+	case ShowParseTree:
+		ctx.WriteKeyWord("PARSE_TREE ")
+		if err := n.ParseTreeStmt.Restore(ctx); err != nil {
+			return annotate(err, "An error occurred while restore ShowStmt.ParseTreeStmt")
+		}
 	case ShowCreateTable:
 		ctx.WriteKeyWord("CREATE TABLE ")
 		if err := n.Table.Restore(ctx); err != nil {
@@ -3309,6 +3383,29 @@ func (n *ShowStmt) Restore(ctx *format.RestoreCtx) error {
 		if err := n.User.Restore(ctx); err != nil {
 			return annotate(err, "An error occurred while restore ShowStmt.User")
 		}
+	case ShowCreateEvent:
+		ctx.WriteKeyWord("CREATE EVENT ")
+		if err := n.Table.Restore(ctx); err != nil {
+			return annotate(err, "An error occurred while restore ShowStmt.Table")
+		}
+	case ShowCreateFunction:
+		ctx.WriteKeyWord("CREATE FUNCTION ")
+		if err := n.Procedure.Restore(ctx); err != nil {
+			return annotate(err, "An error occurred while restore ShowStmt.Procedure")
+		}
+	case ShowCreateTrigger:
+		ctx.WriteKeyWord("CREATE TRIGGER ")
+		if err := n.Table.Restore(ctx); err != nil {
+			return annotate(err, "An error occurred while restore ShowStmt.Table")
+		}
+	case ShowCreateLibrary:
+		ctx.WriteKeyWord("CREATE LIBRARY ")
+		if err := n.Table.Restore(ctx); err != nil {
+			return annotate(err, "An error occurred while restore ShowStmt.Table")
+		}
+	case ShowCreateMaskingPolicy:
+		ctx.WriteKeyWord("CREATE MASKING POLICY ")
+		ctx.WriteName(n.DBName)
 	case ShowMaskingPolicies:
 		ctx.WriteKeyWord("MASKING POLICIES FOR ")
 		if err := n.Table.Restore(ctx); err != nil {
@@ -3539,6 +3636,8 @@ func (n *ShowStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WriteKeyWord("PROCEDURE STATUS")
 		case ShowFunctionStatus:
 			ctx.WriteKeyWord("FUNCTION STATUS")
+		case ShowLibraryStatus:
+			ctx.WriteKeyWord("LIBRARY STATUS")
 		case ShowEvents:
 			ctx.WriteKeyWord("EVENTS")
 			restoreShowDatabaseNameOpt()
@@ -3650,6 +3749,13 @@ func (n *ShowStmt) Accept(v Visitor) (Node, bool) {
 			return n, false
 		}
 		n.Limit = node.(*Limit)
+	}
+	if n.ParseTreeStmt != nil {
+		node, ok := n.ParseTreeStmt.Accept(v)
+		if !ok {
+			return n, false
+		}
+		n.ParseTreeStmt = node.(StmtNode)
 	}
 	return v.Leave(n)
 }
