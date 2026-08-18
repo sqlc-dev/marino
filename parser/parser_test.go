@@ -61,6 +61,7 @@ func TestSimple(t *testing.T) {
 		"cumeDist", "denseRank", "firstValue", "lag", "lastValue", "lead", "nthValue", "ntile",
 		"over", "percentRank", "rank", "row", "rows", "rowNumber", "window", "linear",
 		"match", "until", "placement", "tablesample", "failedLoginAttempts", "passwordLockTime",
+		"cube", "external", "qualify",
 		// TODO: support the following keywords
 		// "with",
 	}
@@ -105,7 +106,7 @@ func TestSimple(t *testing.T) {
 		"following", "preceding", "unbounded", "respect", "nulls", "current", "last", "against", "expansion",
 		"chain", "error", "general", "nvarchar", "pack_keys", "p", "shard_row_id_bits", "pre_split_regions",
 		"constraints", "role", "replicas", "policy", "s3", "strict", "running", "stop", "preserve", "placement", "attributes", "attribute", "resource",
-		"burstable", "calibrate", "masking", "rollup",
+		"burstable", "calibrate", "masking", "rollup", "manual", "parallel",
 	}
 	for _, kw := range unreservedKws {
 		src := fmt.Sprintf("SELECT %s FROM tbl;", kw)
@@ -7615,6 +7616,36 @@ func TestAnalyze(t *testing.T) {
 		{"analyze table t with 0.05 ndvrate 0.00001 samplerate", true, "ANALYZE TABLE `t` WITH 0.05 NDVRATE, 0.00001 SAMPLERATE"},
 		{"analyze no_write_to_binlog table t1", true, "ANALYZE NO_WRITE_TO_BINLOG TABLE `t1`"},
 		{"analyze local table t,t1", true, "ANALYZE NO_WRITE_TO_BINLOG TABLE `t`,`t1`"},
+	}
+	RunTest(t, table, false, false)
+}
+
+func TestMySQLReservedWordCompat(t *testing.T) {
+	// MySQL reserves CUBE, EXTERNAL, QUALIFY, and TABLESAMPLE (documented
+	// since 8.4; information_schema.KEYWORDS corrected in 26.7, MySQL Bug
+	// #114874), while MANUAL and PARALLEL are non-reserved keywords.
+	table := []testCase{
+		// reserved: rejected as unquoted identifiers
+		{"create table cube (a int)", false, ""},
+		{"create table external (a int)", false, ""},
+		{"create table qualify (a int)", false, ""},
+		{"select cube from t", false, ""},
+		{"select external from t", false, ""},
+		{"select qualify from t", false, ""},
+
+		// reserved: usable when quoted
+		{"create table `cube` (a int)", true, "CREATE TABLE `cube` (`a` INT)"},
+		{"create table `external` (a int)", true, "CREATE TABLE `external` (`a` INT)"},
+		{"create table `qualify` (a int)", true, "CREATE TABLE `qualify` (`a` INT)"},
+
+		// reserved: usable unquoted after a qualifying dot, like MySQL
+		{"select t.cube from t", true, "SELECT `t`.`cube` FROM `t`"},
+		{"select t.external from t", true, "SELECT `t`.`external` FROM `t`"},
+		{"select t.qualify from t", true, "SELECT `t`.`qualify` FROM `t`"},
+
+		// non-reserved: valid identifiers anywhere
+		{"create table manual (parallel int)", true, "CREATE TABLE `manual` (`parallel` INT)"},
+		{"select manual, parallel from t", true, "SELECT `manual`,`parallel` FROM `t`"},
 	}
 	RunTest(t, table, false, false)
 }

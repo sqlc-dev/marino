@@ -221,6 +221,7 @@ const (
 	csvNull                    = 57675
 	csvSeparator               = 57676
 	csvTrimLastSeparators      = 57677
+	cube                       = 58247
 	cumeDist                   = 57391
 	curDate                    = 58011
 	curTime                    = 58012
@@ -321,6 +322,7 @@ const (
 	explore                    = 57719
 	exprPushdownBlacklist      = 58022
 	extended                   = 57720
+	external                   = 58248
 	extract                    = 58023
 	failedLoginAttempts        = 57721
 	falseKwd                   = 57425
@@ -504,6 +506,7 @@ const (
 	lowerThanWith              = 58223
 	lowerThenOrder             = 58235
 	lsh                        = 58213
+	manual                     = 58249
 	masking                    = 57775
 	master                     = 57776
 	match                      = 57489
@@ -606,6 +609,7 @@ const (
 	pageCompressed             = 57826
 	pageCompressionLevel       = 57827
 	pageSym                    = 57824
+	parallel                   = 58250
 	paramMarker                = 58217
 	parser                     = 57828
 	partial                    = 57829
@@ -648,6 +652,7 @@ const (
 	profiles                   = 57850
 	proxy                      = 57851
 	purge                      = 57852
+	qualify                    = 58251
 	quarter                    = 57853
 	queries                    = 57854
 	query                      = 57855
