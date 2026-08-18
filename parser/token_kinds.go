@@ -185,6 +185,7 @@ const (
 	clustered                  = 57650
 	cmSketch                   = 58158
 	coalesce                   = 57651
+	code                       = 58275
 	collate                    = 57384
 	collation                  = 57652
 	column                     = 57385
@@ -475,6 +476,7 @@ const (
 	left                       = 57476
 	less                       = 57767
 	level                      = 57768
+	library                    = 58276
 	like                       = 57477
 	limit                      = 57478
 	linear                     = 57479
@@ -553,6 +555,7 @@ const (
 	modify                     = 57793
 	monitor                    = 57794
 	month                      = 57795
+	mutex                      = 58277
 	names                      = 57796
 	national                   = 57797
 	natural                    = 57498
@@ -622,6 +625,7 @@ const (
 	parallel                   = 58250
 	paramMarker                = 58217
 	parser                     = 57828
+	parseTree                  = 58278
 	partial                    = 57829
 	partition                  = 57516
 	partitioning               = 57830
@@ -688,6 +692,7 @@ const (
 	regexpKwd                  = 57527
 	region                     = 58179
 	regions                    = 58180
+	relaylog                   = 58279
 	release                    = 57528
 	reload                     = 57863
 	remove                     = 57864

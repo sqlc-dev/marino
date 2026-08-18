@@ -256,6 +256,34 @@ const (
 	ShowDistributionJobsCommand = "SHOW DISTRIBUTION JOB"
 	// ShowAffinityCommand represents SHOW AFFINITY statement
 	ShowAffinityCommand = "SHOW AFFINITY"
+	// ShowBinaryLogsCommand represents SHOW BINARY LOGS statement
+	ShowBinaryLogsCommand = "SHOW BINARY LOGS"
+	// ShowBinlogEventsCommand represents SHOW BINLOG EVENTS statement
+	ShowBinlogEventsCommand = "SHOW BINLOG EVENTS"
+	// ShowRelaylogEventsCommand represents SHOW RELAYLOG EVENTS statement
+	ShowRelaylogEventsCommand = "SHOW RELAYLOG EVENTS"
+	// ShowReplicasCommand represents SHOW REPLICAS statement
+	ShowReplicasCommand = "SHOW REPLICAS"
+	// ShowEngineCommand represents SHOW ENGINE statement
+	ShowEngineCommand = "SHOW ENGINE"
+	// ShowCreateEventCommand represents SHOW CREATE EVENT statement
+	ShowCreateEventCommand = "SHOW CREATE EVENT"
+	// ShowCreateFunctionCommand represents SHOW CREATE FUNCTION statement
+	ShowCreateFunctionCommand = "SHOW CREATE FUNCTION"
+	// ShowCreateTriggerCommand represents SHOW CREATE TRIGGER statement
+	ShowCreateTriggerCommand = "SHOW CREATE TRIGGER"
+	// ShowCreateLibraryCommand represents SHOW CREATE LIBRARY statement
+	ShowCreateLibraryCommand = "SHOW CREATE LIBRARY"
+	// ShowCreateMaskingPolicyCommand represents SHOW CREATE MASKING POLICY statement
+	ShowCreateMaskingPolicyCommand = "SHOW CREATE MASKING POLICY"
+	// ShowFunctionCodeCommand represents SHOW FUNCTION CODE statement
+	ShowFunctionCodeCommand = "SHOW FUNCTION CODE"
+	// ShowProcedureCodeCommand represents SHOW PROCEDURE CODE statement
+	ShowProcedureCodeCommand = "SHOW PROCEDURE CODE"
+	// ShowLibraryStatusCommand represents SHOW LIBRARY STATUS statement
+	ShowLibraryStatusCommand = "SHOW LIBRARY STATUS"
+	// ShowParseTreeCommand represents SHOW PARSE_TREE statement
+	ShowParseTreeCommand = "SHOW PARSE_TREE"
 )
 
 // Admin Commands
@@ -872,6 +900,34 @@ func (n *ShowStmt) SEMCommand() string {
 		return ShowDistributionJobsCommand
 	case ShowAffinity:
 		return ShowAffinityCommand
+	case ShowBinaryLogs:
+		return ShowBinaryLogsCommand
+	case ShowBinlogEvents:
+		return ShowBinlogEventsCommand
+	case ShowRelaylogEvents:
+		return ShowRelaylogEventsCommand
+	case ShowReplicas:
+		return ShowReplicasCommand
+	case ShowEngineStatus, ShowEngineMutex:
+		return ShowEngineCommand
+	case ShowCreateEvent:
+		return ShowCreateEventCommand
+	case ShowCreateFunction:
+		return ShowCreateFunctionCommand
+	case ShowCreateTrigger:
+		return ShowCreateTriggerCommand
+	case ShowCreateLibrary:
+		return ShowCreateLibraryCommand
+	case ShowCreateMaskingPolicy:
+		return ShowCreateMaskingPolicyCommand
+	case ShowFunctionCode:
+		return ShowFunctionCodeCommand
+	case ShowProcedureCode:
+		return ShowProcedureCodeCommand
+	case ShowLibraryStatus:
+		return ShowLibraryStatusCommand
+	case ShowParseTree:
+		return ShowParseTreeCommand
 	default:
 		return UnknownCommand
 	}

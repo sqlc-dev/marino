@@ -1,0 +1,79 @@
+SHOW BINARY LOGS
+-- case
+SHOW BINLOG EVENTS
+-- case
+SHOW BINLOG EVENTS IN 'binlog.000001'
+-- case
+SHOW BINLOG EVENTS IN 'binlog.000001' FROM 4
+-- case
+SHOW BINLOG EVENTS IN 'binlog.000001' FROM 4 LIMIT 10
+-- case
+SHOW BINLOG EVENTS IN 'binlog.000001' FROM 4 LIMIT 2,10
+-- case
+SHOW BINLOG EVENTS LIMIT 5
+-- case
+SHOW BINLOG EVENTS FOR CHANNEL 'source_1'
+-- case
+SHOW BINLOG EVENTS IN 'binlog.000001' FROM 4 LIMIT 2,10 FOR CHANNEL 'source_1'
+-- case
+SHOW RELAYLOG EVENTS
+-- case
+SHOW RELAYLOG EVENTS IN 'relay-bin.000002'
+-- case
+SHOW RELAYLOG EVENTS IN 'relay-bin.000002' FROM 4 LIMIT 1,3 FOR CHANNEL 'group_replication_recovery'
+-- case
+SHOW REPLICAS
+-- case
+SHOW ENGINE `INNODB` STATUS
+-- case
+SHOW ENGINE `INNODB` MUTEX
+-- case
+SHOW ENGINE `PERFORMANCE_SCHEMA` STATUS
+-- case
+SHOW ENGINE `InnoDB` STATUS
+-- case
+-- error: line 1 column 23 near "LOGS" 
+-- case
+SHOW CREATE EVENT `e`
+-- case
+SHOW CREATE EVENT `test`.`e`
+-- case
+SHOW CREATE FUNCTION `f`
+-- case
+SHOW CREATE FUNCTION `test`.`f`
+-- case
+SHOW CREATE LIBRARY `mylib`
+-- case
+SHOW CREATE LIBRARY `test`.`mylib`
+-- case
+SHOW CREATE MASKING POLICY `p`
+-- case
+SHOW CREATE TRIGGER `trg`
+-- case
+SHOW CREATE TRIGGER `test`.`trg`
+-- case
+SHOW FUNCTION CODE `f`
+-- case
+SHOW FUNCTION CODE `test`.`f`
+-- case
+SHOW PROCEDURE CODE `p`
+-- case
+SHOW PROCEDURE CODE `test`.`p`
+-- case
+SHOW LIBRARY STATUS
+-- case
+SHOW LIBRARY STATUS LIKE _UTF8MB4'lib%'
+-- case
+SHOW LIBRARY STATUS WHERE `Db`=_UTF8MB4'test'
+-- case
+SHOW PARSE_TREE SELECT 1
+-- case
+SHOW PARSE_TREE SELECT * FROM `t` WHERE `a`>1
+-- case
+SHOW PARSE_TREE (SELECT 1)
+-- case
+SHOW PARSE_TREE WITH `cte` AS (SELECT 1) SELECT * FROM `cte`
+-- case
+-- error: line 1 column 22 near "UPDATE t SET a = 1" 
+-- case
+-- error: line 1 column 16 near "LOGS" 

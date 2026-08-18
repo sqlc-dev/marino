@@ -169,13 +169,72 @@ func (r *rdParser) parseShowStmt() ast.StmtNode {
 			Tp: ast.ShowMasterStatus,
 		}
 	case binaryType:
-		// "SHOW" "BINARY" "LOG" "STATUS"
+		// "SHOW" "BINARY" "LOG" "STATUS" | "SHOW" "BINARY" "LOGS"
 		r.advance()
+		if r.accept(logs) {
+			return &ast.ShowStmt{
+				Tp: ast.ShowBinaryLogs,
+			}
+		}
 		r.expect(log)
 		r.expect(status)
 		return &ast.ShowStmt{
 			Tp: ast.ShowBinlogStatus,
 		}
+	case binlog:
+		// "SHOW" "BINLOG" "EVENTS" ShowLogEventsTail
+		r.advance()
+		r.expect(events)
+		return r.parseShowLogEventsTail(ast.ShowBinlogEvents)
+	case relaylog:
+		// "SHOW" "RELAYLOG" "EVENTS" ShowLogEventsTail
+		r.advance()
+		r.expect(events)
+		return r.parseShowLogEventsTail(ast.ShowRelaylogEvents)
+	case replicas:
+		// "SHOW" "REPLICAS"
+		r.advance()
+		return &ast.ShowStmt{
+			Tp: ast.ShowReplicas,
+		}
+	case engine:
+		// "SHOW" "ENGINE" (Identifier | stringLit) ("STATUS" | "MUTEX");
+		// the statement postdates the goyacc grammar, so the shape follows
+		// the MySQL 26.7 reference manual.
+		r.advance()
+		stmt := &ast.ShowStmt{}
+		if r.tok() == stringLit {
+			stmt.Engine = r.cur().lit
+			r.advance()
+		} else {
+			stmt.Engine = r.parseIdentifier()
+		}
+		switch r.tok() {
+		case status:
+			r.advance()
+			stmt.Tp = ast.ShowEngineStatus
+		case mutex:
+			r.advance()
+			stmt.Tp = ast.ShowEngineMutex
+		default:
+			r.syntaxError()
+		}
+		return stmt
+	case parseTree:
+		// "SHOW" "PARSE_TREE" select statement; the statement postdates
+		// the goyacc grammar, and MySQL 26.7 limits its argument to a
+		// select statement.
+		r.advance()
+		stmt := &ast.ShowStmt{Tp: ast.ShowParseTree}
+		switch r.tok() {
+		case selectKwd, tableKwd, values, int('('):
+			stmt.ParseTreeStmt = r.finishSelectFamily(nil)
+		case with:
+			stmt.ParseTreeStmt = r.finishSelectFamily(r.parseWithClause())
+		default:
+			r.syntaxError()
+		}
+		return stmt
 	case replica, slave:
 		// "SHOW" Replica "STATUS"
 		r.advance()
@@ -391,9 +450,70 @@ func (r *rdParser) parseShowCreate() ast.StmtNode {
 			Tp:        ast.ShowCreateProcedure,
 			Procedure: r.parseTableName(),
 		}
+	case function:
+		// "SHOW" "CREATE" "FUNCTION" TableName
+		r.advance()
+		return &ast.ShowStmt{
+			Tp:        ast.ShowCreateFunction,
+			Procedure: r.parseTableName(),
+		}
+	case event:
+		// "SHOW" "CREATE" "EVENT" TableName
+		r.advance()
+		return &ast.ShowStmt{
+			Tp:    ast.ShowCreateEvent,
+			Table: r.parseTableName(),
+		}
+	case trigger:
+		// "SHOW" "CREATE" "TRIGGER" TableName
+		r.advance()
+		return &ast.ShowStmt{
+			Tp:    ast.ShowCreateTrigger,
+			Table: r.parseTableName(),
+		}
+	case library:
+		// "SHOW" "CREATE" "LIBRARY" TableName
+		r.advance()
+		return &ast.ShowStmt{
+			Tp:    ast.ShowCreateLibrary,
+			Table: r.parseTableName(),
+		}
+	case masking:
+		// "SHOW" "CREATE" "MASKING" "POLICY" PolicyName
+		r.advance()
+		r.expect(policy)
+		return &ast.ShowStmt{
+			Tp:     ast.ShowCreateMaskingPolicy,
+			DBName: r.parseIdentifier(),
+		}
 	}
 	r.syntaxError()
 	return nil
+}
+
+// parseShowLogEventsTail implements the shared tail of "SHOW" "BINLOG"
+// "EVENTS" and "SHOW" "RELAYLOG" "EVENTS"; the statements postdate the
+// goyacc grammar, so the shape follows the MySQL 26.7 reference manual:
+//
+//	["IN" stringLit] ["FROM" Int64Num] [SelectStmtLimit]
+//	    ["FOR" "CHANNEL" stringLit]
+func (r *rdParser) parseShowLogEventsTail(tp ast.ShowStmtType) ast.StmtNode {
+	stmt := &ast.ShowStmt{Tp: tp}
+	if r.accept(in) {
+		stmt.LogName = r.expect(stringLit).lit
+	}
+	if r.accept(from) {
+		v := r.parseInt64Num()
+		stmt.Position = &v
+	}
+	if r.tok() == limit {
+		stmt.Limit = r.parseSelectStmtLimit()
+	}
+	if r.accept(forKwd) {
+		r.expect(channel)
+		stmt.ChannelName = r.expect(stringLit).lit
+	}
+	return stmt
 }
 
 // parseShowTable distinguishes the "SHOW" "TABLE" TableName ... targets
@@ -712,18 +832,37 @@ func (r *rdParser) parseShowTargetFilterable() ast.StmtNode {
 			Tp: ast.ShowBindingCacheStatus,
 		})
 	case procedure:
-		// "PROCEDURE" "STATUS"
+		// "PROCEDURE" "STATUS" | "PROCEDURE" "CODE" TableName
 		r.advance()
+		if r.accept(code) {
+			return &ast.ShowStmt{
+				Tp:        ast.ShowProcedureCode,
+				Procedure: r.parseTableName(),
+			}
+		}
 		r.expect(status)
 		return r.applyShowLikeOrWhereOpt(&ast.ShowStmt{
 			Tp: ast.ShowProcedureStatus,
 		})
 	case function:
-		// "FUNCTION" "STATUS"
+		// "FUNCTION" "STATUS" | "FUNCTION" "CODE" TableName
 		r.advance()
+		if r.accept(code) {
+			return &ast.ShowStmt{
+				Tp:        ast.ShowFunctionCode,
+				Procedure: r.parseTableName(),
+			}
+		}
 		r.expect(status)
 		return r.applyShowLikeOrWhereOpt(&ast.ShowStmt{
 			Tp: ast.ShowFunctionStatus,
+		})
+	case library:
+		// "LIBRARY" "STATUS"
+		r.advance()
+		r.expect(status)
+		return r.applyShowLikeOrWhereOpt(&ast.ShowStmt{
+			Tp: ast.ShowLibraryStatus,
 		})
 	case events:
 		// "EVENTS" ShowDatabaseNameOpt
