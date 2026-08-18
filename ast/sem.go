@@ -526,6 +526,22 @@ const (
 	LoadIndexCommand = "LOAD INDEX INTO CACHE"
 	// ResetPersistCommand represents RESET PERSIST statement
 	ResetPersistCommand = "RESET PERSIST"
+	// XAStartCommand represents XA START statement
+	XAStartCommand = "XA START"
+	// XAEndCommand represents XA END statement
+	XAEndCommand = "XA END"
+	// XAPrepareCommand represents XA PREPARE statement
+	XAPrepareCommand = "XA PREPARE"
+	// XACommitCommand represents XA COMMIT statement
+	XACommitCommand = "XA COMMIT"
+	// XARollbackCommand represents XA ROLLBACK statement
+	XARollbackCommand = "XA ROLLBACK"
+	// XARecoverCommand represents XA RECOVER statement
+	XARecoverCommand = "XA RECOVER"
+	// LockInstanceCommand represents LOCK INSTANCE FOR BACKUP statement
+	LockInstanceCommand = "LOCK INSTANCE"
+	// UnlockInstanceCommand represents UNLOCK INSTANCE statement
+	UnlockInstanceCommand = "UNLOCK INSTANCE"
 	// UnknownCommand represents unknown statements
 	UnknownCommand = "UNKNOWN"
 	// SetOprCommand represents UNION/INTERSECT/EXCEPT statement
@@ -1501,4 +1517,33 @@ func (n *LoadIndexStmt) SEMCommand() string {
 // SEMCommand returns the command string for the statement.
 func (n *ResetPersistStmt) SEMCommand() string {
 	return ResetPersistCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *XAStmt) SEMCommand() string {
+	switch n.Op {
+	case XAOpStart:
+		return XAStartCommand
+	case XAOpEnd:
+		return XAEndCommand
+	case XAOpPrepare:
+		return XAPrepareCommand
+	case XAOpCommit:
+		return XACommitCommand
+	case XAOpRollback:
+		return XARollbackCommand
+	case XAOpRecover:
+		return XARecoverCommand
+	}
+	return UnknownCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *LockInstanceStmt) SEMCommand() string {
+	return LockInstanceCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *UnlockInstanceStmt) SEMCommand() string {
+	return UnlockInstanceCommand
 }

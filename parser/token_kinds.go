@@ -543,6 +543,7 @@ const (
 	metadata                   = 58051
 	microsecond                = 57788
 	middleIntType              = 57494
+	migrate                    = 58280
 	min                        = 58052
 	minRows                    = 57791
 	minValue                   = 57790
@@ -601,6 +602,7 @@ const (
 	oltpWriteOnly              = 57817
 	on                         = 57506
 	onDuplicate                = 57820
+	one                        = 58281
 	online                     = 57818
 	only                       = 57819
 	open                       = 57821
@@ -639,6 +641,7 @@ const (
 	percentRank                = 57517
 	persist                    = 58265
 	pessimistic                = 58176
+	phase                      = 58282
 	pipes                      = 57359
 	pipesAsOr                  = 57838
 	placement                  = 58057
@@ -851,6 +854,7 @@ const (
 	sum                        = 58090
 	super                      = 57942
 	survivalPreferences        = 58091
+	suspend                    = 58283
 	swaps                      = 57943
 	switchGroup                = 58092
 	switchesSym                = 57944
@@ -983,6 +987,8 @@ const (
 	workload                   = 57992
 	write                      = 57592
 	x509                       = 57993
+	xa                         = 58284
+	xid                        = 58285
 	xor                        = 57593
 	yearMonth                  = 57594
 	yearType                   = 57994
