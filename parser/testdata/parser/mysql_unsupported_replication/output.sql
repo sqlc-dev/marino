@@ -1,0 +1,19 @@
+-- error: line 1 column 12 near "BINARY LOGS TO 'binlog.000001'" 
+-- case
+-- error: line 1 column 12 near "BINARY LOGS BEFORE '2026-08-18 00:00:00'" 
+-- case
+-- error: line 1 column 5 near "RESET BINARY LOGS AND GTIDS" 
+-- case
+-- error: line 1 column 25 near "FILTER REPLICATE_DO_DB = (db1)" 
+-- case
+-- error: line 1 column 5 near "RESET REPLICA" 
+-- case
+-- error: line 1 column 5 near "RESET REPLICA ALL" 
+-- case
+-- error: line 1 column 13 near "REPLICA" 
+-- case
+-- error: line 1 column 12 near "REPLICA" 
+-- case
+-- error: line 1 column 23 near "GROUP_REPLICATION" 
+-- case
+-- error: line 1 column 22 near "GROUP_REPLICATION" 

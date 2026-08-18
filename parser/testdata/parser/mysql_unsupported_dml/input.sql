@@ -1,0 +1,13 @@
+HANDLER t OPEN
+-- case
+HANDLER t READ FIRST
+-- case
+HANDLER t READ NEXT
+-- case
+HANDLER t CLOSE
+-- case
+IMPORT TABLE FROM 't.sdi'
+-- case
+LOAD XML INFILE 'f.xml' INTO TABLE t
+-- case
+SELECT 1 INTO @a

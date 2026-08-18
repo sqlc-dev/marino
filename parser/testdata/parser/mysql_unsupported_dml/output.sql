@@ -1,0 +1,13 @@
+-- error: line 1 column 7 near "HANDLER t OPEN" 
+-- case
+-- error: line 1 column 7 near "HANDLER t READ FIRST" 
+-- case
+-- error: line 1 column 7 near "HANDLER t READ NEXT" 
+-- case
+-- error: line 1 column 7 near "HANDLER t CLOSE" 
+-- case
+-- error: line 1 column 6 near "IMPORT TABLE FROM 't.sdi'" 
+-- case
+-- error: line 1 column 4 near "LOAD XML INFILE 'f.xml' INTO TABLE t" 
+-- case
+-- error: line 1 column 16 near "@a" 
