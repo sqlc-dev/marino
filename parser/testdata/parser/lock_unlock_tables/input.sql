@@ -1,0 +1,39 @@
+UNLOCK TABLES;
+-- case
+LOCK TABLES t1 READ;
+-- case
+LOCK TABLES t1 READ LOCAL;
+-- case
+show table status like 't'
+-- case
+LOCK TABLES t2 WRITE
+-- case
+LOCK TABLES t2 WRITE LOCAL;
+-- case
+LOCK TABLES t1 WRITE, t2 READ;
+-- case
+LOCK TABLES t1 WRITE LOCAL, t2 READ LOCAL;
+-- case
+UNLOCK TABLE;
+-- case
+LOCK TABLE t1 READ;
+-- case
+LOCK TABLE t1 READ LOCAL;
+-- case
+show table status like 't'
+-- case
+LOCK TABLE t2 WRITE
+-- case
+LOCK TABLE t2 WRITE LOCAL;
+-- case
+LOCK TABLE t1 WRITE, t2 READ;
+-- case
+ADMIN CLEANUP TABLE LOCK
+-- case
+ADMIN CLEANUP TABLE LOCK t
+-- case
+ADMIN CLEANUP TABLE LOCK t1,t2
+-- case
+ALTER TABLE t READ ONLY
+-- case
+ALTER TABLE t READ WRITE

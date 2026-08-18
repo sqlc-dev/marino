@@ -1,0 +1,39 @@
+UNLOCK TABLES
+-- case
+LOCK TABLES `t1` READ
+-- case
+LOCK TABLES `t1` READ LOCAL
+-- case
+SHOW TABLE STATUS LIKE _UTF8MB4't'
+-- case
+LOCK TABLES `t2` WRITE
+-- case
+LOCK TABLES `t2` WRITE LOCAL
+-- case
+LOCK TABLES `t1` WRITE, `t2` READ
+-- case
+LOCK TABLES `t1` WRITE LOCAL, `t2` READ LOCAL
+-- case
+UNLOCK TABLES
+-- case
+LOCK TABLES `t1` READ
+-- case
+LOCK TABLES `t1` READ LOCAL
+-- case
+SHOW TABLE STATUS LIKE _UTF8MB4't'
+-- case
+LOCK TABLES `t2` WRITE
+-- case
+LOCK TABLES `t2` WRITE LOCAL
+-- case
+LOCK TABLES `t1` WRITE, `t2` READ
+-- case
+-- error: line 1 column 24 near "" 
+-- case
+ADMIN CLEANUP TABLE LOCK `t`
+-- case
+ADMIN CLEANUP TABLE LOCK `t1`, `t2`
+-- case
+ALTER TABLE `t` READ ONLY
+-- case
+ALTER TABLE `t` READ WRITE

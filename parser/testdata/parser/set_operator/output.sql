@@ -1,0 +1,207 @@
+SELECT `c1` FROM `t1` UNION SELECT `c2` FROM `t2`
+-- case
+SELECT `c1` FROM `t1` UNION (SELECT `c2` FROM `t2`)
+-- case
+SELECT `c1` FROM `t1` UNION (SELECT `c2` FROM `t2`) ORDER BY `c1`
+-- case
+SELECT `c1` FROM `t1` UNION SELECT `c2` FROM `t2` ORDER BY `c2`
+-- case
+SELECT `c1` FROM `t1` UNION (SELECT `c2` FROM `t2`) LIMIT 1
+-- case
+SELECT `c1` FROM `t1` UNION (SELECT `c2` FROM `t2`) LIMIT 1,1
+-- case
+SELECT `c1` FROM `t1` UNION (SELECT `c2` FROM `t2`) ORDER BY `c1` LIMIT 1
+-- case
+(SELECT `c1` FROM `t1`) UNION SELECT `c2` FROM `t2`
+-- case
+(SELECT `c1` FROM `t1`) UNION SELECT `c2` FROM `t2`
+-- case
+(SELECT `c1` FROM `t1`) UNION ALL SELECT `c2` FROM `t2`
+-- case
+-- error: line 1 column 38 near "all select c2 from t2" 
+-- case
+-- error: line 1 column 41 near "all select c2 from t2" 
+-- case
+-- error: line 1 column 63 near "union select c3 from t3" 
+-- case
+-- error: line 1 column 59 near "union select c3 from t3" 
+-- case
+(SELECT `c1` FROM `t1`) UNION SELECT `c2` FROM `t2` UNION (SELECT `c3` FROM `t3`) ORDER BY `c1` LIMIT 1
+-- case
+SELECT (SELECT 1 UNION SELECT 1) AS `a`
+-- case
+SELECT * FROM (SELECT 1 UNION SELECT 2) AS `a`
+-- case
+INSERT INTO `t` SELECT `c1` FROM `t1` UNION SELECT `c2` FROM `t2`
+-- case
+INSERT INTO `t` (`c`) SELECT `c1` FROM `t1` UNION SELECT `c2` FROM `t2`
+-- case
+SELECT 2 AS `a` UNION SELECT 1 AS `b` ORDER BY `a`
+-- case
+TABLE `t1` UNION TABLE `t2`
+-- case
+TABLE `t1` UNION (TABLE `t2`)
+-- case
+TABLE `t1` UNION SELECT * FROM `t2`
+-- case
+SELECT * FROM `t1` UNION TABLE `t2`
+-- case
+TABLE `t1` UNION (SELECT `c2` FROM `t2`) ORDER BY `c1` LIMIT 1
+-- case
+SELECT `c1` FROM `t1` UNION (TABLE `t2`) ORDER BY `c1` LIMIT 1
+-- case
+(SELECT `c1` FROM `t1`) UNION TABLE `t2` UNION (SELECT `c3` FROM `t3`) ORDER BY `c1` LIMIT 1
+-- case
+(TABLE `t1`) UNION SELECT `c2` FROM `t2` UNION (TABLE `t3`) ORDER BY `c1` LIMIT 1
+-- case
+VALUES ROW(1,-2,3), ROW(5,7,9) UNION VALUES ROW(1,-2,3), ROW(5,7,9)
+-- case
+VALUES ROW(1,-2,3), ROW(5,7,9) UNION (VALUES ROW(1,-2,3), ROW(5,7,9))
+-- case
+VALUES ROW(1,-2,3), ROW(5,7,9) UNION SELECT * FROM `t`
+-- case
+VALUES ROW(1,-2,3), ROW(5,7,9) UNION TABLE `t`
+-- case
+SELECT * FROM `t` UNION VALUES ROW(1,-2,3), ROW(5,7,9)
+-- case
+TABLE `t` UNION VALUES ROW(1,-2,3), ROW(5,7,9)
+-- case
+SELECT `c1` FROM `t1` EXCEPT SELECT `c2` FROM `t2`
+-- case
+SELECT `c1` FROM `t1` EXCEPT (SELECT `c2` FROM `t2`)
+-- case
+SELECT `c1` FROM `t1` EXCEPT (SELECT `c2` FROM `t2`) ORDER BY `c1`
+-- case
+SELECT `c1` FROM `t1` EXCEPT SELECT `c2` FROM `t2` ORDER BY `c2`
+-- case
+SELECT `c1` FROM `t1` EXCEPT (SELECT `c2` FROM `t2`) LIMIT 1
+-- case
+SELECT `c1` FROM `t1` EXCEPT (SELECT `c2` FROM `t2`) LIMIT 1,1
+-- case
+SELECT `c1` FROM `t1` EXCEPT (SELECT `c2` FROM `t2`) ORDER BY `c1` LIMIT 1
+-- case
+-- error: line 1 column 65 near "except select c3 from t3" 
+-- case
+-- error: line 1 column 61 near "except select c3 from t3" 
+-- case
+(SELECT `c1` FROM `t1`) EXCEPT SELECT `c2` FROM `t2` EXCEPT (SELECT `c3` FROM `t3`) ORDER BY `c1` LIMIT 1
+-- case
+SELECT (SELECT 1 EXCEPT SELECT 1) AS `a`
+-- case
+SELECT * FROM (SELECT 1 EXCEPT SELECT 2) AS `a`
+-- case
+INSERT INTO `t` SELECT `c1` FROM `t1` EXCEPT SELECT `c2` FROM `t2`
+-- case
+INSERT INTO `t` (`c`) SELECT `c1` FROM `t1` EXCEPT SELECT `c2` FROM `t2`
+-- case
+SELECT 2 AS `a` EXCEPT SELECT 1 AS `b` ORDER BY `a`
+-- case
+TABLE `t1` EXCEPT TABLE `t2`
+-- case
+TABLE `t1` EXCEPT (TABLE `t2`)
+-- case
+TABLE `t1` EXCEPT SELECT * FROM `t2`
+-- case
+SELECT * FROM `t1` EXCEPT TABLE `t2`
+-- case
+TABLE `t1` EXCEPT (SELECT `c2` FROM `t2`) ORDER BY `c1` LIMIT 1
+-- case
+SELECT `c1` FROM `t1` EXCEPT (TABLE `t2`) ORDER BY `c1` LIMIT 1
+-- case
+(SELECT `c1` FROM `t1`) EXCEPT TABLE `t2` EXCEPT (SELECT `c3` FROM `t3`) ORDER BY `c1` LIMIT 1
+-- case
+(TABLE `t1`) EXCEPT SELECT `c2` FROM `t2` EXCEPT (TABLE `t3`) ORDER BY `c1` LIMIT 1
+-- case
+VALUES ROW(1,-2,3), ROW(5,7,9) EXCEPT VALUES ROW(1,-2,3), ROW(5,7,9)
+-- case
+VALUES ROW(1,-2,3), ROW(5,7,9) EXCEPT (VALUES ROW(1,-2,3), ROW(5,7,9))
+-- case
+VALUES ROW(1,-2,3), ROW(5,7,9) EXCEPT SELECT * FROM `t`
+-- case
+VALUES ROW(1,-2,3), ROW(5,7,9) EXCEPT TABLE `t`
+-- case
+SELECT * FROM `t` EXCEPT VALUES ROW(1,-2,3), ROW(5,7,9)
+-- case
+TABLE `t` EXCEPT VALUES ROW(1,-2,3), ROW(5,7,9)
+-- case
+SELECT `c1` FROM `t1` INTERSECT SELECT `c2` FROM `t2`
+-- case
+SELECT `c1` FROM `t1` INTERSECT (SELECT `c2` FROM `t2`)
+-- case
+SELECT `c1` FROM `t1` INTERSECT (SELECT `c2` FROM `t2`) ORDER BY `c1`
+-- case
+SELECT `c1` FROM `t1` INTERSECT SELECT `c2` FROM `t2` ORDER BY `c2`
+-- case
+SELECT `c1` FROM `t1` INTERSECT (SELECT `c2` FROM `t2`) LIMIT 1
+-- case
+SELECT `c1` FROM `t1` INTERSECT (SELECT `c2` FROM `t2`) LIMIT 1,1
+-- case
+SELECT `c1` FROM `t1` INTERSECT (SELECT `c2` FROM `t2`) ORDER BY `c1` LIMIT 1
+-- case
+-- error: line 1 column 71 near "intersect select c3 from t3" 
+-- case
+-- error: line 1 column 67 near "intersect select c3 from t3" 
+-- case
+(SELECT `c1` FROM `t1`) INTERSECT SELECT `c2` FROM `t2` INTERSECT (SELECT `c3` FROM `t3`) ORDER BY `c1` LIMIT 1
+-- case
+SELECT (SELECT 1 INTERSECT SELECT 1) AS `a`
+-- case
+SELECT * FROM (SELECT 1 INTERSECT SELECT 2) AS `a`
+-- case
+INSERT INTO `t` SELECT `c1` FROM `t1` INTERSECT SELECT `c2` FROM `t2`
+-- case
+INSERT INTO `t` (`c`) SELECT `c1` FROM `t1` INTERSECT SELECT `c2` FROM `t2`
+-- case
+SELECT 2 AS `a` INTERSECT SELECT 1 AS `b` ORDER BY `a`
+-- case
+TABLE `t1` INTERSECT TABLE `t2`
+-- case
+TABLE `t1` INTERSECT (TABLE `t2`)
+-- case
+TABLE `t1` INTERSECT SELECT * FROM `t2`
+-- case
+SELECT * FROM `t1` INTERSECT TABLE `t2`
+-- case
+TABLE `t1` INTERSECT (SELECT `c2` FROM `t2`) ORDER BY `c1` LIMIT 1
+-- case
+SELECT `c1` FROM `t1` INTERSECT (TABLE `t2`) ORDER BY `c1` LIMIT 1
+-- case
+(SELECT `c1` FROM `t1`) INTERSECT TABLE `t2` INTERSECT (SELECT `c3` FROM `t3`) ORDER BY `c1` LIMIT 1
+-- case
+(TABLE `t1`) INTERSECT SELECT `c2` FROM `t2` INTERSECT (TABLE `t3`) ORDER BY `c1` LIMIT 1
+-- case
+VALUES ROW(1,-2,3), ROW(5,7,9) INTERSECT VALUES ROW(1,-2,3), ROW(5,7,9)
+-- case
+VALUES ROW(1,-2,3), ROW(5,7,9) INTERSECT (VALUES ROW(1,-2,3), ROW(5,7,9))
+-- case
+VALUES ROW(1,-2,3), ROW(5,7,9) INTERSECT SELECT * FROM `t`
+-- case
+VALUES ROW(1,-2,3), ROW(5,7,9) INTERSECT TABLE `t`
+-- case
+SELECT * FROM `t` INTERSECT VALUES ROW(1,-2,3), ROW(5,7,9)
+-- case
+TABLE `t` INTERSECT VALUES ROW(1,-2,3), ROW(5,7,9)
+-- case
+(SELECT `c1` FROM `t1`) INTERSECT SELECT `c2` FROM `t2` UNION (SELECT `c3` FROM `t3`) ORDER BY `c1` LIMIT 1
+-- case
+(SELECT `c1` FROM `t1`) UNION ALL SELECT `c2` FROM `t2` EXCEPT (SELECT `c3` FROM `t3`) ORDER BY `c1` LIMIT 1
+-- case
+(SELECT `c1` FROM `t1`) EXCEPT SELECT `c2` FROM `t2` INTERSECT (SELECT `c3` FROM `t3`) ORDER BY `c1` LIMIT 1
+-- case
+SELECT 1 UNION SELECT 1 EXCEPT SELECT 1 INTERSECT SELECT 1
+-- case
+(SELECT `c1` FROM `t1`) INTERSECT ALL (SELECT `c2` FROM `t2` UNION (SELECT `c3` FROM `t3`)) ORDER BY `c1` LIMIT 1
+-- case
+(SELECT `c1` FROM `t1`) UNION ALL (SELECT `c2` FROM `t2` EXCEPT SELECT `c3` FROM `t3`) ORDER BY `c1` LIMIT 1
+-- case
+((SELECT `c1` FROM `t1`) EXCEPT SELECT `c2` FROM `t2`) INTERSECT ALL (SELECT `c3` FROM `t3`) ORDER BY `c1` LIMIT 1
+-- case
+SELECT 1 UNION (SELECT 1 EXCEPT ALL SELECT 1 INTERSECT SELECT 1)
+-- case
+SELECT * FROM `a` WHERE `PK`=0 UNION ALL (SELECT * FROM `b` WHERE `PK`=0 UNION ALL (SELECT * FROM `b` WHERE `PK`!=0) ORDER BY `pk` LIMIT 1)
+-- case
+SELECT * FROM `a` WHERE `PK`=0 UNION ALL (SELECT * FROM `b` WHERE `PK`=0 UNION ALL (SELECT * FROM `b` WHERE `PK`!=0) ORDER BY `pk` LIMIT 1) ORDER BY `pk` LIMIT 2
+-- case
+(SELECT * FROM `b` WHERE `pk`=0 UNION ALL (SELECT * FROM `b` WHERE `pk`!=0) ORDER BY `pk` LIMIT 1) ORDER BY `pk` LIMIT 2
+-- case
+(SELECT * FROM `b` WHERE `pk`=0 UNION ALL (SELECT * FROM `b` WHERE `pk`!=0) ORDER BY `pk` LIMIT 1) ORDER BY `pk`

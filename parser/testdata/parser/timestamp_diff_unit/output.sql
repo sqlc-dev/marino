@@ -1,0 +1,21 @@
+-- error: line 1 column 39 near "SECOND_MICROSECOND,'2003-02-01','2003-05-01')" 
+-- case
+-- error: line 1 column 39 near "MINUTE_MICROSECOND,'2003-02-01','2003-05-01')" 
+-- case
+-- error: line 1 column 34 near "MINUTE_SECOND,'2003-02-01','2003-05-01')" 
+-- case
+-- error: line 1 column 37 near "HOUR_MICROSECOND,'2003-02-01','2003-05-01')" 
+-- case
+-- error: line 1 column 32 near "HOUR_SECOND,'2003-02-01','2003-05-01')" 
+-- case
+-- error: line 1 column 32 near "HOUR_MINUTE,'2003-02-01','2003-05-01')" 
+-- case
+-- error: line 1 column 36 near "DAY_MICROSECOND,'2003-02-01','2003-05-01')" 
+-- case
+-- error: line 1 column 31 near "DAY_SECOND,'2003-02-01','2003-05-01')" 
+-- case
+-- error: line 1 column 31 near "DAY_MINUTE,'2003-02-01','2003-05-01')" 
+-- case
+-- error: line 1 column 29 near "DAY_HOUR,'2003-02-01','2003-05-01')" 
+-- case
+-- error: line 1 column 31 near "YEAR_MONTH,'2003-02-01','2003-05-01')" 

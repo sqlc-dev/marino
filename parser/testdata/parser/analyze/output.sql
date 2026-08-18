@@ -1,0 +1,95 @@
+ANALYZE TABLE `t1`
+-- case
+-- error: line 1 column 18 near "*" 
+-- case
+ANALYZE TABLE `t`,`t1`
+-- case
+ANALYZE TABLE `t1` INDEX
+-- case
+ANALYZE TABLE `t1` INDEX `a`
+-- case
+ANALYZE TABLE `t1` INDEX `a`,`b`
+-- case
+ANALYZE TABLE `t` WITH 4 BUCKETS
+-- case
+ANALYZE TABLE `t` WITH 4 TOPN
+-- case
+ANALYZE TABLE `t` WITH 4 CMSKETCH WIDTH
+-- case
+ANALYZE TABLE `t` WITH 4 CMSKETCH DEPTH
+-- case
+ANALYZE TABLE `t` WITH 4 SAMPLES
+-- case
+ANALYZE TABLE `t` WITH 4 BUCKETS, 4 TOPN, 4 CMSKETCH WIDTH, 4 CMSKETCH DEPTH, 4 SAMPLES
+-- case
+ANALYZE TABLE `t` INDEX `a` WITH 4 BUCKETS
+-- case
+ANALYZE TABLE `t` PARTITION `a`
+-- case
+ANALYZE TABLE `t` PARTITION `a` WITH 4 BUCKETS
+-- case
+ANALYZE TABLE `t` PARTITION `a` INDEX `b`
+-- case
+ANALYZE TABLE `t` PARTITION `a` INDEX `b` WITH 4 BUCKETS
+-- case
+ANALYZE INCREMENTAL TABLE `t` INDEX
+-- case
+ANALYZE INCREMENTAL TABLE `t` INDEX `idx`
+-- case
+ANALYZE TABLE `t` UPDATE HISTOGRAM ON `b` WITH 1024 BUCKETS
+-- case
+ANALYZE TABLE `t` DROP HISTOGRAM ON `b`
+-- case
+ANALYZE TABLE `t` UPDATE HISTOGRAM ON `c1`,`c2`
+-- case
+ANALYZE TABLE `t` DROP HISTOGRAM ON `c1`,`c2`
+-- case
+-- error: line 1 column 38 near ".c1, t.c2" 
+-- case
+-- error: line 1 column 36 near ".c1, t.c2" 
+-- case
+ANALYZE TABLE `t1`,`t2` ALL COLUMNS
+-- case
+ANALYZE TABLE `t` PARTITION `a` ALL COLUMNS
+-- case
+ANALYZE TABLE `t1`,`t2` ALL COLUMNS WITH 4 TOPN
+-- case
+ANALYZE TABLE `t` PARTITION `a` ALL COLUMNS WITH 1024 BUCKETS
+-- case
+ANALYZE TABLE `t1`,`t2` PREDICATE COLUMNS
+-- case
+ANALYZE TABLE `t` PARTITION `a` PREDICATE COLUMNS
+-- case
+ANALYZE TABLE `t1`,`t2` PREDICATE COLUMNS WITH 4 TOPN
+-- case
+ANALYZE TABLE `t` PARTITION `a` PREDICATE COLUMNS WITH 1024 BUCKETS
+-- case
+ANALYZE TABLE `t` COLUMNS `c1`,`c2`
+-- case
+ANALYZE TABLE `t` PARTITION `a` COLUMNS `c1`,`c2`
+-- case
+-- error: line 1 column 26 near ".c1,t.c2" 
+-- case
+-- error: line 1 column 38 near ".c1,t.c2" 
+-- case
+ANALYZE TABLE `t` COLUMNS `c1`,`c2` WITH 4 TOPN
+-- case
+ANALYZE TABLE `t` PARTITION `a` COLUMNS `c1`,`c2` WITH 1024 BUCKETS
+-- case
+-- error: line 1 column 31 near "columns c" 
+-- case
+-- error: line 1 column 27 near "all columns" 
+-- case
+-- error: line 1 column 33 near "predicate columns" 
+-- case
+ANALYZE TABLE `t` WITH 10 SAMPLERATE
+-- case
+ANALYZE TABLE `t` WITH 0.1 SAMPLERATE
+-- case
+ANALYZE TABLE `t` WITH 0.05 NDVRATE
+-- case
+ANALYZE TABLE `t` WITH 0.05 NDVRATE, 0.00001 SAMPLERATE
+-- case
+ANALYZE NO_WRITE_TO_BINLOG TABLE `t1`
+-- case
+ANALYZE NO_WRITE_TO_BINLOG TABLE `t`,`t1`

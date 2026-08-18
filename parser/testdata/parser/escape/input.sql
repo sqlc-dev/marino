@@ -1,0 +1,13 @@
+select """;
+-- case
+select """";
+-- case
+select "汉字";
+-- case
+select 'abc"def';
+-- case
+select 'a\r\n';
+-- case
+select "\a\r\n"
+-- case
+select "\xFF"
