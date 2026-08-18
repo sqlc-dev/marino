@@ -27,12 +27,13 @@ import (
 )
 
 func init() {
+	// The stop and purge tokens are owned by parse_replication.go's
+	// families, which route "STOP BACKUP LOGS" and "PURGE BACKUP LOGS"
+	// here.
 	rdRegister(backup, (*rdParser).parseBackupStmt)
 	rdRegister(restore, (*rdParser).parseRestoreStmt)
-	rdRegister(stop, (*rdParser).parseStopBackupStmt)
 	rdRegister(pause, (*rdParser).parsePauseBackupStmt)
 	rdRegister(resume, (*rdParser).parseResumeBackupStmt)
-	rdRegister(purge, (*rdParser).parsePurgeBackupStmt)
 }
 
 // parseBackupStmt implements the BRIEStmt alternatives

@@ -868,6 +868,10 @@ type ReplicationSourceOption struct {
 // Restore implements Node interface.
 func (n *ReplicationSourceOption) Restore(ctx *format.RestoreCtx) error {
 	ctx.WriteKeyWord(n.Name)
+	if n.Value == nil {
+		// A bare option name (START REPLICA UNTIL SQL_AFTER_MTS_GAPS).
+		return nil
+	}
 	ctx.WritePlain(" = ")
 	if err := n.Value.Restore(ctx); err != nil {
 		return fmt.Errorf("an error occurred while restore ReplicationSourceOption.Value: %w", err)

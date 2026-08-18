@@ -98,6 +98,7 @@ const (
 	backups                    = 57620
 	batch                      = 58126
 	bdr                        = 57621
+	before                     = 58286
 	begin                      = 57622
 	bernoulli                  = 57623
 	between                    = 57371
@@ -338,6 +339,7 @@ const (
 	fetch                      = 57426
 	fields                     = 57723
 	file                       = 57724
+	filter                     = 58287
 	first                      = 57725
 	firstValue                 = 57427
 	fixed                      = 57726
@@ -373,6 +375,8 @@ const (
 	group                      = 57438
 	groupConcat                = 58031
 	groups                     = 57439
+	groupReplication           = 58288
+	gtids                      = 58289
 	handler                    = 57736
 	hash                       = 57737
 	having                     = 57440
@@ -434,6 +438,7 @@ const (
 	inverted                   = 58036
 	invisible                  = 57754
 	invoker                    = 57755
+	ioThread                   = 58290
 	io                         = 57756
 	ioReadBandwidth            = 58037
 	ioWriteBandwidth           = 58038
@@ -797,6 +802,7 @@ const (
 	sqlCalcFoundRows           = 57551
 	sqlNoCache                 = 57919
 	sqlSmallResult             = 57552
+	sqlThread                  = 58291
 	sqlTsiDay                  = 57920
 	sqlTsiHour                 = 57921
 	sqlTsiMinute               = 57922

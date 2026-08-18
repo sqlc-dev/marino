@@ -21,8 +21,9 @@ import (
 )
 
 func init() {
+	// The start token is owned by parse_replication.go's
+	// parseStartStmtFamily, which routes "START TRANSACTION" here.
 	rdRegister(begin, (*rdParser).parseBeginTransactionStmt)
-	rdRegister(start, (*rdParser).parseBeginTransactionStmt)
 	rdRegister(commit, (*rdParser).parseCommitStmt)
 	rdRegister(rollback, (*rdParser).parseRollbackStmt)
 	rdRegister(savepoint, (*rdParser).parseSavepointStmt)

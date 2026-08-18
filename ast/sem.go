@@ -542,6 +542,22 @@ const (
 	LockInstanceCommand = "LOCK INSTANCE"
 	// UnlockInstanceCommand represents UNLOCK INSTANCE statement
 	UnlockInstanceCommand = "UNLOCK INSTANCE"
+	// PurgeBinaryLogsCommand represents PURGE BINARY LOGS statement
+	PurgeBinaryLogsCommand = "PURGE BINARY LOGS"
+	// ResetBinaryLogsAndGtidsCommand represents RESET BINARY LOGS AND GTIDS statement
+	ResetBinaryLogsAndGtidsCommand = "RESET BINARY LOGS AND GTIDS"
+	// ChangeReplicationFilterCommand represents CHANGE REPLICATION FILTER statement
+	ChangeReplicationFilterCommand = "CHANGE REPLICATION FILTER"
+	// ResetReplicaCommand represents RESET REPLICA statement
+	ResetReplicaCommand = "RESET REPLICA"
+	// StartReplicaCommand represents START REPLICA statement
+	StartReplicaCommand = "START REPLICA"
+	// StopReplicaCommand represents STOP REPLICA statement
+	StopReplicaCommand = "STOP REPLICA"
+	// StartGroupReplicationCommand represents START GROUP_REPLICATION statement
+	StartGroupReplicationCommand = "START GROUP_REPLICATION"
+	// StopGroupReplicationCommand represents STOP GROUP_REPLICATION statement
+	StopGroupReplicationCommand = "STOP GROUP_REPLICATION"
 	// UnknownCommand represents unknown statements
 	UnknownCommand = "UNKNOWN"
 	// SetOprCommand represents UNION/INTERSECT/EXCEPT statement
@@ -1546,4 +1562,44 @@ func (n *LockInstanceStmt) SEMCommand() string {
 // SEMCommand returns the command string for the statement.
 func (n *UnlockInstanceStmt) SEMCommand() string {
 	return UnlockInstanceCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *PurgeBinaryLogsStmt) SEMCommand() string {
+	return PurgeBinaryLogsCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *ResetBinaryLogsAndGtidsStmt) SEMCommand() string {
+	return ResetBinaryLogsAndGtidsCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *ChangeReplicationFilterStmt) SEMCommand() string {
+	return ChangeReplicationFilterCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *ResetReplicaStmt) SEMCommand() string {
+	return ResetReplicaCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *StartReplicaStmt) SEMCommand() string {
+	return StartReplicaCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *StopReplicaStmt) SEMCommand() string {
+	return StopReplicaCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *StartGroupReplicationStmt) SEMCommand() string {
+	return StartGroupReplicationCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *StopGroupReplicationStmt) SEMCommand() string {
+	return StopGroupReplicationCommand
 }

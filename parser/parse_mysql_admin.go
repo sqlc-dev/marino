@@ -355,11 +355,18 @@ func (r *rdParser) parseCacheIndexName() ast.CIStr {
 	return ast.NewCIStr(r.parseIdentifier())
 }
 
-// parseResetStmt implements the RESET statement family, of which only
-// ResetPersistStmt is supported:
-// "RESET" "PERSIST" [["IF" "EXISTS"] Identifier].
+// parseResetStmt implements the RESET statement family:
+// ResetPersistStmt ("RESET" "PERSIST" [["IF" "EXISTS"] Identifier])
+// here, with ResetReplicaStmt and ResetBinaryLogsAndGtidsStmt in
+// parse_replication.go.
 func (r *rdParser) parseResetStmt() ast.StmtNode {
-	if r.la(1) != persist {
+	switch r.la(1) {
+	case replica:
+		return r.parseResetReplicaStmt()
+	case binaryType:
+		return r.parseResetBinaryLogsAndGtidsStmt()
+	case persist:
+	default:
 		// The other RESET forms do not parse; fail at RESET the way an
 		// unregistered statement head does.
 		r.syntaxError()
