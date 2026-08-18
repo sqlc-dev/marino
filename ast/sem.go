@@ -371,6 +371,8 @@ const (
 	CalibrateResourceCommand = "CALIBRATE RESOURCE"
 	// CancelDistributionJobCommand represents CANCEL DISTRIBUTION JOB statement
 	CancelDistributionJobCommand = "CANCEL DISTRIBUTION JOB"
+	// ChangeReplicationSourceCommand represents CHANGE REPLICATION SOURCE TO statement
+	ChangeReplicationSourceCommand = "CHANGE REPLICATION SOURCE"
 	// CommitCommand represents COMMIT statement
 	CommitCommand = "COMMIT"
 	// AlterTableCompactCommand represents ALTER TABLE COMPACT statement
@@ -945,6 +947,11 @@ func (n *BeginStmt) SEMCommand() string {
 // SEMCommand returns the command string for the statement.
 func (n *BinlogStmt) SEMCommand() string {
 	return BinlogCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *ChangeReplicationSourceStmt) SEMCommand() string {
+	return ChangeReplicationSourceCommand
 }
 
 // SEMCommand returns the command string for the statement.

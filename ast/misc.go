@@ -32,6 +32,7 @@ var (
 	_ StmtNode = &AlterRangeStmt{}
 	_ StmtNode = &BeginStmt{}
 	_ StmtNode = &BinlogStmt{}
+	_ StmtNode = &ChangeReplicationSourceStmt{}
 	_ StmtNode = &CommitStmt{}
 	_ StmtNode = &CreateUserStmt{}
 	_ StmtNode = &DeallocateStmt{}
@@ -474,7 +475,10 @@ const (
 	TrafficOptionReadOnly
 )
 
-var _ SensitiveStmtNode = (*TrafficStmt)(nil)
+var (
+	_ SensitiveStmtNode = (*ChangeReplicationSourceStmt)(nil)
+	_ SensitiveStmtNode = (*TrafficStmt)(nil)
+)
 
 // TrafficStmt is traffic operation statement.
 type TrafficStmt struct {
@@ -849,6 +853,89 @@ func (n *BinlogStmt) Accept(v Visitor) (Node, bool) {
 		return v.Leave(newNode)
 	}
 	n = newNode.(*BinlogStmt)
+	return v.Leave(n)
+}
+
+// ReplicationSourceOption is a single name = value option of
+// ChangeReplicationSourceStmt. Names are stored uppercase; the parser
+// does not validate them against the server's option list. Values are
+// literals: a string, integer, or decimal.
+type ReplicationSourceOption struct {
+	Name  string
+	Value ValueExpr
+}
+
+// Restore implements Node interface.
+func (n *ReplicationSourceOption) Restore(ctx *format.RestoreCtx) error {
+	ctx.WriteKeyWord(n.Name)
+	ctx.WritePlain(" = ")
+	if err := n.Value.Restore(ctx); err != nil {
+		return fmt.Errorf("an error occurred while restore ReplicationSourceOption.Value: %w", err)
+	}
+	return nil
+}
+
+// ChangeReplicationSourceStmt is a statement to configure a replication
+// channel's connection to its source, "CHANGE REPLICATION SOURCE TO"
+// (which replaced CHANGE MASTER TO; the removed spelling is not parsed).
+// The MySQL 26.7 Change Stream Applier options APPLIER_VERSION,
+// APPLIER_WORKER_COUNT, and APPLIER_EVENT_MEMORY_LIMIT parse through the
+// same generic option form as the connection options.
+// See https://dev.mysql.com/doc/refman/26.7/en/change-replication-source-to.html
+type ChangeReplicationSourceStmt struct {
+	stmtNode
+
+	Options []*ReplicationSourceOption
+	Channel string // FOR CHANNEL clause; empty when absent
+}
+
+// Restore implements Node interface.
+func (n *ChangeReplicationSourceStmt) Restore(ctx *format.RestoreCtx) error {
+	ctx.WriteKeyWord("CHANGE REPLICATION SOURCE TO ")
+	for i, opt := range n.Options {
+		if i != 0 {
+			ctx.WritePlain(", ")
+		}
+		if err := opt.Restore(ctx); err != nil {
+			return fmt.Errorf("an error occurred while restore ChangeReplicationSourceStmt.Options[%d]: %w", i, err)
+		}
+	}
+	if n.Channel != "" {
+		ctx.WriteKeyWord(" FOR CHANNEL ")
+		ctx.WriteString(n.Channel)
+	}
+	return nil
+}
+
+// SecureText implements SensitiveStatement interface.
+func (n *ChangeReplicationSourceStmt) SecureText() string {
+	opts := make([]*ReplicationSourceOption, 0, len(n.Options))
+	for _, opt := range n.Options {
+		if strings.Contains(opt.Name, "PASSWORD") {
+			opt = &ReplicationSourceOption{Name: opt.Name, Value: NewValueExpr("xxxxxx", "", "")}
+		}
+		opts = append(opts, opt)
+	}
+	masked := &ChangeReplicationSourceStmt{Options: opts, Channel: n.Channel}
+	var sb strings.Builder
+	_ = masked.Restore(format.NewRestoreCtx(format.DefaultRestoreFlags, &sb))
+	return sb.String()
+}
+
+// Accept implements Node Accept interface.
+func (n *ChangeReplicationSourceStmt) Accept(v Visitor) (Node, bool) {
+	newNode, skipChildren := v.Enter(n)
+	if skipChildren {
+		return v.Leave(newNode)
+	}
+	n = newNode.(*ChangeReplicationSourceStmt)
+	for _, opt := range n.Options {
+		node, ok := opt.Value.Accept(v)
+		if !ok {
+			return n, false
+		}
+		opt.Value = node.(ValueExpr)
+	}
 	return v.Leave(n)
 }
 

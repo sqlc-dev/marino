@@ -306,6 +306,7 @@ var Keywords = []KeywordsType{
 	{"CASCADED", false, "unreserved"},
 	{"CAUSAL", false, "unreserved"},
 	{"CHAIN", false, "unreserved"},
+	{"CHANNEL", false, "unreserved"},
 	{"CHARSET", false, "unreserved"},
 	{"CHECKPOINT", false, "unreserved"},
 	{"CHECKSUM", false, "unreserved"},

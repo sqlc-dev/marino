@@ -165,6 +165,7 @@ const (
 	causal                     = 57638
 	chain                      = 57639
 	change                     = 57380
+	channel                    = 58252
 	charType                   = 57381
 	character                  = 57382
 	charsetKwd                 = 57640

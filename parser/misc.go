@@ -240,6 +240,7 @@ var tokenMap = map[string]int{
 	"CAUSAL":                         causal,
 	"CHAIN":                          chain,
 	"CHANGE":                         change,
+	"CHANNEL":                        channel,
 	"CHAR":                           charType,
 	"CHARACTER":                      character,
 	"CHARSET":                        charsetKwd,

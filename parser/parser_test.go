@@ -106,7 +106,7 @@ func TestSimple(t *testing.T) {
 		"following", "preceding", "unbounded", "respect", "nulls", "current", "last", "against", "expansion",
 		"chain", "error", "general", "nvarchar", "pack_keys", "p", "shard_row_id_bits", "pre_split_regions",
 		"constraints", "role", "replicas", "policy", "s3", "strict", "running", "stop", "preserve", "placement", "attributes", "attribute", "resource",
-		"burstable", "calibrate", "masking", "rollup", "manual", "parallel",
+		"burstable", "calibrate", "masking", "rollup", "manual", "parallel", "channel",
 	}
 	for _, kw := range unreservedKws {
 		src := fmt.Sprintf("SELECT %s FROM tbl;", kw)
@@ -7618,6 +7618,48 @@ func TestAnalyze(t *testing.T) {
 		{"analyze local table t,t1", true, "ANALYZE NO_WRITE_TO_BINLOG TABLE `t`,`t1`"},
 	}
 	RunTest(t, table, false, false)
+}
+
+func TestChangeReplicationSource(t *testing.T) {
+	table := []testCase{
+		// MySQL 26.7 Change Stream Applier options
+		{"change replication source to applier_version = 2", true, "CHANGE REPLICATION SOURCE TO APPLIER_VERSION = 2"},
+		{"CHANGE REPLICATION SOURCE TO APPLIER_VERSION = 1, APPLIER_WORKER_COUNT = 64, APPLIER_EVENT_MEMORY_LIMIT = 1073741824 FOR CHANNEL 'channel_1'", true, "CHANGE REPLICATION SOURCE TO APPLIER_VERSION = 1, APPLIER_WORKER_COUNT = 64, APPLIER_EVENT_MEMORY_LIMIT = 1073741824 FOR CHANNEL 'channel_1'"},
+
+		// generic connection options
+		{"change replication source to source_host = 'replica.example.com', source_port = 3306", true, "CHANGE REPLICATION SOURCE TO SOURCE_HOST = 'replica.example.com', SOURCE_PORT = 3306"},
+		{"change replication source to source_auto_position = 1 for channel 'group_replication_recovery'", true, "CHANGE REPLICATION SOURCE TO SOURCE_AUTO_POSITION = 1 FOR CHANNEL 'group_replication_recovery'"},
+		{"change replication source to source_heartbeat_period = 60.5", true, "CHANGE REPLICATION SOURCE TO SOURCE_HEARTBEAT_PERIOD = 60.5"},
+
+		// negative test cases
+		{"change replication source to", false, ""},
+		{"change replication source applier_version = 2", false, ""},
+		{"change master to master_host = 'h'", false, ""},
+		{"change replication source to applier_version", false, ""},
+		{"change replication source to applier_version = 2,", false, ""},
+		{"change replication source to applier_version = 2 for channel", false, ""},
+		{"change replication source to for channel 'ch'", false, ""},
+	}
+	RunTest(t, table, false, false)
+
+	// SOURCE_PASSWORD is masked in the sensitive-statement text.
+	p := parser.New()
+	stmt, err := p.ParseOneStmt("change replication source to source_user = 'repl', source_password = 'hunter2'", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sensitive, ok := stmt.(ast.SensitiveStmtNode)
+	if !ok {
+		t.Fatalf("expected ChangeReplicationSourceStmt to implement SensitiveStmtNode, got %T", stmt)
+	}
+	secure := sensitive.SecureText()
+	if strings.Contains(secure, "hunter2") {
+		t.Fatalf("SecureText leaked the password: %q", secure)
+	}
+	want := "CHANGE REPLICATION SOURCE TO SOURCE_USER = 'repl', SOURCE_PASSWORD = 'xxxxxx'"
+	if secure != want {
+		t.Fatalf("got %q, want %q", secure, want)
+	}
 }
 
 func TestMySQLReservedWordCompat(t *testing.T) {

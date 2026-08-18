@@ -40,6 +40,7 @@ var unReservedKeywordNames = []string{
 	"CLEANUP",
 	"CLOSE",
 	"CHAIN",
+	"CHANNEL",
 	"CHARSET",
 	"COLUMNS",
 	"CONFIG",
