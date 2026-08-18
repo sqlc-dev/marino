@@ -2475,9 +2475,18 @@ func (n *PlacementOption) Restore(ctx *format.RestoreCtx) error {
 
 // ResourceGroupOption is used for parsing resource group option.
 type ResourceGroupOption struct {
-	Tp                ResourceUnitType
-	StrValue          string
-	UintValue         uint64
+	Tp        ResourceUnitType
+	StrValue  string
+	UintValue uint64
+	// IntValue holds the ResourceGroupThreadPriority value, which may be
+	// negative (MySQL allows -20..19).
+	IntValue int64
+	// BoolValue distinguishes ResourceGroupEnable's ENABLE (true) from
+	// DISABLE (false).
+	BoolValue bool
+	// Force is the optional FORCE modifier of DISABLE (MySQL syntax
+	// ALTER RESOURCE GROUP ... DISABLE FORCE).
+	Force             bool
 	Burstable         BurstableType
 	RunawayOptionList []*ResourceGroupRunawayOption
 	BackgroundOptions []*ResourceGroupBackgroundOption
@@ -2500,6 +2509,13 @@ const (
 	ResourceUnlimitedOption
 	ResourceGroupRunaway
 	ResourceGroupBackground
+
+	// MySQL-syntax resource group options (CREATE/ALTER RESOURCE GROUP
+	// per the MySQL reference manual rather than the TiDB dialect).
+	ResourceGroupType
+	ResourceGroupVCPU
+	ResourceGroupThreadPriority
+	ResourceGroupEnable
 )
 
 type BurstableType int
@@ -2563,6 +2579,27 @@ func (n *ResourceGroupOption) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(")")
 		} else {
 			ctx.WritePlain("NULL")
+		}
+	case ResourceGroupType:
+		ctx.WriteKeyWord("TYPE ")
+		ctx.WritePlain("= ")
+		ctx.WriteKeyWord(n.StrValue)
+	case ResourceGroupVCPU:
+		ctx.WriteKeyWord("VCPU ")
+		ctx.WritePlain("= ")
+		ctx.WritePlain(n.StrValue)
+	case ResourceGroupThreadPriority:
+		ctx.WriteKeyWord("THREAD_PRIORITY ")
+		ctx.WritePlain("= ")
+		ctx.WritePlainf("%d", n.IntValue)
+	case ResourceGroupEnable:
+		if n.BoolValue {
+			ctx.WriteKeyWord("ENABLE")
+		} else {
+			ctx.WriteKeyWord("DISABLE")
+			if n.Force {
+				ctx.WriteKeyWord(" FORCE")
+			}
 		}
 	case ResourceGroupBackground:
 		ctx.WritePlain("BACKGROUND ")

@@ -413,6 +413,23 @@ var unReservedKeywordNames = []string{
 	"IETF_QUOTES",
 	"DIAGNOSTICS",
 	"STACKED",
+	"AGGREGATE",
+	"CHANGED",
+	"CLONE",
+	"COMPONENT",
+	"FAST",
+	"INSTALL",
+	"LEAVES",
+	"PERSIST",
+	"PLUGIN",
+	"RETURNS",
+	"SONAME",
+	"STRING",
+	"THREAD_PRIORITY",
+	"UNINSTALL",
+	"UPGRADE",
+	"USE_FRM",
+	"VCPU",
 }
 
 // notKeywordTokenNames lists the NotKeywordToken production alternatives of parser.y.

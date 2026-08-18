@@ -381,6 +381,8 @@ func (r *rdParser) parseStatement() ast.StmtNode {
 			return r.parseLoadDataStmt()
 		case stats:
 			return r.parseLoadStatsStmt()
+		case index:
+			return r.parseLoadIndexStmt()
 		}
 		r.unsupported("LOAD statement")
 		return nil

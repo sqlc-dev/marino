@@ -20,7 +20,7 @@
 -- case
 -- error: line 1 column 12 near "EVENT e ON SCHEDULE AT CURRENT_TIMESTAMP DO SELECT 1" 
 -- case
--- error: line 1 column 15 near "FUNCTION f(x INT) RETURNS INT DETERMINISTIC RETURN x + 1" 
+-- error: line 1 column 18 near "(x INT) RETURNS INT DETERMINISTIC RETURN x + 1" 
 -- case
 -- error: line 1 column 11 near "JSON DUALITY VIEW jdv AS SELECT JSON_DUALITY_OBJECT('id' : t.id) FROM t" 
 -- case

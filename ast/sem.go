@@ -474,6 +474,30 @@ const (
 	ResignalCommand = "RESIGNAL"
 	// GetDiagnosticsCommand represents GET DIAGNOSTICS statement
 	GetDiagnosticsCommand = "GET DIAGNOSTICS"
+	// CheckTableCommand represents CHECK TABLE statement
+	CheckTableCommand = "CHECK TABLE"
+	// ChecksumTableCommand represents CHECKSUM TABLE statement
+	ChecksumTableCommand = "CHECKSUM TABLE"
+	// RepairTablesCommand represents REPAIR TABLE statement
+	RepairTablesCommand = "REPAIR TABLE"
+	// CreateLoadableFunctionCommand represents CREATE FUNCTION statement for loadable functions
+	CreateLoadableFunctionCommand = "CREATE FUNCTION"
+	// InstallComponentCommand represents INSTALL COMPONENT statement
+	InstallComponentCommand = "INSTALL COMPONENT"
+	// UninstallComponentCommand represents UNINSTALL COMPONENT statement
+	UninstallComponentCommand = "UNINSTALL COMPONENT"
+	// InstallPluginCommand represents INSTALL PLUGIN statement
+	InstallPluginCommand = "INSTALL PLUGIN"
+	// UninstallPluginCommand represents UNINSTALL PLUGIN statement
+	UninstallPluginCommand = "UNINSTALL PLUGIN"
+	// CloneCommand represents CLONE statement
+	CloneCommand = "CLONE"
+	// CacheIndexCommand represents CACHE INDEX statement
+	CacheIndexCommand = "CACHE INDEX"
+	// LoadIndexCommand represents LOAD INDEX INTO CACHE statement
+	LoadIndexCommand = "LOAD INDEX INTO CACHE"
+	// ResetPersistCommand represents RESET PERSIST statement
+	ResetPersistCommand = "RESET PERSIST"
 	// UnknownCommand represents unknown statements
 	UnknownCommand = "UNKNOWN"
 	// SetOprCommand represents UNION/INTERSECT/EXCEPT statement
@@ -1361,4 +1385,64 @@ func (n *ResignalStmt) SEMCommand() string {
 // SEMCommand returns the command string for the statement.
 func (n *GetDiagnosticsStmt) SEMCommand() string {
 	return GetDiagnosticsCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *CheckTableStmt) SEMCommand() string {
+	return CheckTableCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *ChecksumTableStmt) SEMCommand() string {
+	return ChecksumTableCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *RepairTablesStmt) SEMCommand() string {
+	return RepairTablesCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *CreateLoadableFunctionStmt) SEMCommand() string {
+	return CreateLoadableFunctionCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *InstallComponentStmt) SEMCommand() string {
+	return InstallComponentCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *UninstallComponentStmt) SEMCommand() string {
+	return UninstallComponentCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *InstallPluginStmt) SEMCommand() string {
+	return InstallPluginCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *UninstallPluginStmt) SEMCommand() string {
+	return UninstallPluginCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *CloneStmt) SEMCommand() string {
+	return CloneCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *CacheIndexStmt) SEMCommand() string {
+	return CacheIndexCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *LoadIndexStmt) SEMCommand() string {
+	return LoadIndexCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *ResetPersistStmt) SEMCommand() string {
+	return ResetPersistCommand
 }

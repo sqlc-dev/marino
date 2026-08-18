@@ -84,6 +84,10 @@ func (r *rdParser) parseCreateStmtFamily() ast.StmtNode {
 		return r.parseCreateBindingStmt()
 	case procedure:
 		return r.parseCreateProcedureStmt()
+	case function, aggregate:
+		// Only the loadable function form parses; a stored function
+		// fails inside (at its parameter list).
+		return r.parseCreateLoadableFunctionStmt()
 	default:
 		// No production continues here; the automaton shifts CREATE and
 		// errors at the lookahead, so advance before reporting.
