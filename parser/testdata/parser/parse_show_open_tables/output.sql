@@ -1,0 +1,5 @@
+SHOW OPEN TABLES
+-- case
+SHOW OPEN TABLES IN `test`
+-- case
+SHOW OPEN TABLES IN `test`

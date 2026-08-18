@@ -1,0 +1,11 @@
+create table t (id BIGINT, user_id BIGINT, action_type VARCHAR(20), PRIMARY KEY (id), INDEX idx_user_id (user_id)) SPLIT PRIMARY KEY BETWEEN (0) AND (1000000) REGIONS 4 SPLIT INDEX idx_user_id BETWEEN (1000) AND (100000) REGIONS 3
+-- case
+alter table t SPLIT PRIMARY KEY BETWEEN (0) AND (1000000) REGIONS 4
+-- case
+alter table t SPLIT INDEX ss BETWEEN (0) AND (1000000) REGIONS 3
+-- case
+create table t (id BIGINT) SPLIT BETWEEN (0) AND (1000000) REGIONS 4
+-- case
+create table t (id BIGINT, INDEX idx(id)) SPLIT BETWEEN (0) AND (1000000) REGIONS 4 SPLIT INDEX idx BETWEEN (0) AND (1000000) REGIONS 2
+-- case
+alter table t SPLIT BETWEEN (0) AND (1000000) REGIONS 3

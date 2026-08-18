@@ -1,0 +1,23 @@
+RECOMMEND INDEX RUN
+-- case
+RECOMMEND INDEX RUN WITH A = 1
+-- case
+RECOMMEND INDEX RUN WITH A = 1, B = 2
+-- case
+RECOMMEND INDEX RUN FOR 'select * from t where a=1'
+-- case
+RECOMMEND INDEX RUN FOR 'select * from t where a=1' WITH A = 1
+-- case
+RECOMMEND INDEX RUN FOR 'select * from t where a=1' WITH A = 1, B = 2
+-- case
+RECOMMEND INDEX SHOW OPTION
+-- case
+RECOMMEND INDEX APPLY 1
+-- case
+RECOMMEND INDEX IGNORE 1
+-- case
+RECOMMEND INDEX SET A = 1
+-- case
+RECOMMEND INDEX SET A = 1, B = 2
+-- case
+RECOMMEND INDEX SET A = 1, B = 2, C = 3
