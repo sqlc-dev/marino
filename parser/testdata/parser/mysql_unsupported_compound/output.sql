@@ -1,5 +1,0 @@
--- error: line 1 column 6 near "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'error'" 
--- case
--- error: line 1 column 8 near "RESIGNAL" 
--- case
--- error: line 1 column 3 near "GET DIAGNOSTICS @n = NUMBER" 

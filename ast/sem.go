@@ -468,6 +468,12 @@ const (
 	// ProcedureCommand represents all statements in procedure. It's too rough
 	// but still fine for now.
 	ProcedureCommand = "PROCEDURE"
+	// SignalCommand represents SIGNAL statement
+	SignalCommand = "SIGNAL"
+	// ResignalCommand represents RESIGNAL statement
+	ResignalCommand = "RESIGNAL"
+	// GetDiagnosticsCommand represents GET DIAGNOSTICS statement
+	GetDiagnosticsCommand = "GET DIAGNOSTICS"
 	// UnknownCommand represents unknown statements
 	UnknownCommand = "UNKNOWN"
 	// SetOprCommand represents UNION/INTERSECT/EXCEPT statement
@@ -1340,4 +1346,19 @@ func (n *ProcedureErrorVal) SEMCommand() string {
 // SEMCommand returns the command string for the statement.
 func (n *ProcedureErrorState) SEMCommand() string {
 	return ProcedureCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *SignalStmt) SEMCommand() string {
+	return SignalCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *ResignalStmt) SEMCommand() string {
+	return ResignalCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *GetDiagnosticsStmt) SEMCommand() string {
+	return GetDiagnosticsCommand
 }

@@ -205,7 +205,8 @@ func (r *rdParser) parseProcedureProcStmt() ast.StmtNode {
 //	SelectStmt | SelectStmtWithClause | SubSelect | SetStmt | UpdateStmt
 //	| UseStmt | InsertIntoStmt | ReplaceIntoStmt | CommitStmt
 //	| RollbackStmt | ExplainStmt | SetOprStmt | DeleteFromStmt
-//	| AnalyzeTableStmt | TruncateTableStmt
+//	| AnalyzeTableStmt | TruncateTableStmt | SignalStmt | ResignalStmt
+//	| GetDiagnosticsStmt
 //
 // The SubSelect alternative carries the usual IsInBraces action, which
 // finishSelectFamily reproduces.
@@ -247,6 +248,12 @@ func (r *rdParser) parseProcedureStatementStmt() ast.StmtNode {
 		return r.parseAnalyzeTableStmt()
 	case truncate:
 		return r.parseTruncateTableStmt()
+	case signal:
+		return r.parseSignalStmt()
+	case resignal:
+		return r.parseResignalStmt()
+	case get:
+		return r.parseGetDiagnosticsStmt()
 	}
 	r.syntaxError()
 	return nil
