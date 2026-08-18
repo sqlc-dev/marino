@@ -429,13 +429,25 @@ func spatialTypeByte(tok int) byte {
 
 // parseCharTail finishes `Char/NChar FieldLen OptBinary` and
 // `Char/NChar OptBinary` after the type keyword(s) have been consumed.
+// Deviation from the goyacc grammar: the attribute is parsed as
+// OptCharsetWithOptBinary, whose extra leading tokens admit the MySQL
+// 26.7 §13.3.1 ASCII/UNICODE/BYTE attributes (`CHAR BYTE` is the
+// documented alias for BINARY); goyacc allowed them only on TEXT,
+// ENUM, SET, and LONG.
 func (r *rdParser) parseCharTail() *types.FieldType {
 	tp := types.NewFieldType(mysql.TypeString)
 	if r.tok() == int('(') {
 		tp.SetFlen(r.parseFieldLen())
 	}
-	opt := r.parseOptBinary()
+	opt := r.parseOptCharsetWithOptBinary()
 	tp.SetCharset(opt.Charset)
+	if opt.Charset == charset.CharsetBin {
+		// The binary charset (spelled BYTE or CHARACTER SET binary) makes
+		// the column BINARY(n); normalize like the TextType action so the
+		// result matches what parsing BINARY(n) produces.
+		tp.AddFlag(mysql.BinaryFlag)
+		tp.SetCollate(charset.CollationBin)
+	}
 	if opt.IsBinary {
 		tp.AddFlag(mysql.BinaryFlag)
 	}
@@ -443,13 +455,19 @@ func (r *rdParser) parseCharTail() *types.FieldType {
 }
 
 // parseVarcharTail finishes `Varchar/NVarchar FieldLen OptBinary` after
-// the type keyword(s) have been consumed.
+// the type keyword(s) have been consumed, with the same
+// OptCharsetWithOptBinary deviation and binary-charset normalization as
+// parseCharTail.
 func (r *rdParser) parseVarcharTail() *types.FieldType {
 	flen := r.parseFieldLen()
-	opt := r.parseOptBinary()
+	opt := r.parseOptCharsetWithOptBinary()
 	tp := types.NewFieldType(mysql.TypeVarchar)
 	tp.SetFlen(flen)
 	tp.SetCharset(opt.Charset)
+	if opt.Charset == charset.CharsetBin {
+		tp.AddFlag(mysql.BinaryFlag)
+		tp.SetCollate(charset.CollationBin)
+	}
 	if opt.IsBinary {
 		tp.AddFlag(mysql.BinaryFlag)
 	}
