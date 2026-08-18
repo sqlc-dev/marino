@@ -63,6 +63,7 @@ const (
 	affinity                   = 57600
 	after                      = 57601
 	against                    = 57602
+	aggregate                  = 58258
 	ago                        = 57603
 	algorithm                  = 57604
 	all                        = 57364
@@ -165,6 +166,7 @@ const (
 	causal                     = 57638
 	chain                      = 57639
 	change                     = 57380
+	changed                    = 58259
 	channel                    = 58252
 	charType                   = 57381
 	character                  = 57382
@@ -178,6 +180,7 @@ const (
 	client                     = 57646
 	clientErrorsSummary        = 57647
 	close                      = 57648
+	clone                      = 58260
 	cluster                    = 57649
 	clustered                  = 57650
 	cmSketch                   = 58158
@@ -193,6 +196,7 @@ const (
 	commit                     = 57657
 	committed                  = 57658
 	compact                    = 57659
+	component                  = 58261
 	compress                   = 58007
 	compressed                 = 57660
 	compression                = 57661
@@ -328,6 +332,7 @@ const (
 	extract                    = 58023
 	failedLoginAttempts        = 57721
 	falseKwd                   = 57425
+	fast                       = 58262
 	faultsSym                  = 57722
 	fetch                      = 57426
 	fields                     = 57723
@@ -409,6 +414,7 @@ const (
 	insert                     = 57453
 	insertMethod               = 57752
 	insertValues               = 58228
+	install                    = 58263
 	instance                   = 57753
 	instant                    = 58034
 	int1Type                   = 57455
@@ -465,6 +471,7 @@ const (
 	learnerConstraints         = 58045
 	learners                   = 58046
 	leave                      = 57475
+	leaves                     = 58264
 	left                       = 57476
 	less                       = 57767
 	level                      = 57768
@@ -626,12 +633,14 @@ const (
 	per_table                  = 57837
 	percent                    = 57835
 	percentRank                = 57517
+	persist                    = 58265
 	pessimistic                = 58176
 	pipes                      = 57359
 	pipesAsOr                  = 57838
 	placement                  = 58057
 	plan                       = 58059
 	planCache                  = 58058
+	plugin                     = 58266
 	plugins                    = 57839
 	point                      = 57840
 	policies                   = 58177
@@ -705,6 +714,7 @@ const (
 	restores                   = 57876
 	restrict                   = 57533
 	resume                     = 57877
+	returns                    = 58267
 	reuse                      = 57878
 	reverse                    = 57879
 	revoke                     = 57534
@@ -767,6 +777,7 @@ const (
 	smallIntType               = 57544
 	snapshot                   = 57914
 	some                       = 57915
+	soname                     = 58268
 	source                     = 57916
 	spatial                    = 57545
 	speed                      = 58077
@@ -824,6 +835,7 @@ const (
 	straightJoin               = 57556
 	strict                     = 58086
 	strictFormat               = 57938
+	stringKwd                  = 58269
 	stringLit                  = 57353
 	strong                     = 58087
 	subDate                    = 58088
@@ -853,6 +865,7 @@ const (
 	textType                   = 57952
 	than                       = 57953
 	then                       = 57560
+	threadPriority             = 58270
 	tiFlash                    = 58198
 	tidb                       = 58197
 	tidbCurrentTSO             = 57561
@@ -907,6 +920,7 @@ const (
 	undefined                  = 57974
 	underscoreCS               = 57352
 	unicodeSym                 = 57975
+	uninstall                  = 58271
 	union                      = 57569
 	unique                     = 57570
 	unknown                    = 57976
@@ -917,8 +931,10 @@ const (
 	until                      = 57573
 	untilTS                    = 58115
 	update                     = 57574
+	upgrade                    = 58272
 	usage                      = 57575
 	use                        = 57576
+	useFrm                     = 58273
 	user                       = 57978
 	using                      = 57577
 	utcDate                    = 57578
@@ -936,6 +952,7 @@ const (
 	variables                  = 57981
 	variance                   = 58117
 	varying                    = 57585
+	vcpu                       = 58274
 	vectorType                 = 57982
 	verboseType                = 58120
 	view                       = 57983

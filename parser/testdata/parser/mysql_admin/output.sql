@@ -1,0 +1,75 @@
+CREATE RESOURCE GROUP `rg1` TYPE = USER, VCPU = 0-3
+-- case
+CREATE RESOURCE GROUP `rg2` TYPE = SYSTEM, VCPU = 0,2-3,7, THREAD_PRIORITY = -19, ENABLE
+-- case
+ALTER RESOURCE GROUP `rg1` VCPU = 0-3
+-- case
+ALTER RESOURCE GROUP `rg1` THREAD_PRIORITY = 5, DISABLE FORCE
+-- case
+CHECK TABLE `t`
+-- case
+CHECK TABLE `t1`, `t2` FOR UPGRADE QUICK FAST MEDIUM EXTENDED CHANGED
+-- case
+CHECKSUM TABLE `t`
+-- case
+CHECKSUM TABLE `t1`, `t2` QUICK
+-- case
+CHECKSUM TABLE `t` EXTENDED
+-- case
+REPAIR TABLE `t`
+-- case
+REPAIR NO_WRITE_TO_BINLOG TABLE `t` QUICK EXTENDED USE_FRM
+-- case
+REPAIR NO_WRITE_TO_BINLOG TABLE `t1`, `t2` QUICK
+-- case
+CREATE FUNCTION `metaphon` RETURNS STRING SONAME 'udf.so'
+-- case
+CREATE AGGREGATE FUNCTION IF NOT EXISTS `myfunc` RETURNS INTEGER SONAME 'udf.so'
+-- case
+CREATE FUNCTION `f1` RETURNS INTEGER SONAME 'lib.so'
+-- case
+CREATE FUNCTION `f2` RETURNS REAL SONAME 'lib.so'
+-- case
+CREATE FUNCTION `f3` RETURNS DECIMAL SONAME 'lib.so'
+-- case
+INSTALL COMPONENT 'file://component_validate_password'
+-- case
+INSTALL COMPONENT 'file://c1', 'file://c2' SET @@GLOBAL.`log_error_verbosity`=3, @`a`=1
+-- case
+INSTALL PLUGIN `myplugin` SONAME 'plugin.so'
+-- case
+UNINSTALL COMPONENT 'file://component_validate_password'
+-- case
+UNINSTALL COMPONENT 'file://c1', 'file://c2'
+-- case
+UNINSTALL PLUGIN `myplugin`
+-- case
+CLONE LOCAL DATA DIRECTORY = '/tmp/clone'
+-- case
+CLONE LOCAL DATA DIRECTORY = '/tmp/clone'
+-- case
+CLONE INSTANCE FROM `user`@`host`:3306 IDENTIFIED BY 'password'
+-- case
+CLONE INSTANCE FROM `u`@`h`:3306 IDENTIFIED BY 'p' DATA DIRECTORY = '/d' REQUIRE SSL
+-- case
+CLONE INSTANCE FROM `u`@`h`:3306 IDENTIFIED BY 'p' REQUIRE NO SSL
+-- case
+CACHE INDEX `t` IN `hot_cache`
+-- case
+CACHE INDEX `t1` INDEX (`i1`, `i2`), `t2` INDEX (`i3`) IN `cold_cache`
+-- case
+CACHE INDEX `t` PARTITION (`p0`, `p1`) IN `default`
+-- case
+CACHE INDEX `t` PARTITION (ALL) INDEX (`i1`) IN `c1`
+-- case
+LOAD INDEX INTO CACHE `t`
+-- case
+LOAD INDEX INTO CACHE `t1` INDEX (`i1`) IGNORE LEAVES, `t2`
+-- case
+LOAD INDEX INTO CACHE `t` PARTITION (`p0`) INDEX (`i1`, `PRIMARY`)
+-- case
+RESET PERSIST
+-- case
+RESET PERSIST `var1`
+-- case
+RESET PERSIST IF EXISTS `var1`

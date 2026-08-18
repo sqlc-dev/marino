@@ -22,6 +22,7 @@ package parser
 // the masking-policy clauses, ...) live in parse_alter.go.
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -652,6 +653,9 @@ func (r *rdParser) isDirectResourceGroupOptionStart() bool {
 	switch r.tok() {
 	case ruRate, priority, burstable, queryLimit, background:
 		return true
+	case tp, vcpu, threadPriority, enable, disable:
+		// The MySQL-syntax resource group options.
+		return true
 	}
 	return false
 }
@@ -748,9 +752,68 @@ func (r *rdParser) parseDirectResourceGroupOption() *ast.ResourceGroupOption {
 		list := r.parseResourceGroupBackgroundOptionList()
 		r.expect(int(')'))
 		return &ast.ResourceGroupOption{Tp: ast.ResourceGroupBackground, BackgroundOptions: list}
+	case tp:
+		// "TYPE" EqOpt ("SYSTEM" | "USER") — MySQL syntax, as are the
+		// remaining options (CREATE/ALTER RESOURCE GROUP per the MySQL
+		// 26.7 reference manual, §15.7.2).
+		r.advance()
+		r.parseEqOpt()
+		switch r.tok() {
+		case system:
+			r.advance()
+			return &ast.ResourceGroupOption{Tp: ast.ResourceGroupType, StrValue: "SYSTEM"}
+		case user:
+			r.advance()
+			return &ast.ResourceGroupOption{Tp: ast.ResourceGroupType, StrValue: "USER"}
+		}
+		r.syntaxError()
+	case vcpu:
+		// "VCPU" EqOpt VCPUSpecList
+		r.advance()
+		r.parseEqOpt()
+		return &ast.ResourceGroupOption{Tp: ast.ResourceGroupVCPU, StrValue: r.parseVCPUSpecList()}
+	case threadPriority:
+		// "THREAD_PRIORITY" EqOpt ['-'] NUM
+		r.advance()
+		r.parseEqOpt()
+		negative := r.accept(int('-'))
+		value := int64(getUint64FromNUM(r.expect(intLit).item))
+		if negative {
+			value = -value
+		}
+		return &ast.ResourceGroupOption{Tp: ast.ResourceGroupThreadPriority, IntValue: value}
+	case enable:
+		// "ENABLE"
+		r.advance()
+		return &ast.ResourceGroupOption{Tp: ast.ResourceGroupEnable, BoolValue: true}
+	case disable:
+		// "DISABLE" ["FORCE"]
+		r.advance()
+		return &ast.ResourceGroupOption{Tp: ast.ResourceGroupEnable, Force: r.accept(force)}
 	}
 	r.syntaxError()
 	return nil
+}
+
+// parseVCPUSpecList implements VCPUSpecList, the value of the VCPU
+// resource group option: NUM | NUM '-' NUM, comma-separated. The list is
+// returned in canonical spelling (e.g. "0,2-3"). A comma continues the
+// list only when a number follows, since a comma may also separate
+// resource group options.
+func (r *rdParser) parseVCPUSpecList() string {
+	var sb strings.Builder
+	for {
+		sb.WriteString(strconv.FormatUint(getUint64FromNUM(r.expect(intLit).item), 10))
+		if r.accept(int('-')) {
+			sb.WriteByte('-')
+			sb.WriteString(strconv.FormatUint(getUint64FromNUM(r.expect(intLit).item), 10))
+		}
+		if r.tok() != int(',') || r.la(1) != intLit {
+			return sb.String()
+		}
+		r.advance()
+		sb.WriteByte(',')
+	}
 }
 
 // parseResourceGroupRunawayOptionList implements
