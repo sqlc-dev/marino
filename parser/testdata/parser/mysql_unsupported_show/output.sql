@@ -1,0 +1,27 @@
+-- error: line 1 column 16 near "LOGS" 
+-- case
+-- error: line 1 column 11 near "BINLOG EVENTS IN 'binlog.000001'" 
+-- case
+-- error: line 1 column 17 near "EVENT e" 
+-- case
+-- error: line 1 column 20 near "FUNCTION f" 
+-- case
+-- error: line 1 column 19 near "LIBRARY mylib" 
+-- case
+-- error: line 1 column 19 near "MASKING POLICY p" 
+-- case
+-- error: line 1 column 19 near "TRIGGER trg" 
+-- case
+-- error: line 1 column 11 near "ENGINE INNODB STATUS" 
+-- case
+-- error: line 1 column 18 near "CODE f" 
+-- case
+-- error: line 1 column 12 near "LIBRARY STATUS" 
+-- case
+-- error: line 1 column 15 near "PARSE_TREE SELECT 1" 
+-- case
+-- error: line 1 column 19 near "CODE p" 
+-- case
+-- error: line 1 column 13 near "RELAYLOG EVENTS" 
+-- case
+-- error: line 1 column 13 near "REPLICAS" 

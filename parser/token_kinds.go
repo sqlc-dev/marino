@@ -262,6 +262,7 @@ const (
 	depth                      = 58163
 	desc                       = 57409
 	describe                   = 57410
+	diagnostics                = 58253
 	digest                     = 57688
 	directory                  = 57689
 	disable                    = 57690
@@ -358,6 +359,7 @@ const (
 	ge                         = 58209
 	general                    = 57733
 	generated                  = 57436
+	get                        = 58254
 	getFormat                  = 58030
 	global                     = 57734
 	grant                      = 57437
@@ -694,6 +696,7 @@ const (
 	require                    = 57532
 	required                   = 57871
 	reset                      = 58181
+	resignal                   = 58255
 	resource                   = 57872
 	respect                    = 57873
 	restart                    = 57874
@@ -752,6 +755,7 @@ const (
 	shared                     = 57906
 	show                       = 57543
 	shutdown                   = 57907
+	signal                     = 58256
 	signed                     = 57908
 	similar                    = 58076
 	simple                     = 57909
@@ -786,6 +790,7 @@ const (
 	sqlstate                   = 57548
 	sqlwarning                 = 57549
 	ssl                        = 57553
+	stacked                    = 58257
 	staleness                  = 58078
 	start                      = 57928
 	startTS                    = 58080

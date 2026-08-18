@@ -411,6 +411,8 @@ var unReservedKeywordNames = []string{
 	"PAGE_COMPRESSION_LEVEL",
 	"TRANSACTIONAL",
 	"IETF_QUOTES",
+	"DIAGNOSTICS",
+	"STACKED",
 }
 
 // notKeywordTokenNames lists the NotKeywordToken production alternatives of parser.y.
