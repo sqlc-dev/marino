@@ -732,7 +732,7 @@ func (r *rdParser) parseAlterTableSpec() *ast.AlterTableSpec {
 func (r *rdParser) parseAlterTableSpecAdd() *ast.AlterTableSpec {
 	r.expect(add)
 	switch r.tok() {
-	case constraint, primary, unique, fulltext, foreign, check, key, index:
+	case constraint, primary, unique, fulltext, spatial, foreign, check, key, index:
 		// "ADD" ConstraintWithColumnarIndex (the Constraint alternative)
 		return &ast.AlterTableSpec{
 			Tp:         ast.AlterTableAddConstraint,

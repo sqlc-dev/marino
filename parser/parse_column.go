@@ -58,7 +58,8 @@ func (r *rdParser) isColumnOptionStart() bool {
 	switch r.tok() {
 	case not, not2, null, autoIncrement, primary, key, unique, defaultKwd,
 		serial, on, comment, check, constraint, generated, as, references,
-		collate, columnFormat, storage, autoRandom, secondaryEngineAttribute:
+		collate, columnFormat, storage, autoRandom, secondaryEngineAttribute,
+		srid:
 		return true
 	}
 	return false
@@ -261,6 +262,14 @@ func (r *rdParser) parseColumnOption() interface{} {
 		return &ast.ColumnOption{
 			Tp:       ast.ColumnOptionSecondaryEngineAttribute,
 			StrValue: r.expect(stringLit).lit,
+		}
+	case srid:
+		// ColumnOption: "SRID" LengthNum — the spatial column attribute
+		// (MySQL 26.7 §13.1.20.10); postdates the goyacc grammar.
+		r.advance()
+		return &ast.ColumnOption{
+			Tp:        ast.ColumnOptionSrid,
+			UintValue: r.parseLengthNum(),
 		}
 	}
 	r.syntaxError()
@@ -738,6 +747,32 @@ func (r *rdParser) parseConstraintElem() *ast.Constraint {
 		option := r.parseIndexOptionList()
 		c := &ast.Constraint{
 			Tp:           ast.ConstraintFulltext,
+			Keys:         keys,
+			Name:         name.String,
+			IsEmptyIndex: name.Empty,
+		}
+		if option != nil {
+			c.Option = option
+		} else {
+			c.Option = &ast.IndexOption{}
+		}
+		return c
+	case spatial:
+		// "SPATIAL" KeyOrIndexOpt IndexName '(' IndexPartSpecificationList ')' IndexOptionList
+		// — the MySQL 26.7 §15.1.20 table-constraint form, which postdates
+		// the goyacc grammar (it only had CREATE SPATIAL INDEX). Mirrors
+		// the FULLTEXT alternative.
+		r.advance()
+		if r.tok() == key || r.tok() == index {
+			r.advance()
+		}
+		name := r.parseIndexName()
+		r.expect(int('('))
+		keys := r.parseIndexPartSpecificationList()
+		r.expect(int(')'))
+		option := r.parseIndexOptionList()
+		c := &ast.Constraint{
+			Tp:           ast.ConstraintSpatial,
 			Keys:         keys,
 			Name:         name.String,
 			IsEmptyIndex: name.Empty,

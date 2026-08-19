@@ -47,6 +47,17 @@ const (
 	TypeGeometry   byte = 0xff
 
 	TypeTiDBVectorFloat32 byte = 0xe1
+
+	// MySQL reports every spatial column as TypeGeometry on the wire; these
+	// bytes exist only so the parser can keep the declared spatial subtype
+	// (following the TypeTiDBVectorFloat32 precedent for non-wire types).
+	TypePoint              byte = 0xe2
+	TypeLineString         byte = 0xe3
+	TypePolygon            byte = 0xe4
+	TypeMultiPoint         byte = 0xe5
+	TypeMultiLineString    byte = 0xe6
+	TypeMultiPolygon       byte = 0xe7
+	TypeGeometryCollection byte = 0xe8
 )
 
 // Flag information.

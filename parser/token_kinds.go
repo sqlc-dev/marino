@@ -379,6 +379,8 @@ const (
 	ge                         = 58209
 	general                    = 57733
 	generated                  = 57436
+	geometryCollectionType     = 58320
+	geometryType               = 58321
 	get                        = 58254
 	getFormat                  = 58030
 	global                     = 57734
@@ -500,6 +502,7 @@ const (
 	limit                      = 57478
 	linear                     = 57479
 	lines                      = 57480
+	linestringType             = 58322
 	list                       = 57769
 	lite                       = 58171
 	load                       = 57481
@@ -577,6 +580,9 @@ const (
 	modify                     = 57793
 	monitor                    = 57794
 	month                      = 57795
+	multilinestringType        = 58323
+	multipointType             = 58324
+	multipolygonType           = 58325
 	mutex                      = 58277
 	names                      = 57796
 	national                   = 57797
@@ -674,6 +680,7 @@ const (
 	point                      = 57840
 	policies                   = 58177
 	policy                     = 57841
+	polygonType                = 58326
 	position                   = 58060
 	preSplitRegions            = 57845
 	precedes                   = 58311
@@ -837,6 +844,7 @@ const (
 	sqlexception               = 57547
 	sqlstate                   = 57548
 	sqlwarning                 = 57549
+	srid                       = 58327
 	ssl                        = 57553
 	stacked                    = 58257
 	staleness                  = 58078
