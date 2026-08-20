@@ -1,0 +1,21 @@
+-- error: line 1 column 50 near "(1, 2)" 
+-- case
+-- error: line 1 column 50 near "()" 
+-- case
+-- error: line 1 column 60 near "@'h'" 
+-- case
+-- error: line 1 column 57 near "NULL" 
+-- case
+-- error: line 1 column 65 near "ON" 
+-- case
+-- error: line 1 column 66 near "OFF" 
+-- case
+-- error: line 1 column 69 near "STREAM" 
+-- case
+-- error: line 1 column 71 near "GENERATE" 
+-- case
+-- error: line 1 column 73 near "OFF" 
+-- case
+-- error: line 1 column 75 near "LOCAL" 
+-- case
+-- error: line 1 column 30 near "TO 100" 

@@ -1,0 +1,13 @@
+-- error: line 1 column 48 near "4194304" 
+-- case
+-- error: line 1 column 28 near "START TRANSACTION" 
+-- case
+-- error: line 1 column 41 near "ENGINE_ATTRIBUTE = '{}'" 
+-- case
+-- error: line 1 column 21 near "READ ONLY = 1" 
+-- case
+-- error: line 1 column 21 near "READ ONLY = DEFAULT" 
+-- case
+-- error: line 1 column 36 near "CHECK OPTION" 
+-- case
+-- error: line 1 column 35 near "CHECK OPTION" 

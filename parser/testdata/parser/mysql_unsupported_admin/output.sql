@@ -1,0 +1,35 @@
+-- error: line 1 column 44 near "USING DATA 'json'" 
+-- case
+-- error: line 1 column 43 near "AUTO UPDATE" 
+-- case
+-- error: line 1 column 45 near "MANUAL UPDATE" 
+-- case
+-- error: line 1 column 59 near "AUTO UPDATE" 
+-- case
+-- error: line 1 column 43 near "v1 = 1" 
+-- case
+-- error: line 1 column 28 near "FORCE" 
+-- case
+-- error: line 1 column 25 near "FOR 4" 
+-- case
+-- error: line 1 column 25 near "FOR 4, 5, 6" 
+-- case
+-- error: line 1 column 21 near "OPTIMIZER_COSTS" 
+-- case
+-- error: line 1 column 11 near "RELAY LOGS" 
+-- case
+-- error: line 1 column 11 near "RELAY LOGS FOR CHANNEL 'ch'" 
+-- case
+-- error: line 1 column 20 near "USER_RESOURCES" 
+-- case
+-- error: line 1 column 23 near "FOR EXPORT" 
+-- case
+-- error: line 1 column 18 near ", ERROR LOGS, STATUS" 
+-- case
+-- error: line 1 column 27 near "max_connections = 200" 
+-- case
+-- error: line 1 column 32 near "max_connections = 250" 
+-- case
+-- error: line 1 column 27 near "max_connections = 200, long_query_time = 0.5" 
+-- case
+-- error: line 1 column 57 near "long_query_time = 1" 
