@@ -50,48 +50,60 @@ func (r *rdParser) parseBeginTransactionStmt() ast.StmtNode {
 			// "BEGIN" "OPTIMISTIC"
 			r.advance()
 			return &ast.BeginStmt{Mode: ast.Optimistic}
+		case work:
+			// "BEGIN" "WORK"
+			r.advance()
+			return &ast.BeginStmt{}
 		}
 		// "BEGIN"
 		return &ast.BeginStmt{}
 	}
 	r.expect(start)
 	r.expect(transaction)
-	switch r.tok() {
-	case read:
-		r.advance()
-		if r.accept(write) {
-			// "START" "TRANSACTION" "READ" "WRITE"
-			return &ast.BeginStmt{}
-		}
-		r.expect(only)
-		if r.tok() == asof {
-			// "START" "TRANSACTION" "READ" "ONLY" AsOfClause
-			return &ast.BeginStmt{
-				ReadOnly: true,
-				AsOf:     r.parseAsOfClause(),
+	stmt := &ast.BeginStmt{}
+	if r.tok() != read && r.tok() != with {
+		// "START" "TRANSACTION"
+		return stmt
+	}
+	// TransactionCharacteristicList: one or more comma-separated
+	// characteristics (WITH CONSISTENT SNAPSHOT | READ WRITE | READ ONLY),
+	// plus the TiDB extensions READ ONLY AsOfClause and WITH CAUSAL
+	// CONSISTENCY ONLY.
+	for {
+		switch r.tok() {
+		case read:
+			r.advance()
+			if r.accept(write) {
+				// "READ" "WRITE"
+				stmt.ReadOnly = false
+			} else {
+				r.expect(only)
+				stmt.ReadOnly = true
+				if r.tok() == asof {
+					// "READ" "ONLY" AsOfClause
+					stmt.AsOf = r.parseAsOfClause()
+				}
 			}
+		case with:
+			r.advance()
+			if r.accept(consistent) {
+				// "WITH" "CONSISTENT" "SNAPSHOT"
+				r.expect(snapshot)
+			} else {
+				// "WITH" "CAUSAL" "CONSISTENCY" "ONLY"
+				r.expect(causal)
+				r.expect(consistency)
+				r.expect(only)
+				stmt.CausalConsistencyOnly = true
+			}
+		default:
+			r.syntaxError()
 		}
-		// "START" "TRANSACTION" "READ" "ONLY"
-		return &ast.BeginStmt{
-			ReadOnly: true,
-		}
-	case with:
-		r.advance()
-		if r.accept(consistent) {
-			// "START" "TRANSACTION" "WITH" "CONSISTENT" "SNAPSHOT"
-			r.expect(snapshot)
-			return &ast.BeginStmt{}
-		}
-		// "START" "TRANSACTION" "WITH" "CAUSAL" "CONSISTENCY" "ONLY"
-		r.expect(causal)
-		r.expect(consistency)
-		r.expect(only)
-		return &ast.BeginStmt{
-			CausalConsistencyOnly: true,
+		if !r.accept(int(',')) {
+			break
 		}
 	}
-	// "START" "TRANSACTION"
-	return &ast.BeginStmt{}
+	return stmt
 }
 
 // parseCompletionType implements CompletionTypeWithinTransaction.
@@ -136,6 +148,8 @@ func (r *rdParser) parseCompletionType() ast.CompletionType {
 // parseCommitStmt implements CommitStmt.
 func (r *rdParser) parseCommitStmt() ast.StmtNode {
 	r.expect(commit)
+	// "COMMIT" "WORK"
+	r.accept(work)
 	switch r.tok() {
 	case and, release, no:
 		// "COMMIT" CompletionTypeWithinTransaction
@@ -147,6 +161,8 @@ func (r *rdParser) parseCommitStmt() ast.StmtNode {
 // parseRollbackStmt implements RollbackStmt.
 func (r *rdParser) parseRollbackStmt() ast.StmtNode {
 	r.expect(rollback)
+	// "ROLLBACK" "WORK"
+	r.accept(work)
 	switch r.tok() {
 	case to:
 		r.advance()

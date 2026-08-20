@@ -729,6 +729,7 @@ var Keywords = []KeywordsType{
 	{"WEIGHT_STRING", false, "unreserved"},
 	{"WITHOUT", false, "unreserved"},
 	{"WITH_SYS_TABLE", false, "unreserved"},
+	{"WORK", false, "unreserved"},
 	{"WORKLOAD", false, "unreserved"},
 	{"WRAPPER", false, "unreserved"},
 	{"X509", false, "unreserved"},

@@ -1024,6 +1024,7 @@ const (
 	with                       = 57591
 	withSysTable               = 57991
 	without                    = 57990
+	work                       = 58328
 	workload                   = 57992
 	wrapper                    = 58319
 	write                      = 57592

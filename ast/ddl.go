@@ -2301,6 +2301,7 @@ type LockTablesStmt struct {
 type TableLock struct {
 	Table *TableName
 	Type  TableLockType
+	Alias CIStr // empty when absent; restored with AS
 }
 
 // Accept implements Node Accept interface.
@@ -2329,6 +2330,10 @@ func (n *LockTablesStmt) Restore(ctx *format.RestoreCtx) error {
 		}
 		if err := tl.Table.Restore(ctx); err != nil {
 			return annotate(err, "An error occurred while add index")
+		}
+		if tl.Alias.O != "" {
+			ctx.WriteKeyWord(" AS ")
+			ctx.WriteName(tl.Alias.O)
 		}
 		ctx.WriteKeyWord(" " + tl.Type.String())
 	}

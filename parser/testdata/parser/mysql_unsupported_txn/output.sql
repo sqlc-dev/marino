@@ -1,15 +1,15 @@
--- error: line 1 column 43 near ", READ ONLY" 
+START TRANSACTION READ ONLY
 -- case
--- error: line 1 column 10 near "WORK" 
+START TRANSACTION
 -- case
--- error: line 1 column 11 near "WORK" 
+COMMIT
 -- case
--- error: line 1 column 13 near "WORK AND NO CHAIN RELEASE" 
+ROLLBACK RELEASE
 -- case
--- error: line 1 column 13 near "WORK TO s1" 
+ROLLBACK TO s1
 -- case
--- error: line 1 column 17 near "AS a1 WRITE" 
+LOCK TABLES `t1` AS `a1` WRITE
 -- case
--- error: line 1 column 17 near "a1 READ" 
+LOCK TABLES `t1` AS `a1` READ
 -- case
--- error: line 1 column 27 near "LOW_PRIORITY WRITE" 
+LOCK TABLES `t2` LOW_PRIORITY WRITE

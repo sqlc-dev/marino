@@ -41,6 +41,9 @@ const (
 	TableLockWrite
 	// TableLockWriteLocal means the session with this lock has write/read permission, and the other session still has read permission.
 	TableLockWriteLocal
+	// TableLockWriteLowPriority is the deprecated LOW_PRIORITY WRITE lock.
+	// It affects only lock scheduling; the lock itself is a WRITE lock.
+	TableLockWriteLowPriority
 )
 
 // String implements fmt.Stringer interface.
@@ -58,6 +61,8 @@ func (t TableLockType) String() string {
 		return "WRITE LOCAL"
 	case TableLockWrite:
 		return "WRITE"
+	case TableLockWriteLowPriority:
+		return "LOW_PRIORITY WRITE"
 	}
 	return ""
 }

@@ -395,6 +395,7 @@ var unReservedKeywordNames = []string{
 	"HANDLER",
 	"FOUND",
 	"CALIBRATE",
+	"WORK",
 	"WORKLOAD",
 	"TPCC",
 	"OLTP_READ_WRITE",

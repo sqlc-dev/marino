@@ -348,9 +348,17 @@ func (r *rdParser) parseLockStmtFamily() ast.StmtNode {
 	}
 }
 
-// parseTableLock implements TableLock and LockType.
+// parseTableLock implements TableLock and LockType:
+// TableName [["AS"] Identifier] lock_type, with lock_type one of
+// READ [LOCAL] | [LOW_PRIORITY] WRITE | WRITE LOCAL.
 func (r *rdParser) parseTableLock() ast.TableLock {
 	tn := r.parseTableName()
+	var alias ast.CIStr
+	if r.accept(as) {
+		alias = ast.NewCIStr(r.parseIdentifier())
+	} else if isIdentifierTok(r.tok()) {
+		alias = ast.NewCIStr(r.parseIdentifier())
+	}
 	var lockType ast.TableLockType
 	switch r.tok() {
 	case read:
@@ -365,12 +373,17 @@ func (r *rdParser) parseTableLock() ast.TableLock {
 		if r.accept(local) {
 			lockType = ast.TableLockWriteLocal
 		}
+	case lowPriority:
+		r.advance()
+		r.expect(write)
+		lockType = ast.TableLockWriteLowPriority
 	default:
 		r.syntaxError()
 	}
 	return ast.TableLock{
 		Table: tn,
 		Type:  lockType,
+		Alias: alias,
 	}
 }
 
