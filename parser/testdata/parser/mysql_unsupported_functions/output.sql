@@ -1,0 +1,21 @@
+-- error: line 1 column 24 near "NCHAR(5))" 
+-- case
+-- error: line 1 column 24 near "NCHAR)" 
+-- case
+-- error: line 1 column 45 near "AT TIME ZONE 'UTC' AS DATETIME)" 
+-- case
+-- error: line 1 column 45 near "AT TIME ZONE '+00:00' AS DATETIME(3))" 
+-- case
+-- error: line 1 column 25 near "('[{"a":1}]', '$[*]' COLUMNS (a INT PATH '$.a')) AS jt" 
+-- case
+-- error: line 1 column 25 near "('[]', '$[*]' COLUMNS (ord FOR ORDINALITY, x VARCHAR(10) PATH '$.x' DEFAULT '"d"' ON EMPTY NULL ON ERROR, y INT EXISTS PATH '$.y', NESTED PATH '$.z[*]' COLUMNS (z INT PATH '$'))) AS jt" 
+-- case
+-- error: line 1 column 37 near "(t.j, '$[*]' COLUMNS (x VARCHAR(10) PATH '$.x' ERROR ON EMPTY)) AS jt" 
+-- case
+-- error: line 1 column 45 near "RETURNING UNSIGNED)" 
+-- case
+-- error: line 1 column 47 near "RETURNING DECIMAL(5,2) DEFAULT 0 ON EMPTY DEFAULT 99 ON ERROR)" 
+-- case
+-- error: line 1 column 39 near "RETURNING CHAR(8) NULL ON EMPTY ERROR ON ERROR)" 
+-- case
+-- error: line 1 column 22 near "LIKE 'b'" 

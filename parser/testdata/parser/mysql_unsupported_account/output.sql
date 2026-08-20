@@ -1,0 +1,75 @@
+-- error: line 1 column 34 near "RANDOM PASSWORD" 
+-- case
+-- error: line 1 column 61 near "RANDOM PASSWORD" 
+-- case
+-- error: line 1 column 33 near "RANDOM PASSWORD" 
+-- case
+-- error: line 1 column 33 near "RANDOM PASSWORD RETAIN CURRENT PASSWORD" 
+-- case
+-- error: line 1 column 36 near "AND IDENTIFIED WITH authentication_ldap_simple" 
+-- case
+-- error: line 1 column 36 near "AND IDENTIFIED WITH authentication_fido AND IDENTIFIED WITH authentication_ldap_simple BY 'p3'" 
+-- case
+-- error: line 1 column 16 near "ADD 2 FACTOR IDENTIFIED WITH authentication_ldap_simple" 
+-- case
+-- error: line 1 column 19 near "MODIFY 2 FACTOR IDENTIFIED WITH authentication_ldap_simple BY 'p'" 
+-- case
+-- error: line 1 column 17 near "DROP 2 FACTOR" 
+-- case
+-- error: line 1 column 14 near "2 FACTOR INITIATE REGISTRATION" 
+-- case
+-- error: line 1 column 14 near "2 FACTOR FINISH REGISTRATION SET CHALLENGE_RESPONSE AS 'blob'" 
+-- case
+-- error: line 1 column 14 near "2 FACTOR UNREGISTER" 
+-- case
+-- error: line 1 column 21 near "DEFAULT ROLE r1, r2" 
+-- case
+-- error: line 1 column 38 near "" 
+-- case
+-- error: line 1 column 47 near "OPTIONAL" 
+-- case
+-- error: line 1 column 38 near "REPLACE 'old'" 
+-- case
+-- error: line 1 column 37 near "RETAIN CURRENT PASSWORD" 
+-- case
+-- error: line 1 column 38 near "REPLACE 'old' RETAIN CURRENT PASSWORD" 
+-- case
+-- error: line 1 column 20 near "DISCARD OLD PASSWORD" 
+-- case
+-- error: line 1 column 20 near "DEFAULT ROLE ALL" 
+-- case
+-- error: line 1 column 20 near "DEFAULT ROLE NONE" 
+-- case
+-- error: line 1 column 20 near "DEFAULT ROLE r1, r2" 
+-- case
+-- error: line 1 column 18 near "WITH ADMIN OPTION" 
+-- case
+-- error: line 1 column 27 near "AS root@localhost" 
+-- case
+-- error: line 1 column 27 near "AS root@localhost WITH ROLE DEFAULT" 
+-- case
+-- error: line 1 column 27 near "AS root@localhost WITH ROLE NONE" 
+-- case
+-- error: line 1 column 27 near "AS root@localhost WITH ROLE ALL" 
+-- case
+-- error: line 1 column 27 near "AS root@localhost WITH ROLE ALL EXCEPT r1, r2" 
+-- case
+-- error: line 1 column 27 near "AS root@localhost WITH ROLE r1, r2" 
+-- case
+-- error: line 1 column 9 near "IF EXISTS SELECT ON db.t FROM u" 
+-- case
+-- error: line 1 column 35 near "IGNORE UNKNOWN USER" 
+-- case
+-- error: line 1 column 9 near "IF EXISTS SELECT ON db.t FROM u IGNORE UNKNOWN USER" 
+-- case
+-- error: line 1 column 12 near "PROXY ON pu FROM u" 
+-- case
+-- error: line 1 column 26 near "REPLACE 'old'" 
+-- case
+-- error: line 1 column 31 near "RETAIN CURRENT PASSWORD" 
+-- case
+-- error: line 1 column 15 near "TO RANDOM" 
+-- case
+-- error: line 1 column 21 near "TO RANDOM" 
+-- case
+-- error: line 1 column 21 near "TO RANDOM REPLACE 'old'" 

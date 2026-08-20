@@ -1,0 +1,15 @@
+-- error: line 1 column 40 near "CHARACTER SET utf8mb4 FROM t" 
+-- case
+-- error: line 1 column 47 near "CHARACTER SET utf8mb4 FIELDS TERMINATED BY ','" 
+-- case
+-- error: line 1 column 47 near "FOR UPDATE OF t2 SKIP LOCKED" 
+-- case
+-- error: line 1 column 27 near "FOR UPDATE" 
+-- case
+-- error: line 1 column 50 near "(c1, c2)" 
+-- case
+-- error: line 1 column 20 near "CONCURRENT INFILE '/tmp/f' IGNORE INTO TABLE t" 
+-- case
+-- error: line 1 column 48 near "PARTITION (p0) CHARACTER SET utf8mb4" 
+-- case
+-- error: line 1 column 78 near "ROWS" 
