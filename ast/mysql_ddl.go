@@ -676,7 +676,46 @@ type CreateFunctionStmt struct {
 	Params          []*FunctionParam
 	ReturnType      *types.FieldType
 	Characteristics RoutineCharacteristics
-	Body            StmtNode
+	// Imports is the USING (library [AS alias], ...) clause of LANGUAGE
+	// JAVASCRIPT routines; empty when absent.
+	Imports []*RoutineImport
+	// Body is the SQL routine body; nil when the routine uses the AS
+	// string form (CodeBody).
+	Body StmtNode
+	// CodeBody is the AS 'code' body of LANGUAGE JAVASCRIPT routines
+	// (a string or dollar-quoted literal); nil for SQL bodies.
+	CodeBody *string
+}
+
+// RoutineImport is one entry of the USING (library [AS alias], ...)
+// clause of a LANGUAGE JAVASCRIPT routine.
+type RoutineImport struct {
+	Library *TableName
+	Alias   CIStr // empty when absent; restored with AS
+}
+
+// restoreRoutineImports writes a USING clause with one leading space, or
+// nothing for an empty list.
+func restoreRoutineImports(ctx *format.RestoreCtx, imports []*RoutineImport, what string) error {
+	if len(imports) == 0 {
+		return nil
+	}
+	ctx.WriteKeyWord(" USING ")
+	ctx.WritePlain("(")
+	for i, imp := range imports {
+		if i != 0 {
+			ctx.WritePlain(", ")
+		}
+		if err := imp.Library.Restore(ctx); err != nil {
+			return annotatef(err, "An error occurred while restore %s.Imports[%d]", what, i)
+		}
+		if imp.Alias.O != "" {
+			ctx.WriteKeyWord(" AS ")
+			ctx.WriteName(imp.Alias.O)
+		}
+	}
+	ctx.WritePlain(")")
+	return nil
 }
 
 // Restore implements Node interface.
@@ -710,6 +749,14 @@ func (n *CreateFunctionStmt) Restore(ctx *format.RestoreCtx) error {
 	}
 	if err := n.Characteristics.Restore(ctx); err != nil {
 		return err
+	}
+	if err := restoreRoutineImports(ctx, n.Imports, "CreateFunctionStmt"); err != nil {
+		return err
+	}
+	if n.CodeBody != nil {
+		ctx.WriteKeyWord(" AS ")
+		ctx.WriteString(*n.CodeBody)
+		return nil
 	}
 	ctx.WritePlain(" ")
 	if err := n.Body.Restore(ctx); err != nil {

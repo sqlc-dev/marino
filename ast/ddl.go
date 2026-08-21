@@ -82,6 +82,7 @@ const (
 	DatabaseOptionCollate
 	DatabaseOptionEncryption
 	DatabaseSetTiFlashReplica
+	DatabaseOptionReadOnly
 	DatabaseOptionPlacementPolicy = DatabaseOptionType(PlacementOptionPolicy)
 )
 
@@ -108,6 +109,10 @@ func (n *DatabaseOption) Restore(ctx *format.RestoreCtx) error {
 		ctx.WriteKeyWord("ENCRYPTION")
 		ctx.WritePlain(" = ")
 		ctx.WriteString(n.Value)
+	case DatabaseOptionReadOnly:
+		ctx.WriteKeyWord("READ ONLY")
+		ctx.WritePlain(" = ")
+		ctx.WriteKeyWord(n.Value)
 	case DatabaseOptionPlacementPolicy:
 		placementOpt := PlacementOption{
 			Tp:        PlacementOptionPolicy,
@@ -528,6 +533,9 @@ const (
 	ColumnOptionAutoRandom
 	ColumnOptionSecondaryEngineAttribute
 	ColumnOptionSrid
+	ColumnOptionVisible
+	ColumnOptionInvisible
+	ColumnOptionEngineAttribute
 )
 
 var (
@@ -597,6 +605,11 @@ func (n *ColumnOption) Restore(ctx *format.RestoreCtx) error {
 			}
 		}
 		if _, ok := n.Expr.(*ColumnNameExpr); ok {
+			printOuterParentheses = true
+		}
+		if _, ok := n.Expr.(*BinaryOperationExpr); ok {
+			// DEFAULT (expr) with an operator; MySQL requires the
+			// parentheses.
 			printOuterParentheses = true
 		}
 		if printOuterParentheses {
@@ -692,6 +705,14 @@ func (n *ColumnOption) Restore(ctx *format.RestoreCtx) error {
 	case ColumnOptionSrid:
 		ctx.WriteKeyWord("SRID ")
 		ctx.WritePlainf("%d", n.UintValue)
+	case ColumnOptionVisible:
+		ctx.WriteKeyWord("VISIBLE")
+	case ColumnOptionInvisible:
+		ctx.WriteKeyWord("INVISIBLE")
+	case ColumnOptionEngineAttribute:
+		ctx.WriteKeyWord("ENGINE_ATTRIBUTE")
+		ctx.WritePlain(" = ")
+		ctx.WriteString(n.StrValue)
 	default:
 		return errors.New("An error occurred while splicing ColumnOption")
 	}
@@ -754,6 +775,7 @@ type IndexOption struct {
 	PrimaryKeyTp               PrimaryKeyType
 	Global                     bool
 	SplitOpt                   *SplitOption `json:"-"` // SplitOption contains expr nodes, which cannot marshal for DDL job arguments.
+	EngineAttr                 string
 	SecondaryEngineAttr        string
 	AddColumnarReplicaOnDemand int
 	Condition                  ExprNode `json:"-"` // Condition contains expr nodes, which cannot marshal for DDL job arguments. It's used for partial index.
@@ -770,6 +792,7 @@ func (n *IndexOption) IsEmpty() bool {
 		n.Global ||
 		n.Visibility != IndexVisibilityDefault ||
 		n.SplitOpt != nil ||
+		len(n.EngineAttr) > 0 ||
 		len(n.SecondaryEngineAttr) > 0 ||
 		n.Condition != nil {
 		return false
@@ -874,6 +897,16 @@ func (n *IndexOption) Restore(ctx *format.RestoreCtx) error {
 		if err != nil {
 			return err
 		}
+		hasPrevOption = true
+	}
+
+	if n.EngineAttr != "" {
+		if hasPrevOption {
+			ctx.WritePlain(" ")
+		}
+		ctx.WriteKeyWord("ENGINE_ATTRIBUTE")
+		ctx.WritePlain(" = ")
+		ctx.WriteString(n.EngineAttr)
 		hasPrevOption = true
 	}
 
@@ -1465,6 +1498,7 @@ type DropResourceGroupStmt struct {
 
 	IfExists          bool
 	ResourceGroupName CIStr
+	Force             bool
 }
 
 // Restore implements Restore interface.
@@ -1478,6 +1512,9 @@ func (n *DropResourceGroupStmt) Restore(ctx *format.RestoreCtx) error {
 		ctx.WriteKeyWord("IF EXISTS ")
 	}
 	ctx.WriteName(n.ResourceGroupName.O)
+	if n.Force {
+		ctx.WriteKeyWord(" FORCE")
+	}
 	return nil
 }
 
@@ -2301,6 +2338,7 @@ type LockTablesStmt struct {
 type TableLock struct {
 	Table *TableName
 	Type  TableLockType
+	Alias CIStr // empty when absent; restored with AS
 }
 
 // Accept implements Node Accept interface.
@@ -2329,6 +2367,10 @@ func (n *LockTablesStmt) Restore(ctx *format.RestoreCtx) error {
 		}
 		if err := tl.Table.Restore(ctx); err != nil {
 			return annotate(err, "An error occurred while add index")
+		}
+		if tl.Alias.O != "" {
+			ctx.WriteKeyWord(" AS ")
+			ctx.WriteName(tl.Alias.O)
 		}
 		ctx.WriteKeyWord(" " + tl.Type.String())
 	}
@@ -2883,6 +2925,7 @@ const (
 	TableOptionIetfQuotes
 	TableOptionSequence
 	TableOptionAffinity
+	TableOptionStartTransaction
 	TableOptionPlacementPolicy = TableOptionType(PlacementOptionPolicy)
 	TableOptionStatsBuckets    = TableOptionType(StatsOptionBuckets)
 	TableOptionStatsTopN       = TableOptionType(StatsOptionTopN)
@@ -3270,6 +3313,8 @@ func (n *TableOption) Restore(ctx *format.RestoreCtx) error {
 		ctx.WriteKeyWord("AUTOEXTEND_SIZE ")
 		ctx.WritePlain("= ")
 		ctx.WritePlain(n.StrValue) // e.g. '4M'
+	case TableOptionStartTransaction:
+		ctx.WriteKeyWord("START TRANSACTION")
 
 	// MariaDB specific options
 	case TableOptionPageChecksum:
@@ -3535,6 +3580,11 @@ const (
 	AlterTableDropMaskingPolicy
 	AlterTableModifyMaskingPolicyExpression
 	AlterTableModifyMaskingPolicyRestrictOn
+	// AlterTableAlterColumnVisibility is
+	// ALTER TABLE ... ALTER COLUMN col SET {VISIBLE | INVISIBLE};
+	// the column is NewColumns[0] (name only) and the Visibility field
+	// carries the choice.
+	AlterTableAlterColumnVisibility
 )
 
 // LockType is the type for AlterTableSpec.
@@ -3934,6 +3984,16 @@ func (n *AlterTableSpec) Restore(ctx *format.RestoreCtx) error {
 			}
 		} else {
 			ctx.WriteKeyWord(" DROP DEFAULT")
+		}
+	case AlterTableAlterColumnVisibility:
+		ctx.WriteKeyWord("ALTER COLUMN ")
+		if err := n.NewColumns[0].Restore(ctx); err != nil {
+			return annotate(err, "An error occurred while restore AlterTableSpec.NewColumns[0]")
+		}
+		if n.Visibility == IndexVisibilityInvisible {
+			ctx.WriteKeyWord(" SET INVISIBLE")
+		} else {
+			ctx.WriteKeyWord(" SET VISIBLE")
 		}
 	case AlterTableLock:
 		ctx.WriteKeyWord("LOCK ")

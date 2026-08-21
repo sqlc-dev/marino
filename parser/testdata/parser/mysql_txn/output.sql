@@ -35,3 +35,19 @@ LOCK INSTANCE FOR BACKUP
 UNLOCK INSTANCE
 -- case
 SELECT `xa`,`xid`,`one`,`phase` FROM `suspend` WHERE `migrate`=1
+-- case
+START TRANSACTION READ ONLY
+-- case
+START TRANSACTION
+-- case
+COMMIT
+-- case
+ROLLBACK RELEASE
+-- case
+ROLLBACK TO s1
+-- case
+LOCK TABLES `t1` AS `a1` WRITE
+-- case
+LOCK TABLES `t1` AS `a1` READ
+-- case
+LOCK TABLES `t2` LOW_PRIORITY WRITE

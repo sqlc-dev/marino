@@ -237,8 +237,17 @@ type ProcedureInfo struct {
 	IfNotExists       bool
 	ProcedureName     *TableName
 	ProcedureParam    []*StoreParameter //procedure param
-	ProcedureBody     StmtNode          //procedure body statement
+	ProcedureBody     StmtNode          //procedure body statement; nil when the routine uses the AS string form (CodeBody)
 	ProcedureParamStr string            //procedure parameter string
+	// Characteristics are the routine characteristics (COMMENT,
+	// LANGUAGE, [NOT] DETERMINISTIC, SQL data access, SQL SECURITY).
+	Characteristics RoutineCharacteristics
+	// Imports is the USING (library [AS alias], ...) clause of LANGUAGE
+	// JAVASCRIPT routines; empty when absent.
+	Imports []*RoutineImport
+	// CodeBody is the AS 'code' body of LANGUAGE JAVASCRIPT routines
+	// (a string or dollar-quoted literal); nil for SQL bodies.
+	CodeBody *string
 	// Definer is the DEFINER = user clause; nil when absent.
 	Definer *auth.UserIdentity
 }
@@ -272,7 +281,19 @@ func (n *ProcedureInfo) Restore(ctx *format.RestoreCtx) error {
 			return err
 		}
 	}
-	ctx.WritePlain(") ")
+	ctx.WritePlain(")")
+	if err := n.Characteristics.Restore(ctx); err != nil {
+		return err
+	}
+	if err := restoreRoutineImports(ctx, n.Imports, "ProcedureInfo"); err != nil {
+		return err
+	}
+	if n.CodeBody != nil {
+		ctx.WriteKeyWord(" AS ")
+		ctx.WriteString(*n.CodeBody)
+		return nil
+	}
+	ctx.WritePlain(" ")
 	err = (n.ProcedureBody).Restore(ctx)
 	if err != nil {
 		return err
@@ -294,11 +315,13 @@ func (n *ProcedureInfo) Accept(v Visitor) (Node, bool) {
 		}
 		n.ProcedureParam[i] = node.(*StoreParameter)
 	}
-	node, ok := n.ProcedureBody.Accept(v)
-	if !ok {
-		return n, false
+	if n.ProcedureBody != nil {
+		node, ok := n.ProcedureBody.Accept(v)
+		if !ok {
+			return n, false
+		}
+		n.ProcedureBody = node.(StmtNode)
 	}
-	n.ProcedureBody = node.(StmtNode)
 	return v.Leave(n)
 }
 
@@ -795,6 +818,45 @@ func (n *ProcedureWhileStmt) Accept(v Visitor) (Node, bool) {
 	return v.Leave(n)
 }
 
+// ProcedureLoopStmt stores `LOOP ... END LOOP` statement.
+type ProcedureLoopStmt struct {
+	stmtNode
+
+	Body []StmtNode
+}
+
+// Restore implements ProcedureLoopStmt interface.
+func (n *ProcedureLoopStmt) Restore(ctx *format.RestoreCtx) error {
+	ctx.WriteKeyWord("LOOP ")
+	for _, stmt := range n.Body {
+		err := stmt.Restore(ctx)
+		if err != nil {
+			return err
+		}
+		ctx.WriteKeyWord(";")
+	}
+	ctx.WriteKeyWord("END LOOP")
+	return nil
+}
+
+// Accept implements ProcedureLoopStmt Accept interface.
+func (n *ProcedureLoopStmt) Accept(v Visitor) (Node, bool) {
+	newNode, skipChildren := v.Enter(n)
+	if skipChildren {
+		return v.Leave(newNode)
+	}
+	n = newNode.(*ProcedureLoopStmt)
+
+	for i, stmt := range n.Body {
+		node, ok := stmt.Accept(v)
+		if !ok {
+			return n, false
+		}
+		n.Body[i] = node.(StmtNode)
+	}
+	return v.Leave(n)
+}
+
 // ProcedureCursor stores procedure cursor statement.
 type ProcedureCursor struct {
 	ProcedureDeclInfo
@@ -1005,6 +1067,66 @@ func (n *ProcedureErrorState) Accept(v Visitor) (Node, bool) {
 	return v.Leave(n)
 }
 
+// ProcedureErrorName references a condition declared with
+// DECLARE ... CONDITION in a handler condition list.
+type ProcedureErrorName struct {
+	ProcedureErrorCondition
+
+	Name string
+}
+
+// Restore implements ProcedureErrorName interface.
+func (n *ProcedureErrorName) Restore(ctx *format.RestoreCtx) error {
+	ctx.WriteName(n.Name)
+	return nil
+}
+
+// Accept implements ProcedureErrorName Accept interface.
+func (n *ProcedureErrorName) Accept(v Visitor) (Node, bool) {
+	newNode, skipChildren := v.Enter(n)
+	if skipChildren {
+		return v.Leave(newNode)
+	}
+	n = newNode.(*ProcedureErrorName)
+	return v.Leave(n)
+}
+
+// ProcedureConditionDecl stores a DECLARE ... CONDITION FOR declaration;
+// Value is the named condition's value, a ProcedureErrorVal (a MySQL
+// error number) or ProcedureErrorState (an SQLSTATE value).
+type ProcedureConditionDecl struct {
+	ProcedureDeclInfo
+
+	Name  string
+	Value ErrNode
+}
+
+// Restore implements ProcedureConditionDecl interface.
+func (n *ProcedureConditionDecl) Restore(ctx *format.RestoreCtx) error {
+	ctx.WriteKeyWord("DECLARE ")
+	ctx.WriteName(n.Name)
+	ctx.WriteKeyWord(" CONDITION FOR ")
+	if err := n.Value.Restore(ctx); err != nil {
+		return annotate(err, "An error occur while restore ProcedureConditionDecl.Value")
+	}
+	return nil
+}
+
+// Accept implements ProcedureConditionDecl Accept interface.
+func (n *ProcedureConditionDecl) Accept(v Visitor) (Node, bool) {
+	newNode, skipChildren := v.Enter(n)
+	if skipChildren {
+		return v.Leave(newNode)
+	}
+	n = newNode.(*ProcedureConditionDecl)
+	node, ok := n.Value.Accept(v)
+	if !ok {
+		return n, false
+	}
+	n.Value = node.(ErrNode)
+	return v.Leave(n)
+}
+
 // ProcedureErrorCon stores procedure handler status info.
 type ProcedureErrorCon struct {
 	ProcedureErrorCondition
@@ -1174,7 +1296,7 @@ func (n *ProcedureJump) Restore(ctx *format.RestoreCtx) error {
 		ctx.WriteKeyWord("ITERATE ")
 	}
 
-	ctx.WriteString(n.Name)
+	ctx.WriteName(n.Name)
 	return nil
 }
 

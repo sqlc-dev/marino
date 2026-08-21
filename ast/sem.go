@@ -451,6 +451,8 @@ const (
 	RestartCommand = "RESTART"
 	// RevokeCommand represents REVOKE statement
 	RevokeCommand = "REVOKE"
+	// RevokeProxyCommand represents REVOKE PROXY statement
+	RevokeProxyCommand = "REVOKE PROXY"
 	// RevokeRoleCommand represents REVOKE ROLE statement
 	RevokeRoleCommand = "REVOKE ROLE"
 	// RollbackCommand represents ROLLBACK statement
@@ -1263,6 +1265,11 @@ func (n *GrantProxyStmt) SEMCommand() string {
 }
 
 // SEMCommand returns the command string for the statement.
+func (n *RevokeProxyStmt) SEMCommand() string {
+	return RevokeProxyCommand
+}
+
+// SEMCommand returns the command string for the statement.
 func (n *GrantRoleStmt) SEMCommand() string {
 	return GrantRoleCommand
 }
@@ -1478,6 +1485,16 @@ func (n *ProcedureRepeatStmt) SEMCommand() string {
 
 // SEMCommand returns the command string for the statement.
 func (n *ProcedureWhileStmt) SEMCommand() string {
+	return ProcedureCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *ProcedureLoopStmt) SEMCommand() string {
+	return ProcedureCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *ProcedureErrorName) SEMCommand() string {
 	return ProcedureCommand
 }
 

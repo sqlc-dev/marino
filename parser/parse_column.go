@@ -59,7 +59,7 @@ func (r *rdParser) isColumnOptionStart() bool {
 	case not, not2, null, autoIncrement, primary, key, unique, defaultKwd,
 		serial, on, comment, check, constraint, generated, as, references,
 		collate, columnFormat, storage, autoRandom, secondaryEngineAttribute,
-		srid:
+		srid, visible, invisible, engine_attribute:
 		return true
 	}
 	return false
@@ -263,6 +263,22 @@ func (r *rdParser) parseColumnOption() interface{} {
 			Tp:       ast.ColumnOptionSecondaryEngineAttribute,
 			StrValue: r.expect(stringLit).lit,
 		}
+	case engine_attribute:
+		// ColumnOption: "ENGINE_ATTRIBUTE" EqOpt stringLit
+		r.advance()
+		r.parseEqOpt()
+		return &ast.ColumnOption{
+			Tp:       ast.ColumnOptionEngineAttribute,
+			StrValue: r.expect(stringLit).lit,
+		}
+	case visible:
+		// ColumnOption: "VISIBLE"
+		r.advance()
+		return &ast.ColumnOption{Tp: ast.ColumnOptionVisible}
+	case invisible:
+		// ColumnOption: "INVISIBLE"
+		r.advance()
+		return &ast.ColumnOption{Tp: ast.ColumnOptionInvisible}
 	case srid:
 		// ColumnOption: "SRID" LengthNum — the spatial column attribute
 		// (MySQL 26.7 §13.1.20.10); postdates the goyacc grammar.
@@ -423,45 +439,55 @@ func (r *rdParser) parseDefaultValueExpr() ast.ExprNode {
 // alternatives: '(' Identifier ')' and '(' SignedLiteral ')' (one level
 // only), plus the parenthesized recursions of BuiltinFunction,
 // NowSymOptionFractionParentheses, and NextValueForSequenceParentheses.
+// When none of those alternatives spans the parentheses, the content
+// reparses as a full '(' Expression ')' — the MySQL DEFAULT (expr) form
+// with operators.
 func (r *rdParser) parseDefaultValueExprParen() ast.ExprNode {
 	start := r.cur().offset
-	r.expect(int('('))
 	var v ast.ExprNode
-	switch r.tok() {
-	case currentTs, localTime, localTs, builtinNow, builtinCurDate, currentDate:
-		v = r.parseNowSymOptionFraction()
-	case next:
-		// NEXT can also be an Identifier; "VALUE" commits to
-		// NextValueForSequence the way the LALR states do.
-		if r.la(1) == value {
-			v = r.parseNextValueForSequence()
-		} else {
-			v = r.parseParenIdentifierExpr()
-		}
-	case nextval:
-		if r.la(1) == int('(') {
-			v = r.parseNextValueForSequence()
-		} else {
-			v = r.parseParenIdentifierExpr()
-		}
-	case identifier:
-		if r.la(1) == int('(') {
+	if ok := r.try(func() {
+		r.expect(int('('))
+		switch r.tok() {
+		case currentTs, localTime, localTs, builtinNow, builtinCurDate, currentDate:
+			v = r.parseNowSymOptionFraction()
+		case next:
+			// NEXT can also be an Identifier; "VALUE" commits to
+			// NextValueForSequence the way the LALR states do.
+			if r.la(1) == value {
+				v = r.parseNextValueForSequence()
+			} else {
+				v = r.parseParenIdentifierExpr()
+			}
+		case nextval:
+			if r.la(1) == int('(') {
+				v = r.parseNextValueForSequence()
+			} else {
+				v = r.parseParenIdentifierExpr()
+			}
+		case identifier:
+			if r.la(1) == int('(') {
+				v = r.parseBuiltinFunction()
+			} else {
+				v = r.parseParenIdentifierExpr()
+			}
+		case replace:
 			v = r.parseBuiltinFunction()
-		} else {
-			v = r.parseParenIdentifierExpr()
+		case int('('):
+			v = r.parseDefaultNestedParen()
+		default:
+			if isIdentifierTok(r.tok()) {
+				v = r.parseParenIdentifierExpr()
+			} else {
+				v = r.parseSignedLiteral()
+			}
 		}
-	case replace:
-		v = r.parseBuiltinFunction()
-	case int('('):
-		v = r.parseDefaultNestedParen()
-	default:
-		if isIdentifierTok(r.tok()) {
-			v = r.parseParenIdentifierExpr()
-		} else {
-			v = r.parseSignedLiteral()
-		}
+		r.expect(int(')'))
+	}); !ok {
+		// '(' Expression ')'
+		r.expect(int('('))
+		v = r.parseExpression()
+		r.expect(int(')'))
 	}
-	r.expect(int(')'))
 	return r.setOrigin(v, start)
 }
 
@@ -1019,7 +1045,7 @@ func (r *rdParser) isIndexOptionStart() bool {
 	switch r.tok() {
 	case keyBlockSize, addColumnarReplicaOnDemand, using, tp, with, comment,
 		visible, invisible, clustered, nonclustered, global, local,
-		preSplitRegions, secondaryEngineAttribute, where:
+		preSplitRegions, engine_attribute, secondaryEngineAttribute, where:
 		return true
 	}
 	return false
@@ -1054,6 +1080,8 @@ func (r *rdParser) parseIndexOptionList() *ast.IndexOption {
 			opt1.Global = true
 		} else if opt2.SplitOpt != nil {
 			opt1.SplitOpt = opt2.SplitOpt
+		} else if len(opt2.EngineAttr) > 0 {
+			opt1.EngineAttr = opt2.EngineAttr
 		} else if len(opt2.SecondaryEngineAttr) > 0 {
 			opt1.SecondaryEngineAttr = opt2.SecondaryEngineAttr
 		} else if opt2.Condition != nil {
@@ -1145,6 +1173,11 @@ func (r *rdParser) parseIndexOption() *ast.IndexOption {
 				Num: r.parseInt64Num(),
 			},
 		}
+	case engine_attribute:
+		// "ENGINE_ATTRIBUTE" EqOpt stringLit
+		r.advance()
+		r.parseEqOpt()
+		return &ast.IndexOption{EngineAttr: r.expect(stringLit).lit}
 	case secondaryEngineAttribute:
 		// "SECONDARY_ENGINE_ATTRIBUTE" EqOpt stringLit
 		r.advance()

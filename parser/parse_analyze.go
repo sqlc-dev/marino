@@ -117,17 +117,36 @@ func (r *rdParser) parseAnalyzeTableStmt() ast.StmtNode {
 			AnalyzeOpts:     r.parseAnalyzeOptionListOpt(),
 		}
 	case update:
-		// ... "UPDATE" "HISTOGRAM" "ON" IdentList AnalyzeOptionListOpt
+		// ... "UPDATE" "HISTOGRAM" "ON" IdentList
+		//     ("USING" "DATA" stringLit
+		//      | AnalyzeOptionListOpt [("AUTO"|"MANUAL") "UPDATE"])
 		r.advance()
 		r.expect(histogram)
 		r.expect(on)
-		return &ast.AnalyzeTableStmt{
+		stmt := &ast.AnalyzeTableStmt{
 			TableNames:         []*ast.TableName{table},
 			NoWriteToBinLog:    noWriteToBinLog,
 			ColumnNames:        r.parseIdentList(),
-			AnalyzeOpts:        r.parseAnalyzeOptionListOpt(),
 			HistogramOperation: ast.HistogramOperationUpdate,
 		}
+		if r.tok() == using {
+			r.advance()
+			r.expect(data)
+			stmt.HistogramData = r.expect(stringLit).lit
+			return stmt
+		}
+		stmt.AnalyzeOpts = r.parseAnalyzeOptionListOpt()
+		switch r.tok() {
+		case auto:
+			r.advance()
+			r.expect(update)
+			stmt.HistogramUpdate = ast.HistogramUpdateAuto
+		case manual:
+			r.advance()
+			r.expect(update)
+			stmt.HistogramUpdate = ast.HistogramUpdateManual
+		}
+		return stmt
 	case drop:
 		// ... "DROP" "HISTOGRAM" "ON" IdentList
 		r.advance()

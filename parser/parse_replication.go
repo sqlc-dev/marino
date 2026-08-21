@@ -114,11 +114,46 @@ func (r *rdParser) parseChangeReplicationSourceStmt() ast.StmtNode {
 }
 
 // parseReplicationSourceOption implements ReplicationSourceOption:
-// Identifier eq (stringLit | intLit | decLit | floatLit).
+// Identifier eq (stringLit | intLit | decLit | floatLit), plus the
+// non-literal value forms selected by the option name: a parenthesized
+// server-id list (IGNORE_SERVER_IDS), an account name or NULL
+// (PRIVILEGE_CHECKS_USER), and bare keyword values
+// (REQUIRE_TABLE_PRIMARY_KEY_CHECK = STREAM|GENERATE|ON|OFF,
+// ASSIGN_GTIDS_TO_ANONYMOUS_TRANSACTIONS = OFF|LOCAL|uuid).
 func (r *rdParser) parseReplicationSourceOption() *ast.ReplicationSourceOption {
 	name := strings.ToUpper(r.parseIdentifier())
 	r.expect(eq)
-	return &ast.ReplicationSourceOption{Name: name, Value: r.parseReplicationOptionValue()}
+	opt := &ast.ReplicationSourceOption{Name: name}
+	switch name {
+	case "IGNORE_SERVER_IDS":
+		r.expect(int('('))
+		opt.ServerIDs = []ast.ValueExpr{}
+		if r.tok() != int(')') {
+			opt.ServerIDs = append(opt.ServerIDs, r.parseReplicationOptionValue())
+			for r.accept(int(',')) {
+				opt.ServerIDs = append(opt.ServerIDs, r.parseReplicationOptionValue())
+			}
+		}
+		r.expect(int(')'))
+	case "PRIVILEGE_CHECKS_USER":
+		if r.accept(null) {
+			opt.KeywordValue = "NULL"
+		} else {
+			opt.User = r.parseGrantUsername()
+		}
+	case "REQUIRE_TABLE_PRIMARY_KEY_CHECK", "ASSIGN_GTIDS_TO_ANONYMOUS_TRANSACTIONS":
+		if r.accept(on) {
+			opt.KeywordValue = "ON"
+		} else if r.tok() == stringLit {
+			// ASSIGN_GTIDS_TO_ANONYMOUS_TRANSACTIONS = 'uuid'
+			opt.Value = r.parseReplicationOptionValue()
+		} else {
+			opt.KeywordValue = strings.ToUpper(r.parseIdentifier())
+		}
+	default:
+		opt.Value = r.parseReplicationOptionValue()
+	}
+	return opt
 }
 
 // parseReplicationOptionValue implements the literal value of a
@@ -275,14 +310,19 @@ func (r *rdParser) parseResetReplicaStmt() ast.StmtNode {
 }
 
 // parseResetBinaryLogsAndGtidsStmt implements
-// ResetBinaryLogsAndGtidsStmt: "RESET" "BINARY" "LOGS" "AND" "GTIDS".
+// ResetBinaryLogsAndGtidsStmt:
+// "RESET" "BINARY" "LOGS" "AND" "GTIDS" ["TO" Int64Num].
 func (r *rdParser) parseResetBinaryLogsAndGtidsStmt() ast.StmtNode {
 	r.expect(reset)
 	r.expect(binaryType)
 	r.expect(logs)
 	r.expect(and)
 	r.expect(gtids)
-	return &ast.ResetBinaryLogsAndGtidsStmt{}
+	stmt := &ast.ResetBinaryLogsAndGtidsStmt{}
+	if r.accept(to) {
+		stmt.To = r.parseInt64Num()
+	}
+	return stmt
 }
 
 // parseReplicaThreadTypes implements the thread_types list of

@@ -236,11 +236,12 @@ func (r *rdParser) parseShowStmt() ast.StmtNode {
 		}
 		return stmt
 	case replica, slave:
-		// "SHOW" Replica "STATUS"
+		// "SHOW" Replica "STATUS" ForChannelOpt
 		r.advance()
 		r.expect(status)
 		return &ast.ShowStmt{
-			Tp: ast.ShowReplicaStatus,
+			Tp:          ast.ShowReplicaStatus,
+			ChannelName: r.parseForChannelOpt(),
 		}
 	case processlist:
 		// "SHOW" OptFull "PROCESSLIST" (empty OptFull)
@@ -703,6 +704,11 @@ func (r *rdParser) parseShowTargetFilterable() ast.StmtNode {
 	case engines:
 		r.advance()
 		return r.applyShowLikeOrWhereOpt(&ast.ShowStmt{Tp: ast.ShowEngines})
+	case storage:
+		// "STORAGE" "ENGINES"; Restore() canonicalizes to SHOW ENGINES.
+		r.advance()
+		r.expect(engines)
+		return r.applyShowLikeOrWhereOpt(&ast.ShowStmt{Tp: ast.ShowEngines})
 	case databases:
 		r.advance()
 		return r.applyShowLikeOrWhereOpt(&ast.ShowStmt{Tp: ast.ShowDatabases})
@@ -753,8 +759,26 @@ func (r *rdParser) parseShowTargetFilterable() ast.StmtNode {
 		stmt.DBName = r.parseShowDatabaseNameOpt()
 		return r.applyShowLikeOrWhereOpt(stmt)
 	case extended:
-		// "EXTENDED" OptFull FieldsOrColumns ShowTableAliasOpt ShowDatabaseNameOpt
+		// "EXTENDED" ShowIndexKwd FromOrIn TableName
+		// | "EXTENDED" OptFull FieldsOrColumns ShowTableAliasOpt ShowDatabaseNameOpt
 		r.advance()
+		if r.tok() == index || r.tok() == keys || r.tok() == indexes {
+			r.advance()
+			if r.tok() != from && r.tok() != in {
+				r.syntaxError()
+			}
+			r.advance()
+			tn := r.parseTableName()
+			if (r.tok() == from || r.tok() == in) && tn.Schema.O == "" {
+				r.advance()
+				tn = &ast.TableName{Name: tn.Name, Schema: ast.NewCIStr(r.parseIdentifier())}
+			}
+			return r.applyShowLikeOrWhereOpt(&ast.ShowStmt{
+				Tp:       ast.ShowIndex,
+				Table:    tn,
+				Extended: true,
+			})
+		}
 		fullFlag := r.accept(full)
 		if r.tok() != fields && r.tok() != columns {
 			r.syntaxError()
@@ -784,11 +808,21 @@ func (r *rdParser) parseShowTargetFilterable() ast.StmtNode {
 		}
 		r.syntaxError()
 	case warnings:
+		// "WARNINGS" SelectStmtLimitOpt
 		r.advance()
-		return r.applyShowLikeOrWhereOpt(&ast.ShowStmt{Tp: ast.ShowWarnings})
+		stmt := &ast.ShowStmt{Tp: ast.ShowWarnings}
+		if r.tok() == limit || r.tok() == fetch {
+			stmt.Limit = r.parseSelectStmtLimit()
+		}
+		return r.applyShowLikeOrWhereOpt(stmt)
 	case identSQLErrors:
+		// "ERRORS" SelectStmtLimitOpt
 		r.advance()
-		return r.applyShowLikeOrWhereOpt(&ast.ShowStmt{Tp: ast.ShowErrors})
+		stmt := &ast.ShowStmt{Tp: ast.ShowErrors}
+		if r.tok() == limit || r.tok() == fetch {
+			stmt.Limit = r.parseSelectStmtLimit()
+		}
+		return r.applyShowLikeOrWhereOpt(stmt)
 	case global, session, variables, status, bindings:
 		// GlobalScope ("VARIABLES" | "STATUS" | "BINDINGS")
 		globalScope := false

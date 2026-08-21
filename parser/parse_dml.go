@@ -377,7 +377,14 @@ func (r *rdParser) parseLoadDataStmt() ast.StmtNode {
 	r.expect(load)
 	r.expect(data)
 	x := &ast.LoadDataStmt{FileLocRef: ast.FileLocServerOrRemote}
-	x.LowPriority = r.accept(lowPriority)
+	switch r.tok() {
+	case lowPriority:
+		r.advance()
+		x.LowPriority = true
+	case concurrent:
+		r.advance()
+		x.Concurrent = true
+	}
 	isLocal := r.accept(local)
 	r.expect(infile)
 	x.Path = r.expect(stringLit).lit
@@ -397,6 +404,9 @@ func (r *rdParser) parseLoadDataStmt() ast.StmtNode {
 	r.expect(into)
 	r.expect(tableKwd)
 	x.Table = r.parseTableName()
+	if r.tok() == partition && r.la(1) == int('(') {
+		x.Partitions = r.parsePartitionNameListOpt()
+	}
 	if (r.tok() == character || r.tok() == charType) && r.la(1) == set {
 		r.advance()
 		r.advance()
@@ -406,10 +416,14 @@ func (r *rdParser) parseLoadDataStmt() ast.StmtNode {
 	x.FieldsInfo = r.parseFieldsClause()
 	x.LinesInfo = r.parseLinesClause()
 	if r.tok() == ignore {
-		// IgnoreLines: "IGNORE" NUM "LINES" — always shifted here.
+		// "IGNORE" NUM ("LINES" | "ROWS") — always shifted here;
+		// Restore() canonicalizes the ROWS spelling to LINES.
 		r.advance()
 		v := getUint64FromNUM(r.expect(intLit).item)
-		r.expect(lines)
+		if r.tok() != lines && r.tok() != rows {
+			r.syntaxError()
+		}
+		r.advance()
 		x.IgnoreLines = &v
 	}
 	x.ColumnsAndUserVars = r.parseColumnNameOrUserVarListOptWithBrackets()

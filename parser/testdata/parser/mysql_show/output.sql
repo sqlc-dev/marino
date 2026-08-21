@@ -77,3 +77,17 @@ SHOW PARSE_TREE WITH `cte` AS (SELECT 1) SELECT * FROM `cte`
 -- error: line 1 column 22 near "UPDATE t SET a = 1" 
 -- case
 -- error: line 1 column 16 near "LOGS" 
+-- case
+SHOW ENGINES
+-- case
+SHOW ERRORS LIMIT 5
+-- case
+SHOW ERRORS LIMIT 5,10
+-- case
+SHOW WARNINGS LIMIT 1
+-- case
+SHOW WARNINGS LIMIT 5,10
+-- case
+SHOW EXTENDED INDEX IN `t`
+-- case
+SHOW REPLICA STATUS FOR CHANNEL 'ch'

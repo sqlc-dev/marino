@@ -1,9 +1,0 @@
--- error: line 1 column 47 near "CONDITION FOR SQLSTATE '23000'; DECLARE EXIT HANDLER FOR e ROLLBACK; END" 
--- case
--- error: line 1 column 47 near "CONDITION FOR 1051; END" 
--- case
--- error: line 1 column 26 near "LOOP SET @x = 1; END LOOP" 
--- case
--- error: line 1 column 32 near "LOOP SET @x = 1; END LOOP; END" 
--- case
--- error: line 1 column 31 near "LOOP LEAVE lbl; END LOOP lbl" 

@@ -83,14 +83,21 @@ func (n *PurgeBinaryLogsStmt) Accept(v Visitor) (Node, bool) {
 
 // ResetBinaryLogsAndGtidsStmt is a RESET BINARY LOGS AND GTIDS
 // statement (which replaced RESET MASTER; the removed spelling is not
-// parsed).
+// parsed). To is the TO binary_log_file_index_number clause; zero when
+// absent (MySQL requires the index to be positive).
 type ResetBinaryLogsAndGtidsStmt struct {
 	stmtNode
+
+	To int64
 }
 
 // Restore implements Node interface.
 func (n *ResetBinaryLogsAndGtidsStmt) Restore(ctx *format.RestoreCtx) error {
 	ctx.WriteKeyWord("RESET BINARY LOGS AND GTIDS")
+	if n.To != 0 {
+		ctx.WriteKeyWord(" TO ")
+		ctx.WritePlainf("%d", n.To)
+	}
 	return nil
 }
 

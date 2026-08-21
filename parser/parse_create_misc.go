@@ -66,6 +66,9 @@ func (r *rdParser) isDatabaseOptionStart() bool {
 	case set:
 		// "SET" "TIFLASH" "REPLICA" ...
 		return r.la(1) == tiFlash
+	case read:
+		// "READ" "ONLY" (ALTER DATABASE)
+		return r.la(1) == only
 	}
 	return false
 }
@@ -95,6 +98,18 @@ func (r *rdParser) parseDatabaseOption() *ast.DatabaseOption {
 			Tp:        ast.DatabaseOptionType(placementOptions.Tp),
 			Value:     placementOptions.StrValue,
 			UintValue: placementOptions.UintValue,
+		}
+	case read:
+		// "READ" "ONLY" EqOpt ("DEFAULT" | Int64Num)
+		r.advance()
+		r.expect(only)
+		r.parseEqOpt()
+		if r.accept(defaultKwd) {
+			return &ast.DatabaseOption{Tp: ast.DatabaseOptionReadOnly, Value: "DEFAULT"}
+		}
+		return &ast.DatabaseOption{
+			Tp:    ast.DatabaseOptionReadOnly,
+			Value: strconv.FormatInt(r.parseInt64Num(), 10),
 		}
 	}
 	// DefaultKwdOpt
@@ -260,6 +275,7 @@ func (r *rdParser) parseCreateUserStmt() ast.StmtNode {
 	r.expect(user)
 	ifNotExists := r.parseIfNotExists()
 	specs := r.parseGrantUserSpecList()
+	defaultRoles := r.parseUserDefaultRolesOpt()
 	tlsOptions := r.parseGrantRequireClauseOpt()
 	resourceOptions := r.parseUserConnectionOptions()
 	pwdLockOptions := r.parseUserPasswordOrLockOptions()
@@ -270,6 +286,7 @@ func (r *rdParser) parseCreateUserStmt() ast.StmtNode {
 		AuthTokenOrTLSOptions: tlsOptions,
 		ResourceOptions:       resourceOptions,
 		PasswordOrLockOptions: pwdLockOptions,
+		DefaultRoles:          defaultRoles,
 	}
 	if opt := r.parseUserCommentOrAttributeOption(); opt != nil {
 		ret.CommentOrAttributeOption = opt
@@ -278,6 +295,26 @@ func (r *rdParser) parseCreateUserStmt() ast.StmtNode {
 		ret.ResourceGroupNameOption = opt
 	}
 	return ret
+}
+
+// parseUserDefaultRolesOpt implements the DEFAULT ROLE clause of
+// CREATE USER and ALTER USER (nil for the empty alternative):
+// empty | "DEFAULT" "ROLE" ("NONE" | "ALL" | RolenameList).
+func (r *rdParser) parseUserDefaultRolesOpt() *ast.UserDefaultRoles {
+	if r.tok() != defaultKwd || r.la(1) != role {
+		return nil
+	}
+	r.advance()
+	r.advance()
+	switch r.tok() {
+	case all:
+		r.advance()
+		return &ast.UserDefaultRoles{All: true}
+	case none:
+		r.advance()
+		return &ast.UserDefaultRoles{None: true}
+	}
+	return &ast.UserDefaultRoles{Roles: r.parseRolenameList()}
 }
 
 // parseUserConnectionOptions implements ConnectionOptions and
@@ -412,11 +449,18 @@ func (r *rdParser) parseUserPasswordOrLockOption() *ast.PasswordOrLockOption {
 			}
 			return &ast.PasswordOrLockOption{Type: ast.PasswordExpire}
 		case require:
-			// "PASSWORD" "REQUIRE" "CURRENT" "DEFAULT"
+			// "PASSWORD" "REQUIRE" "CURRENT" ["DEFAULT" | "OPTIONAL"]
 			r.advance()
 			r.expect(current)
-			r.expect(defaultKwd)
-			return &ast.PasswordOrLockOption{Type: ast.PasswordRequireCurrentDefault}
+			switch r.tok() {
+			case defaultKwd:
+				r.advance()
+				return &ast.PasswordOrLockOption{Type: ast.PasswordRequireCurrentDefault}
+			case optional:
+				r.advance()
+				return &ast.PasswordOrLockOption{Type: ast.PasswordRequireCurrentOptional}
+			}
+			return &ast.PasswordOrLockOption{Type: ast.PasswordRequireCurrent}
 		}
 	}
 	r.syntaxError()

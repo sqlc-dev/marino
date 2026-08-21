@@ -157,6 +157,12 @@ func (r *rdParser) parseFlushStmt() ast.StmtNode {
 	}
 	st := r.parseFlushOption()
 	st.NoWriteToBinLog = noWrite
+	// FlushOptionList: a comma continues the list (FLUSH BINARY LOGS,
+	// STATUS, ...). A FLUSH TABLES table list consumes its own commas, so
+	// only commas after a complete option arrive here.
+	for r.accept(int(',')) {
+		st.MoreOptions = append(st.MoreOptions, r.parseFlushOption())
+	}
 	return st
 }
 
@@ -187,8 +193,8 @@ func (r *rdParser) parseFlushOption() *ast.FlushStmt {
 			Tp:      ast.FlushLogs,
 			LogType: ast.LogTypeDefault,
 		}
-	case binaryType, engine, errorKwd, general, slow:
-		// LogTypeOpt "LOGS"
+	case binaryType, engine, errorKwd, general, slow, relay:
+		// LogTypeOpt "LOGS" [ForChannelOpt (RELAY only)]
 		var logType ast.LogType
 		switch r.tok() {
 		case binaryType:
@@ -201,15 +207,27 @@ func (r *rdParser) parseFlushOption() *ast.FlushStmt {
 			logType = ast.LogTypeGeneral
 		case slow:
 			logType = ast.LogTypeSlow
+		case relay:
+			logType = ast.LogTypeRelay
 		}
 		r.advance()
 		r.expect(logs)
-		return &ast.FlushStmt{
+		st := &ast.FlushStmt{
 			Tp:      ast.FlushLogs,
 			LogType: logType,
 		}
+		if logType == ast.LogTypeRelay {
+			st.Channel = r.parseForChannelOpt()
+		}
+		return st
+	case optimizerCosts:
+		r.advance()
+		return &ast.FlushStmt{Tp: ast.FlushOptimizerCosts}
+	case userResources:
+		r.advance()
+		return &ast.FlushStmt{Tp: ast.FlushUserResources}
 	case tableKwd, tables:
-		// TableOrTables TableNameListOpt WithReadLockOpt
+		// TableOrTables TableNameListOpt (WithReadLockOpt | "FOR" "EXPORT")
 		r.advance()
 		st := &ast.FlushStmt{
 			Tp:     ast.FlushTables,
@@ -222,6 +240,10 @@ func (r *rdParser) parseFlushOption() *ast.FlushStmt {
 			r.expect(read)
 			r.expect(lock)
 			st.ReadLock = true
+		} else if r.tok() == forKwd && r.la(1) == export {
+			r.advance()
+			r.advance()
+			st.ForExport = true
 		}
 		return st
 	case clientErrorsSummary:
@@ -348,9 +370,17 @@ func (r *rdParser) parseLockStmtFamily() ast.StmtNode {
 	}
 }
 
-// parseTableLock implements TableLock and LockType.
+// parseTableLock implements TableLock and LockType:
+// TableName [["AS"] Identifier] lock_type, with lock_type one of
+// READ [LOCAL] | [LOW_PRIORITY] WRITE | WRITE LOCAL.
 func (r *rdParser) parseTableLock() ast.TableLock {
 	tn := r.parseTableName()
+	var alias ast.CIStr
+	if r.accept(as) {
+		alias = ast.NewCIStr(r.parseIdentifier())
+	} else if isIdentifierTok(r.tok()) {
+		alias = ast.NewCIStr(r.parseIdentifier())
+	}
 	var lockType ast.TableLockType
 	switch r.tok() {
 	case read:
@@ -365,12 +395,17 @@ func (r *rdParser) parseTableLock() ast.TableLock {
 		if r.accept(local) {
 			lockType = ast.TableLockWriteLocal
 		}
+	case lowPriority:
+		r.advance()
+		r.expect(write)
+		lockType = ast.TableLockWriteLowPriority
 	default:
 		r.syntaxError()
 	}
 	return ast.TableLock{
 		Table: tn,
 		Type:  lockType,
+		Alias: alias,
 	}
 }
 
@@ -561,10 +596,17 @@ func (r *rdParser) parseExplainStmt() ast.StmtNode {
 				Format:     formatStr,
 			}
 		}
-		// ... ExplainableStmt
+		// ... ["INTO" UserVariable] ExplainableStmt
+		var intoVar string
+		if r.tok() == into && r.la(1) == singleAtIdentifier {
+			r.advance()
+			intoVar = strings.TrimPrefix(r.cur().lit, "@")
+			r.advance()
+		}
 		return &ast.ExplainStmt{
-			Stmt:   r.parseExplainableStmt(),
-			Format: formatStr,
+			Stmt:    r.parseExplainableStmt(),
+			Format:  formatStr,
+			IntoVar: intoVar,
 		}
 	}
 	if r.tok() == stringLit {
@@ -584,13 +626,21 @@ func (r *rdParser) parseExplainStmt() ast.StmtNode {
 			Format: "row",
 		}
 	}
-	// ExplainSym TableName [ColumnName]
+	// ExplainSym TableName [ColumnName | stringLit]
 	showStmt := &ast.ShowStmt{
 		Tp:    ast.ShowColumns,
 		Table: r.parseTableName(),
 	}
 	if isIdentifierTok(r.tok()) {
 		showStmt.Column = r.parseColumnName()
+	} else if r.tok() == stringLit {
+		// A column-name wildcard pattern, as in SHOW COLUMNS ... LIKE.
+		showStmt.Pattern = &ast.PatternLikeOrIlikeExpr{
+			Pattern:        r.parseSimpleExpr(),
+			Escape:         '\\',
+			EscapeExplicit: false,
+			IsLike:         true,
+		}
 	}
 	return &ast.ExplainStmt{
 		Stmt: showStmt,
@@ -599,12 +649,17 @@ func (r *rdParser) parseExplainStmt() ast.StmtNode {
 
 // parseExplainFormat parses the symbol after "FORMAT" "=": either a
 // stringLit or an ExplainFormatType keyword; both yield their spelling.
+// A bare identifier (e.g. the MySQL TREE format) also parses, yielding
+// its spelling.
 func (r *rdParser) parseExplainFormat() string {
 	switch r.tok() {
 	case stringLit, traditional, jsonType, row, dotType, briefType, verboseType, trueCardCost, tidbJson:
 		lit := r.cur().lit
 		r.advance()
 		return lit
+	}
+	if isIdentifierTok(r.tok()) {
+		return r.parseIdentifier()
 	}
 	r.syntaxError()
 	return ""

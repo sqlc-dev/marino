@@ -363,8 +363,21 @@ func (r *rdParser) parseSelectTail(st *ast.SelectStmt) {
 	if r.tok() == limit || r.tok() == fetch {
 		st.Limit = r.parseSelectStmtLimit()
 	}
+	// MySQL also accepts the SelectStmtIntoOption before the locking
+	// clauses.
+	if st.SelectIntoOpt == nil && r.tok() == into {
+		st.SelectIntoOpt = r.parseSelectStmtIntoOption()
+	}
 	if lock := r.parseSelectLockOpt(); lock != nil {
 		st.LockInfo = lock
+		// A statement may carry several locking clauses.
+		for {
+			more := r.parseSelectLockOpt()
+			if more == nil {
+				break
+			}
+			st.MoreLockInfos = append(st.MoreLockInfos, more)
+		}
 	}
 	if st.SelectIntoOpt == nil {
 		if opt := r.parseSelectStmtIntoOption(); opt != nil {
@@ -704,6 +717,11 @@ func (r *rdParser) parseSelectStmtIntoOption() *ast.SelectIntoOption {
 	case outfile:
 		r.advance()
 		x := &ast.SelectIntoOption{Tp: ast.SelectIntoOutfile, FileName: r.expect(stringLit).lit}
+		if (r.tok() == character || r.tok() == charType) && r.la(1) == set {
+			r.advance()
+			r.advance()
+			x.Charset = r.parseCharsetName()
+		}
 		if fields := r.parseFieldsClause(); fields != nil {
 			x.FieldsInfo = fields
 		}
@@ -1061,7 +1079,12 @@ func (r *rdParser) parseTableFactor() ast.ResultSetNode {
 			var ts ast.ResultSetNode
 			if r.try(func() {
 				sub := r.parseSubSelect()
-				ts = &ast.TableSource{Source: sub.Query.(ast.ResultSetNode), AsName: r.parseTableAsNameOpt()}
+				src := &ast.TableSource{Source: sub.Query.(ast.ResultSetNode), AsName: r.parseTableAsNameOpt()}
+				if src.AsName.O != "" && r.tok() == int('(') {
+					// The optional derived-table column alias list.
+					src.ColumnNames = r.parseIdentListWithParenOpt()
+				}
+				ts = src
 			}) {
 				return ts
 			}
@@ -1080,6 +1103,10 @@ func (r *rdParser) parseTableFactor() ast.ResultSetNode {
 		ts.Lateral = true
 		ts.ColumnNames = r.parseIdentListWithParenOpt()
 		return ts
+	case r.tok() == identifier && r.la(1) == int('(') && strings.EqualFold(r.cur().lit, "JSON_TABLE"):
+		// TableFactor: the JSON_TABLE table function TableAsNameOpt
+		jt := r.parseJSONTableExpr()
+		return &ast.TableSource{Source: jt, AsName: r.parseTableAsNameOpt()}
 	default:
 		// TableFactor: TableName PartitionNameListOpt TableAsNameOpt
 		// AsOfClauseOpt IndexHintListOpt TableSampleOpt

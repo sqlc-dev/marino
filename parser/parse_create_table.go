@@ -20,6 +20,7 @@ package parser
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/sqlc-dev/marino/ast"
@@ -364,6 +365,9 @@ func (r *rdParser) isTableOptionStart() bool {
 	case character, charType:
 		// CharsetKw: "CHARACTER" "SET" | "CHAR" "SET"
 		return r.la(1) == set
+	case start:
+		// "START" "TRANSACTION"
+		return r.la(1) == transaction
 	}
 	return false
 }
@@ -648,9 +652,22 @@ func (r *rdParser) parseTableOption() *ast.TableOption {
 		// Parse it but will ignore it.
 		r.advance()
 		r.parseEqOpt()
-		opt := &ast.TableOption{Tp: ast.TableOptionAutoextendSize, StrValue: r.parseStringName()}
+		var v string
+		if r.tok() == intLit {
+			v = strconv.FormatUint(getUint64FromNUM(r.cur().item), 10)
+			r.advance()
+		} else {
+			v = r.parseStringName()
+		}
+		opt := &ast.TableOption{Tp: ast.TableOptionAutoextendSize, StrValue: v}
 		r.appendWarnf("The AUTOEXTEND_SIZE option is parsed but ignored by all storage engines.")
 		return opt
+	case start:
+		// "START" "TRANSACTION" (CREATE TABLE only; parsed and ignored,
+		// like AUTOEXTEND_SIZE).
+		r.advance()
+		r.expect(transaction)
+		return &ast.TableOption{Tp: ast.TableOptionStartTransaction}
 	case affinity:
 		r.advance()
 		r.parseEqOpt()

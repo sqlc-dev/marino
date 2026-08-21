@@ -29,6 +29,7 @@ import (
 	. "github.com/sqlc-dev/marino/format"
 	"github.com/sqlc-dev/marino/mysql"
 	"github.com/sqlc-dev/marino/opcode"
+	"github.com/sqlc-dev/marino/types"
 	"github.com/sqlc-dev/marino/parser"
 	"github.com/sqlc-dev/marino/terror"
 )
@@ -3864,6 +3865,31 @@ func (checker *nodeTextCleaner) Enter(in ast.Node) (out ast.Node, skipChildren b
 		node.Tp.CleanElemIsBinaryLit()
 	case *ast.PartitionOptions:
 		cleanPartition(node)
+	case *ast.ProcedureBlock:
+		// ProcedureBlock.Accept deliberately does not traverse
+		// ProcedureProcStmts; clean them explicitly so restored
+		// procedure bodies compare deep-equal.
+		var tmpCleaner nodeTextCleaner
+		for _, stmt := range node.ProcedureProcStmts {
+			stmt.Accept(&tmpCleaner)
+		}
+	case *ast.ProcedureInfo:
+		// The parameter list's recorded source text is not normalized by
+		// Restore().
+		node.ProcedureParamStr = ""
+	case *ast.StoreParameter:
+		// Restore() prints the type via CompactStr, which substitutes
+		// the default display width for an unspecified one; canonicalize
+		// the parsed type the same way so IN a INT compares deep-equal
+		// with its restored IN a INT(11) spelling.
+		if node.ParamType.GetFlen() == types.UnspecifiedLength {
+			flen, _ := mysql.GetDefaultFieldLengthAndDecimal(node.ParamType.GetType())
+			node.ParamType.SetFlen(flen)
+		}
+		if node.ParamType.GetDecimal() == types.UnspecifiedLength {
+			_, decimal := mysql.GetDefaultFieldLengthAndDecimal(node.ParamType.GetType())
+			node.ParamType.SetDecimal(decimal)
+		}
 	}
 	return in, false
 }

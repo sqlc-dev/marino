@@ -102,21 +102,44 @@ type AuthOption struct {
 	ByHashString bool
 	HashString   string
 	AuthPlugin   string
+	// ByRandomPassword is the BY RANDOM PASSWORD form.
+	ByRandomPassword bool
+	// ReplacePassword is the REPLACE 'current' dual-password clause;
+	// nil when absent.
+	ReplacePassword *string
+	// RetainCurrentPassword is the RETAIN CURRENT PASSWORD clause.
+	RetainCurrentPassword bool
+	// DiscardOldPassword selects the DISCARD OLD PASSWORD form, which
+	// replaces the whole IDENTIFIED clause; no other field is set.
+	DiscardOldPassword bool
 }
 
 // Restore implements Node interface.
 func (n *AuthOption) Restore(ctx *format.RestoreCtx) error {
+	if n.DiscardOldPassword {
+		ctx.WriteKeyWord("DISCARD OLD PASSWORD")
+		return nil
+	}
 	ctx.WriteKeyWord("IDENTIFIED")
 	if n.AuthPlugin != "" {
 		ctx.WriteKeyWord(" WITH ")
 		ctx.WriteString(n.AuthPlugin)
 	}
-	if n.ByAuthString {
+	if n.ByRandomPassword {
+		ctx.WriteKeyWord(" BY RANDOM PASSWORD")
+	} else if n.ByAuthString {
 		ctx.WriteKeyWord(" BY ")
 		ctx.WriteString(n.AuthString)
 	} else if n.ByHashString {
 		ctx.WriteKeyWord(" AS ")
 		ctx.WriteString(n.HashString)
+	}
+	if n.ReplacePassword != nil {
+		ctx.WriteKeyWord(" REPLACE ")
+		ctx.WriteString(*n.ReplacePassword)
+	}
+	if n.RetainCurrentPassword {
+		ctx.WriteKeyWord(" RETAIN CURRENT PASSWORD")
 	}
 	return nil
 }
@@ -219,6 +242,9 @@ type ExplainStmt struct {
 	SQLDigest string
 	// PlanDigest to explain, used in `EXPLAIN [ANALYZE] <plan_digest>`.
 	PlanDigest string
+	// IntoVar is the user variable of `EXPLAIN FORMAT = ... INTO @var`,
+	// without the leading @; empty when absent.
+	IntoVar string
 }
 
 // Restore implements Node interface.
@@ -232,6 +258,15 @@ func (n *ExplainStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(" ")
 			if err := showStmt.Column.Restore(ctx); err != nil {
 				return annotate(err, "An error occurred while restore ExplainStmt.ShowStmt.Column")
+			}
+		} else if showStmt.Pattern != nil && showStmt.Pattern.Pattern != nil {
+			ctx.WritePlain(" ")
+			if pat, ok := showStmt.Pattern.Pattern.(ValueExpr); ok {
+				// Write the wildcard as a plain string: DESC does not
+				// accept a charset-prefixed literal.
+				ctx.WriteString(pat.GetString())
+			} else if err := showStmt.Pattern.Pattern.Restore(ctx); err != nil {
+				return annotate(err, "An error occurred while restore ExplainStmt.ShowStmt.Pattern")
 			}
 		}
 		return nil
@@ -249,6 +284,12 @@ func (n *ExplainStmt) Restore(ctx *format.RestoreCtx) error {
 		ctx.WriteKeyWord("FORMAT ")
 		ctx.WritePlain("= ")
 		ctx.WriteString(n.Format)
+		ctx.WritePlain(" ")
+	}
+	if n.IntoVar != "" {
+		ctx.WriteKeyWord("INTO ")
+		ctx.WritePlain("@")
+		ctx.WriteName(n.IntoVar)
 		ctx.WritePlain(" ")
 	}
 	if n.PlanDigest != "" {
@@ -859,15 +900,48 @@ func (n *BinlogStmt) Accept(v Visitor) (Node, bool) {
 // ReplicationSourceOption is a single name = value option of
 // ChangeReplicationSourceStmt. Names are stored uppercase; the parser
 // does not validate them against the server's option list. Values are
-// literals: a string, integer, or decimal.
+// usually literals (a string, integer, or decimal, in Value); the
+// non-literal forms are a bare keyword (KeywordValue, e.g.
+// REQUIRE_TABLE_PRIMARY_KEY_CHECK = STREAM or PRIVILEGE_CHECKS_USER =
+// NULL), an account name (User, PRIVILEGE_CHECKS_USER = 'u'@'h'), and a
+// parenthesized server-id list (ServerIDs, IGNORE_SERVER_IDS = (1, 2);
+// non-nil but empty for an empty list).
 type ReplicationSourceOption struct {
-	Name  string
-	Value ValueExpr
+	Name         string
+	Value        ValueExpr
+	KeywordValue string
+	User         *auth.UserIdentity
+	ServerIDs    []ValueExpr
 }
 
 // Restore implements Node interface.
 func (n *ReplicationSourceOption) Restore(ctx *format.RestoreCtx) error {
 	ctx.WriteKeyWord(n.Name)
+	if n.ServerIDs != nil {
+		ctx.WritePlain(" = (")
+		for i, id := range n.ServerIDs {
+			if i != 0 {
+				ctx.WritePlain(", ")
+			}
+			if err := id.Restore(ctx); err != nil {
+				return fmt.Errorf("an error occurred while restore ReplicationSourceOption.ServerIDs[%d]: %w", i, err)
+			}
+		}
+		ctx.WritePlain(")")
+		return nil
+	}
+	if n.User != nil {
+		ctx.WritePlain(" = ")
+		if err := n.User.Restore(ctx); err != nil {
+			return fmt.Errorf("an error occurred while restore ReplicationSourceOption.User: %w", err)
+		}
+		return nil
+	}
+	if n.KeywordValue != "" {
+		ctx.WritePlain(" = ")
+		ctx.WriteKeyWord(n.KeywordValue)
+		return nil
+	}
 	if n.Value == nil {
 		// A bare option name (START REPLICA UNTIL SQL_AFTER_MTS_GAPS).
 		return nil
@@ -934,6 +1008,9 @@ func (n *ChangeReplicationSourceStmt) Accept(v Visitor) (Node, bool) {
 	}
 	n = newNode.(*ChangeReplicationSourceStmt)
 	for _, opt := range n.Options {
+		if opt.Value == nil {
+			continue
+		}
 		node, ok := opt.Value.Accept(v)
 		if !ok {
 			return n, false
@@ -1065,11 +1142,13 @@ const (
 // VariableAssignment is a variable assignment struct.
 type VariableAssignment struct {
 	node
-	Name       string
-	Value      ExprNode
-	IsInstance bool
-	IsGlobal   bool
-	IsSystem   bool
+	Name          string
+	Value         ExprNode
+	IsInstance    bool
+	IsGlobal      bool
+	IsSystem      bool
+	IsPersist     bool // SET PERSIST var: persist to mysqld-auto.cnf and set globally
+	IsPersistOnly bool // SET PERSIST_ONLY var: persist without setting the running value
 
 	// ExtendValue is a way to store extended info.
 	// VariableAssignment should be able to store information for SetCharset/SetPWD Stmt.
@@ -1082,7 +1161,11 @@ type VariableAssignment struct {
 func (n *VariableAssignment) Restore(ctx *format.RestoreCtx) error {
 	if n.IsSystem {
 		ctx.WritePlain("@@")
-		if n.IsGlobal {
+		if n.IsPersist {
+			ctx.WriteKeyWord("PERSIST")
+		} else if n.IsPersistOnly {
+			ctx.WriteKeyWord("PERSIST_ONLY")
+		} else if n.IsGlobal {
 			ctx.WriteKeyWord("GLOBAL")
 		} else if n.IsInstance {
 			ctx.WriteKeyWord("INSTANCE")
@@ -1145,6 +1228,8 @@ const (
 	FlushLogs
 	FlushClientErrorsSummary
 	FlushStatsDelta
+	FlushOptimizerCosts
+	FlushUserResources
 )
 
 // LogType is the log type used in FLUSH statement.
@@ -1157,6 +1242,7 @@ const (
 	LogTypeError
 	LogTypeGeneral
 	LogTypeSlow
+	LogTypeRelay
 )
 
 // FlushStmt is a statement to flush tables/privileges/optimizer costs and so on.
@@ -1171,6 +1257,12 @@ type FlushStmt struct {
 	Plugins         []string
 	IsCluster       bool           // For FlushStatsDelta, whether to flush cluster-wide stats delta
 	FlushObjects    []*StatsObject // For FlushStatsDelta, scoped objects (db.tbl, db.*, *.*). Always non-empty.
+	Channel         string         // For FLUSH RELAY LOGS FOR CHANNEL; empty when absent.
+	ForExport       bool           // For FLUSH TABLES ... FOR EXPORT.
+	// MoreOptions are the second and later options of a comma-separated
+	// FLUSH option list (FLUSH BINARY LOGS, STATUS, ...); each carries
+	// only its option fields, not NoWriteToBinLog.
+	MoreOptions []*FlushStmt
 }
 
 // Restore implements Node interface.
@@ -1179,6 +1271,21 @@ func (n *FlushStmt) Restore(ctx *format.RestoreCtx) error {
 	if n.NoWriteToBinLog {
 		ctx.WriteKeyWord("NO_WRITE_TO_BINLOG ")
 	}
+	if err := n.restoreOption(ctx); err != nil {
+		return err
+	}
+	for i, opt := range n.MoreOptions {
+		ctx.WritePlain(", ")
+		if err := opt.restoreOption(ctx); err != nil {
+			return annotatef(err, "An error occurred while restore FlushStmt.MoreOptions[%d]", i)
+		}
+	}
+	return nil
+}
+
+// restoreOption writes one FLUSH option (everything after FLUSH
+// [NO_WRITE_TO_BINLOG] for this statement's own option).
+func (n *FlushStmt) restoreOption(ctx *format.RestoreCtx) error {
 	switch n.Tp {
 	case FlushTables:
 		ctx.WriteKeyWord("TABLES")
@@ -1194,6 +1301,9 @@ func (n *FlushStmt) Restore(ctx *format.RestoreCtx) error {
 		}
 		if n.ReadLock {
 			ctx.WriteKeyWord(" WITH READ LOCK")
+		}
+		if n.ForExport {
+			ctx.WriteKeyWord(" FOR EXPORT")
 		}
 	case FlushPrivileges:
 		ctx.WriteKeyWord("PRIVILEGES")
@@ -1226,8 +1336,18 @@ func (n *FlushStmt) Restore(ctx *format.RestoreCtx) error {
 			logType = "GENERAL LOGS"
 		case LogTypeSlow:
 			logType = "SLOW LOGS"
+		case LogTypeRelay:
+			logType = "RELAY LOGS"
 		}
 		ctx.WriteKeyWord(logType)
+		if n.Channel != "" {
+			ctx.WriteKeyWord(" FOR CHANNEL ")
+			ctx.WriteString(n.Channel)
+		}
+	case FlushOptimizerCosts:
+		ctx.WriteKeyWord("OPTIMIZER_COSTS")
+	case FlushUserResources:
+		ctx.WriteKeyWord("USER_RESOURCES")
 	case FlushClientErrorsSummary:
 		ctx.WriteKeyWord("CLIENT_ERRORS_SUMMARY")
 	case FlushStatsDelta:
@@ -1497,6 +1617,14 @@ type SetPwdStmt struct {
 
 	User     *auth.UserIdentity
 	Password string
+	// ToRandom is the SET PASSWORD ... TO RANDOM form; Password is
+	// empty then.
+	ToRandom bool
+	// ReplacePassword is the REPLACE 'current' dual-password clause;
+	// nil when absent.
+	ReplacePassword *string
+	// RetainCurrentPassword is the RETAIN CURRENT PASSWORD clause.
+	RetainCurrentPassword bool
 }
 
 // Restore implements Node interface.
@@ -1508,8 +1636,19 @@ func (n *SetPwdStmt) Restore(ctx *format.RestoreCtx) error {
 			return annotate(err, "An error occurred while restore SetPwdStmt.User")
 		}
 	}
-	ctx.WritePlain("=")
-	ctx.WriteString(n.Password)
+	if n.ToRandom {
+		ctx.WriteKeyWord(" TO RANDOM")
+	} else {
+		ctx.WritePlain("=")
+		ctx.WriteString(n.Password)
+	}
+	if n.ReplacePassword != nil {
+		ctx.WriteKeyWord(" REPLACE ")
+		ctx.WriteString(*n.ReplacePassword)
+	}
+	if n.RetainCurrentPassword {
+		ctx.WriteKeyWord(" RETAIN CURRENT PASSWORD")
+	}
 	return nil
 }
 
@@ -1638,6 +1777,9 @@ type UserSpec struct {
 	User    *auth.UserIdentity
 	AuthOpt *AuthOption
 	IsRole  bool
+	// MoreAuthOpts are the second and third authentication factors
+	// (AND IDENTIFIED ...); empty when absent.
+	MoreAuthOpts []*AuthOption
 }
 
 // Restore implements Node interface.
@@ -1649,6 +1791,12 @@ func (n *UserSpec) Restore(ctx *format.RestoreCtx) error {
 		ctx.WritePlain(" ")
 		if err := n.AuthOpt.Restore(ctx); err != nil {
 			return annotate(err, "An error occurred while restore UserSpec.AuthOpt")
+		}
+	}
+	for i, opt := range n.MoreAuthOpts {
+		ctx.WriteKeyWord(" AND ")
+		if err := opt.Restore(ctx); err != nil {
+			return annotatef(err, "An error occurred while restore UserSpec.MoreAuthOpts[%d]", i)
 		}
 	}
 	return nil
@@ -1786,6 +1934,9 @@ const (
 	PasswordRequireCurrentDefault
 
 	UserResourceGroupName
+
+	PasswordRequireCurrent
+	PasswordRequireCurrentOptional
 )
 
 type PasswordOrLockOption struct {
@@ -1828,6 +1979,12 @@ func (p *PasswordOrLockOption) Restore(ctx *format.RestoreCtx) error {
 		ctx.WriteKeyWord(" DAY")
 	case PasswordReuseDefault:
 		ctx.WriteKeyWord("PASSWORD REUSE INTERVAL DEFAULT")
+	case PasswordRequireCurrent:
+		ctx.WriteKeyWord("PASSWORD REQUIRE CURRENT")
+	case PasswordRequireCurrentDefault:
+		ctx.WriteKeyWord("PASSWORD REQUIRE CURRENT DEFAULT")
+	case PasswordRequireCurrentOptional:
+		ctx.WriteKeyWord("PASSWORD REQUIRE CURRENT OPTIONAL")
 	default:
 		return fmt.Errorf("Unsupported PasswordOrLockOption.Type %d", p.Type)
 	}
@@ -1860,6 +2017,98 @@ func (c *ResourceGroupNameOption) Restore(ctx *format.RestoreCtx) error {
 	return nil
 }
 
+// UserDefaultRoles is the DEFAULT ROLE clause of CREATE USER and ALTER
+// USER: DEFAULT ROLE {NONE | ALL | role [, role]...}.
+type UserDefaultRoles struct {
+	All   bool
+	None  bool
+	Roles []*auth.RoleIdentity
+}
+
+// Restore implements Node interface.
+func (n *UserDefaultRoles) Restore(ctx *format.RestoreCtx) error {
+	ctx.WriteKeyWord("DEFAULT ROLE ")
+	switch {
+	case n.All:
+		ctx.WriteKeyWord("ALL")
+	case n.None:
+		ctx.WriteKeyWord("NONE")
+	default:
+		for i, role := range n.Roles {
+			if i != 0 {
+				ctx.WritePlain(", ")
+			}
+			if err := role.Restore(ctx); err != nil {
+				return annotatef(err, "An error occurred while restore UserDefaultRoles.Roles[%d]", i)
+			}
+		}
+	}
+	return nil
+}
+
+// AlterUserFactorOpType names the multi-factor authentication operation
+// of an AlterUserFactor clause.
+type AlterUserFactorOpType int
+
+// Multi-factor authentication operations.
+const (
+	// AlterUserFactorAdd is ADD n FACTOR auth_option.
+	AlterUserFactorAdd AlterUserFactorOpType = iota
+	// AlterUserFactorModify is MODIFY n FACTOR auth_option.
+	AlterUserFactorModify
+	// AlterUserFactorDrop is DROP n FACTOR.
+	AlterUserFactorDrop
+	// AlterUserFactorInitiateRegistration is n FACTOR INITIATE REGISTRATION.
+	AlterUserFactorInitiateRegistration
+	// AlterUserFactorFinishRegistration is n FACTOR FINISH REGISTRATION
+	// SET CHALLENGE_RESPONSE AS 'auth_string'.
+	AlterUserFactorFinishRegistration
+	// AlterUserFactorUnregister is n FACTOR UNREGISTER.
+	AlterUserFactorUnregister
+)
+
+// AlterUserFactor is one multi-factor authentication clause of ALTER
+// USER (MySQL 26.7 §15.7.1.1): ADD/MODIFY/DROP n FACTOR and the
+// registration steps.
+type AlterUserFactor struct {
+	Op     AlterUserFactorOpType
+	Factor int64 // 2 or 3
+	// AuthOpt is set for Add and Modify.
+	AuthOpt *AuthOption
+	// ChallengeResponse is the FINISH REGISTRATION SET
+	// CHALLENGE_RESPONSE AS value; nil otherwise.
+	ChallengeResponse *string
+}
+
+// Restore implements Node interface.
+func (n *AlterUserFactor) Restore(ctx *format.RestoreCtx) error {
+	switch n.Op {
+	case AlterUserFactorAdd:
+		ctx.WriteKeyWord("ADD ")
+	case AlterUserFactorModify:
+		ctx.WriteKeyWord("MODIFY ")
+	case AlterUserFactorDrop:
+		ctx.WriteKeyWord("DROP ")
+	}
+	ctx.WritePlainf("%d", n.Factor)
+	ctx.WriteKeyWord(" FACTOR")
+	switch n.Op {
+	case AlterUserFactorAdd, AlterUserFactorModify:
+		ctx.WritePlain(" ")
+		if err := n.AuthOpt.Restore(ctx); err != nil {
+			return annotate(err, "An error occurred while restore AlterUserFactor.AuthOpt")
+		}
+	case AlterUserFactorInitiateRegistration:
+		ctx.WriteKeyWord(" INITIATE REGISTRATION")
+	case AlterUserFactorFinishRegistration:
+		ctx.WriteKeyWord(" FINISH REGISTRATION SET CHALLENGE_RESPONSE AS ")
+		ctx.WriteString(*n.ChallengeResponse)
+	case AlterUserFactorUnregister:
+		ctx.WriteKeyWord(" UNREGISTER")
+	}
+	return nil
+}
+
 // CreateUserStmt creates user account.
 // See https://dev.mysql.com/doc/refman/8.0/en/create-user.html
 type CreateUserStmt struct {
@@ -1873,6 +2122,8 @@ type CreateUserStmt struct {
 	PasswordOrLockOptions    []*PasswordOrLockOption
 	CommentOrAttributeOption *CommentOrAttributeOption
 	ResourceGroupNameOption  *ResourceGroupNameOption
+	// DefaultRoles is the DEFAULT ROLE clause; nil when absent.
+	DefaultRoles *UserDefaultRoles
 }
 
 // Restore implements Node interface.
@@ -1891,6 +2142,13 @@ func (n *CreateUserStmt) Restore(ctx *format.RestoreCtx) error {
 		}
 		if err := v.Restore(ctx); err != nil {
 			return annotatef(err, "An error occurred while restore CreateUserStmt.Specs[%d]", i)
+		}
+	}
+
+	if n.DefaultRoles != nil {
+		ctx.WritePlain(" ")
+		if err := n.DefaultRoles.Restore(ctx); err != nil {
+			return annotate(err, "An error occurred while restore CreateUserStmt.DefaultRoles")
 		}
 	}
 
@@ -1974,6 +2232,11 @@ type AlterUserStmt struct {
 	PasswordOrLockOptions    []*PasswordOrLockOption
 	CommentOrAttributeOption *CommentOrAttributeOption
 	ResourceGroupNameOption  *ResourceGroupNameOption
+	// DefaultRoles is the DEFAULT ROLE clause; nil when absent.
+	DefaultRoles *UserDefaultRoles
+	// Factors are the multi-factor authentication clauses (ADD/MODIFY/
+	// DROP n FACTOR and the registration steps); empty when absent.
+	Factors []*AlterUserFactor
 }
 
 // Restore implements Node interface.
@@ -1995,6 +2258,20 @@ func (n *AlterUserStmt) Restore(ctx *format.RestoreCtx) error {
 		}
 		if err := v.Restore(ctx); err != nil {
 			return annotatef(err, "An error occurred while restore AlterUserStmt.Specs[%d]", i)
+		}
+	}
+
+	for i, factor := range n.Factors {
+		ctx.WritePlain(" ")
+		if err := factor.Restore(ctx); err != nil {
+			return annotatef(err, "An error occurred while restore AlterUserStmt.Factors[%d]", i)
+		}
+	}
+
+	if n.DefaultRoles != nil {
+		ctx.WritePlain(" ")
+		if err := n.DefaultRoles.Restore(ctx); err != nil {
+			return annotate(err, "An error occurred while restore AlterUserStmt.DefaultRoles")
 		}
 	}
 
@@ -3206,11 +3483,18 @@ type RevokeStmt struct {
 	ObjectType ObjectTypeType
 	Level      *GrantLevel
 	Users      []*UserSpec
+	// IfExists is the IF EXISTS clause.
+	IfExists bool
+	// IgnoreUnknownUser is the IGNORE UNKNOWN USER clause.
+	IgnoreUnknownUser bool
 }
 
 // Restore implements Node interface.
 func (n *RevokeStmt) Restore(ctx *format.RestoreCtx) error {
 	ctx.WriteKeyWord("REVOKE ")
+	if n.IfExists {
+		ctx.WriteKeyWord("IF EXISTS ")
+	}
 	for i, v := range n.Privs {
 		if i != 0 {
 			ctx.WritePlain(", ")
@@ -3238,6 +3522,9 @@ func (n *RevokeStmt) Restore(ctx *format.RestoreCtx) error {
 			return annotatef(err, "An error occurred while restore RevokeStmt.Users[%d]", i)
 		}
 	}
+	if n.IgnoreUnknownUser {
+		ctx.WriteKeyWord(" IGNORE UNKNOWN USER")
+	}
 	return nil
 }
 
@@ -3264,11 +3551,18 @@ type RevokeRoleStmt struct {
 
 	Roles []*auth.RoleIdentity
 	Users []*auth.UserIdentity
+	// IfExists is the IF EXISTS clause.
+	IfExists bool
+	// IgnoreUnknownUser is the IGNORE UNKNOWN USER clause.
+	IgnoreUnknownUser bool
 }
 
 // Restore implements Node interface.
 func (n *RevokeRoleStmt) Restore(ctx *format.RestoreCtx) error {
 	ctx.WriteKeyWord("REVOKE ")
+	if n.IfExists {
+		ctx.WriteKeyWord("IF EXISTS ")
+	}
 	for i, role := range n.Roles {
 		if i != 0 {
 			ctx.WritePlain(", ")
@@ -3285,6 +3579,9 @@ func (n *RevokeRoleStmt) Restore(ctx *format.RestoreCtx) error {
 		if err := v.Restore(ctx); err != nil {
 			return annotatef(err, "An error occurred while restore RevokeRoleStmt.Users[%d]", i)
 		}
+	}
+	if n.IgnoreUnknownUser {
+		ctx.WriteKeyWord(" IGNORE UNKNOWN USER")
 	}
 	return nil
 }
@@ -3309,6 +3606,53 @@ type GrantStmt struct {
 	Users                 []*UserSpec
 	AuthTokenOrTLSOptions []*AuthTokenOrTLSOption
 	WithGrant             bool
+	// AsUser is the AS user [WITH ROLE ...] clause; nil when absent.
+	AsUser *GrantAs
+}
+
+// GrantAs is the AS user [WITH ROLE {DEFAULT | NONE | ALL | ALL EXCEPT
+// role [, role]... | role [, role]...}] clause of GRANT, which
+// evaluates the granted privileges with the given user's access rights.
+type GrantAs struct {
+	User *auth.UserIdentity
+	// WithRole reports whether a WITH ROLE clause is present; RoleOpt
+	// and Roles describe it.
+	WithRole bool
+	RoleOpt  SetRoleStmtType
+	Roles    []*auth.RoleIdentity
+}
+
+// Restore implements Node interface.
+func (n *GrantAs) Restore(ctx *format.RestoreCtx) error {
+	ctx.WriteKeyWord("AS ")
+	if err := n.User.Restore(ctx); err != nil {
+		return annotate(err, "An error occurred while restore GrantAs.User")
+	}
+	if !n.WithRole {
+		return nil
+	}
+	ctx.WriteKeyWord(" WITH ROLE ")
+	switch n.RoleOpt {
+	case SetRoleDefault:
+		ctx.WriteKeyWord("DEFAULT")
+	case SetRoleNone:
+		ctx.WriteKeyWord("NONE")
+	case SetRoleAll:
+		ctx.WriteKeyWord("ALL")
+	case SetRoleAllExcept:
+		ctx.WriteKeyWord("ALL EXCEPT ")
+	}
+	if n.RoleOpt == SetRoleAllExcept || n.RoleOpt == SetRoleRegular {
+		for i, role := range n.Roles {
+			if i != 0 {
+				ctx.WritePlain(", ")
+			}
+			if err := role.Restore(ctx); err != nil {
+				return annotatef(err, "An error occurred while restore GrantAs.Roles[%d]", i)
+			}
+		}
+	}
+	return nil
 }
 
 // Restore implements Node interface.
@@ -3358,6 +3702,12 @@ func (n *GrantStmt) Restore(ctx *format.RestoreCtx) error {
 	}
 	if n.WithGrant {
 		ctx.WriteKeyWord(" WITH GRANT OPTION")
+	}
+	if n.AsUser != nil {
+		ctx.WritePlain(" ")
+		if err := n.AsUser.Restore(ctx); err != nil {
+			return annotate(err, "An error occurred while restore GrantStmt.AsUser")
+		}
 	}
 	return nil
 }
@@ -3430,12 +3780,51 @@ func (n *GrantProxyStmt) Restore(ctx *format.RestoreCtx) error {
 	return nil
 }
 
+// RevokeProxyStmt is the struct for REVOKE PROXY statement:
+// REVOKE PROXY ON user FROM user [, user]...
+type RevokeProxyStmt struct {
+	stmtNode
+
+	LocalUser     *auth.UserIdentity
+	ExternalUsers []*auth.UserIdentity
+}
+
+// Restore implements Node interface.
+func (n *RevokeProxyStmt) Restore(ctx *format.RestoreCtx) error {
+	ctx.WriteKeyWord("REVOKE PROXY ON ")
+	if err := n.LocalUser.Restore(ctx); err != nil {
+		return annotatef(err, "An error occurred while restore RevokeProxyStmt.LocalUser")
+	}
+	ctx.WriteKeyWord(" FROM ")
+	for i, v := range n.ExternalUsers {
+		if i != 0 {
+			ctx.WritePlain(", ")
+		}
+		if err := v.Restore(ctx); err != nil {
+			return annotatef(err, "An error occurred while restore RevokeProxyStmt.ExternalUsers[%d]", i)
+		}
+	}
+	return nil
+}
+
+// Accept implements Node Accept interface.
+func (n *RevokeProxyStmt) Accept(v Visitor) (Node, bool) {
+	newNode, skipChildren := v.Enter(n)
+	if skipChildren {
+		return v.Leave(newNode)
+	}
+	n = newNode.(*RevokeProxyStmt)
+	return v.Leave(n)
+}
+
 // GrantRoleStmt is the struct for GRANT TO statement.
 type GrantRoleStmt struct {
 	stmtNode
 
 	Roles []*auth.RoleIdentity
 	Users []*auth.UserIdentity
+	// AdminOption is the WITH ADMIN OPTION clause.
+	AdminOption bool
 }
 
 // Accept implements Node Accept interface.
@@ -3469,6 +3858,9 @@ func (n *GrantRoleStmt) Restore(ctx *format.RestoreCtx) error {
 		if err := v.Restore(ctx); err != nil {
 			return annotatef(err, "An error occurred while restore GrantStmt.Users[%d]", i)
 		}
+	}
+	if n.AdminOption {
+		ctx.WriteKeyWord(" WITH ADMIN OPTION")
 	}
 	return nil
 }
@@ -4356,15 +4748,26 @@ type BinaryLiteral interface {
 	ToString() string
 }
 
-// SetResourceGroupStmt is a statement to set the resource group name for current session.
+// SetResourceGroupStmt is a statement to set the resource group name for
+// the current session, or for the given threads (FOR thread_id, ...).
 type SetResourceGroupStmt struct {
 	stmtNode
-	Name CIStr
+	Name      CIStr
+	ThreadIDs []int64 // FOR thread_id list; nil when absent
 }
 
 func (n *SetResourceGroupStmt) Restore(ctx *format.RestoreCtx) error {
 	ctx.WriteKeyWord("SET RESOURCE GROUP ")
 	ctx.WriteName(n.Name.O)
+	if len(n.ThreadIDs) > 0 {
+		ctx.WriteKeyWord(" FOR ")
+		for i, id := range n.ThreadIDs {
+			if i != 0 {
+				ctx.WritePlain(", ")
+			}
+			ctx.WritePlainf("%d", id)
+		}
+	}
 	return nil
 }
 

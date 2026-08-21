@@ -49,6 +49,15 @@ func (r *rdParser) parseSimpleExprAtom() ast.ExprNode {
 		// The unqualified form requires a raw identifier token.
 		if r.la(1) == int('(') {
 			name := r.cur().lit
+			if strings.EqualFold(name, "JSON_VALUE") {
+				// JSON_VALUE with a RETURNING or ON EMPTY/ON ERROR
+				// clause parses as a JSONValueExpr; the plain call falls
+				// through to the generic form.
+				var jv ast.ExprNode
+				if r.try(func() { jv = r.parseJSONValueExpr() }) {
+					return r.setOrigin(jv, start)
+				}
+			}
 			r.advance()
 			r.advance()
 			args := r.parseExpressionListOpt()
@@ -165,10 +174,18 @@ func (r *rdParser) parseSimpleExprAtom() ast.ExprNode {
 		return r.setOrigin(x, start)
 
 	case builtinCast:
-		// SimpleExpr: builtinCast '(' Expression "AS" CastType ArrayKwdOpt ')'
+		// SimpleExpr: builtinCast '(' Expression ["AT" "TIME" "ZONE"
+		// stringLit] "AS" CastType ArrayKwdOpt ')'
 		r.advance()
 		r.expect(int('('))
 		expr := r.parseExpression()
+		var atTimeZone string
+		if r.tok() == at {
+			r.advance()
+			r.expect(timeType)
+			r.expect(zone)
+			atTimeZone = r.expect(stringLit).lit
+		}
 		r.expect(as)
 		tp := r.parseCastType()
 		isArray := r.accept(array)
@@ -192,6 +209,7 @@ func (r *rdParser) parseSimpleExprAtom() ast.ExprNode {
 			Tp:              tp,
 			FunctionType:    ast.CastFunction,
 			ExplicitCharSet: explicitCharset,
+			AtTimeZone:      atTimeZone,
 		}, start)
 	case jsonSumCrc32:
 		// SimpleExpr: jsonSumCrc32 '(' Expression "AS" CastType "ARRAY" ')'
@@ -1285,6 +1303,16 @@ func (r *rdParser) parseCastType() *types.FieldType {
 		tp.SetCollate(charset.CollationBin)
 		tp.AddFlag(mysql.BinaryFlag)
 		return tp
+	case ncharType:
+		// "NCHAR" OptFieldLen — the national char cast, which is CHAR in
+		// the national character set (the connection charset here).
+		r.advance()
+		flen := r.parseOptFieldLen()
+		tp := types.NewFieldType(mysql.TypeVarString)
+		tp.SetFlen(flen)
+		tp.SetCharset(r.p.charset)
+		tp.SetCollate(r.p.collation)
+		return tp
 	case charType, character:
 		// Char OptFieldLen OptBinary
 		r.advance()
@@ -1554,4 +1582,113 @@ func (r *rdParser) endOffsetAt(offset int) int {
 		offset--
 	}
 	return offset
+}
+
+// parseJSONValueExpr implements the extended JSON_VALUE form
+// (MySQL 26.7 §14.17.3):
+//
+//	"JSON_VALUE" '(' Expression ',' Expression ["RETURNING" CastType]
+//	    [JSONOnResponse "ON" "EMPTY"] [JSONOnResponse "ON" "ERROR"] ')'
+//
+// At least one of the optional clauses must be present; the plain
+// two-argument call stays a generic FuncCallExpr (the caller speculates,
+// so failing here selects that route).
+func (r *rdParser) parseJSONValueExpr() ast.ExprNode {
+	r.expect(identifier) // JSON_VALUE
+	r.expect(int('('))
+	x := &ast.JSONValueExpr{Doc: r.parseExpression()}
+	r.expect(int(','))
+	x.Path = r.parseExpression()
+	if r.accept(returning) {
+		x.Returning = r.parseCastType()
+	}
+	r.parseJSONOnResponses(&x.OnEmpty, &x.OnError)
+	if x.Returning == nil && x.OnEmpty == nil && x.OnError == nil {
+		r.syntaxError()
+	}
+	r.expect(int(')'))
+	return x
+}
+
+// parseJSONOnResponses parses the [on_empty] [on_error] clauses shared by
+// JSON_VALUE and JSON_TABLE columns:
+// ("NULL" | "ERROR" | "DEFAULT" SimpleExpr) "ON" ("EMPTY" | "ERROR").
+func (r *rdParser) parseJSONOnResponses(onEmpty, onError **ast.JSONOnResponse) {
+	for r.tok() == null || r.tok() == errorKwd || r.tok() == defaultKwd {
+		resp := &ast.JSONOnResponse{}
+		switch r.tok() {
+		case null:
+			r.advance()
+			resp.Tp = ast.JSONOnResponseNull
+		case errorKwd:
+			r.advance()
+			resp.Tp = ast.JSONOnResponseError
+		case defaultKwd:
+			r.advance()
+			resp.Tp = ast.JSONOnResponseDefault
+			resp.Value = r.parseSimpleExpr()
+		}
+		r.expect(on)
+		if r.accept(empty) {
+			*onEmpty = resp
+		} else {
+			r.expect(errorKwd)
+			*onError = resp
+		}
+	}
+}
+
+// parseJSONTableExpr implements the JSON_TABLE table function
+// (MySQL 26.7 §14.17.6):
+//
+//	"JSON_TABLE" '(' Expression ',' Expression "COLUMNS"
+//	    '(' JSONTableColumn (',' JSONTableColumn)* ')' ')'
+func (r *rdParser) parseJSONTableExpr() *ast.JSONTableExpr {
+	r.expect(identifier) // JSON_TABLE
+	r.expect(int('('))
+	x := &ast.JSONTableExpr{Doc: r.parseExpression()}
+	r.expect(int(','))
+	x.Path = r.parseExpression()
+	r.expect(columns)
+	r.expect(int('('))
+	x.Columns = []*ast.JSONTableColumn{r.parseJSONTableColumn()}
+	for r.accept(int(',')) {
+		x.Columns = append(x.Columns, r.parseJSONTableColumn())
+	}
+	r.expect(int(')'))
+	r.expect(int(')'))
+	return x
+}
+
+// parseJSONTableColumn implements one COLUMNS entry of JSON_TABLE:
+//
+//	Identifier "FOR" "ORDINALITY"
+//	| Identifier Type ["EXISTS"] "PATH" Expression [on_empty] [on_error]
+//	| "NESTED" ["PATH"] Expression "COLUMNS" '(' ... ')'
+func (r *rdParser) parseJSONTableColumn() *ast.JSONTableColumn {
+	if r.tok() == nested {
+		r.advance()
+		r.accept(path)
+		col := &ast.JSONTableColumn{Nested: true, NestedPath: r.parseExpression()}
+		r.expect(columns)
+		r.expect(int('('))
+		col.NestedColumns = []*ast.JSONTableColumn{r.parseJSONTableColumn()}
+		for r.accept(int(',')) {
+			col.NestedColumns = append(col.NestedColumns, r.parseJSONTableColumn())
+		}
+		r.expect(int(')'))
+		return col
+	}
+	name := ast.NewCIStr(r.parseIdentifier())
+	if r.tok() == forKwd {
+		r.advance()
+		r.expect(ordinality)
+		return &ast.JSONTableColumn{Name: name, ForOrdinality: true}
+	}
+	col := &ast.JSONTableColumn{Name: name, Tp: r.parseType()}
+	col.Exists = r.accept(exists)
+	r.expect(path)
+	col.Path = r.parseExpression()
+	r.parseJSONOnResponses(&col.OnEmpty, &col.OnError)
+	return col
 }

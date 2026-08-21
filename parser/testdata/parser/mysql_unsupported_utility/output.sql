@@ -1,9 +1,0 @@
--- error: line 1 column 21 near "TREE SELECT 1" 
--- case
--- error: line 1 column 29 near "TREE SELECT 1" 
--- case
--- error: line 1 column 26 near "INTO @plan SELECT 1" 
--- case
--- error: line 1 column 26 near "INTO @plan SELECT t.id, COUNT(*) FROM information_schema.tables t GROUP BY t.id" 
--- case
--- error: line 1 column 14 near "'a%'" 

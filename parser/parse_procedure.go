@@ -88,16 +88,25 @@ func (r *rdParser) parseCreateProcedureStmt() ast.StmtNode {
 	lparen := r.expect(int('('))
 	params := r.parseOptSpPdparams()
 	rparen := r.expect(int(')'))
-	bodyStart := r.cur().offset
-	body := r.parseProcedureProcStmt()
 	x := &ast.ProcedureInfo{
 		IfNotExists:    ifNotExists,
 		ProcedureName:  procName,
 		ProcedureParam: params,
-		ProcedureBody:  body,
 		Definer:        definerV,
 	}
-	r.p.setNodeText(body, strings.TrimSpace(r.src[bodyStart:r.cur().offset]))
+	x.Characteristics = r.parseRoutineCharacteristics()
+	x.Imports = r.parseRoutineImportsOpt()
+	if r.tok() == as {
+		// The AS 'code' body of a LANGUAGE JAVASCRIPT routine.
+		r.advance()
+		s := r.expect(stringLit).lit
+		x.CodeBody = &s
+	} else {
+		bodyStart := r.cur().offset
+		body := r.parseProcedureProcStmt()
+		x.ProcedureBody = body
+		r.p.setNodeText(body, strings.TrimSpace(r.src[bodyStart:r.cur().offset]))
+	}
 	startOffset := lparen.offset
 	if r.src[startOffset] == '(' {
 		startOffset++
@@ -173,7 +182,7 @@ func (r *rdParser) parseProcedureProcStmt() ast.StmtNode {
 		return r.parseProcedureIfstmt()
 	case caseKwd:
 		return r.parseProcedureCaseStmt()
-	case while, repeat:
+	case while, repeat, loop:
 		// ProcedureUnlabelLoopBlock: ProcedureUnlabelLoopStmt
 		return r.parseProcedureUnlabelLoopStmt()
 	case open:
@@ -325,6 +334,25 @@ func (r *rdParser) parseProcedureDecl() ast.DeclNode {
 			CurName:      name,
 			Selectstring: r.parseProcedureCursorSelectStmt(),
 		}
+	case r.tok() == identifier && r.la(1) == condition:
+		// "DECLARE" identifier "CONDITION" "FOR" ProcedurceCond
+		name := strings.ToLower(r.expect(identifier).lit)
+		r.expect(condition)
+		r.expect(forKwd)
+		decl := &ast.ProcedureConditionDecl{Name: name}
+		if r.tok() == intLit {
+			decl.Value = &ast.ProcedureErrorVal{
+				ErrorNum: getUint64FromNUM(r.expect(intLit).item),
+			}
+		} else {
+			r.expect(sqlstate)
+			// optValue: empty | "VALUE"
+			r.accept(value)
+			decl.Value = &ast.ProcedureErrorState{
+				CodeStatus: r.expect(stringLit).lit,
+			}
+		}
+		return decl
 	}
 	// ProcedureDeclIdents: Identifier (',' Identifier)*
 	names := []string{strings.ToLower(r.parseIdentifier())}
@@ -399,6 +427,11 @@ func (r *rdParser) parseProcedureHcond() ast.ErrNode {
 		r.advance()
 		return &ast.ProcedureErrorCon{
 			ErrorCon: ast.PROCEDUR_SQLEXCEPTION,
+		}
+	case identifier:
+		// A condition name declared with DECLARE ... CONDITION.
+		return &ast.ProcedureErrorName{
+			Name: strings.ToLower(r.expect(identifier).lit),
 		}
 	}
 	r.syntaxError()
@@ -554,6 +587,16 @@ func (r *rdParser) parseProcedureUnlabelLoopStmt() ast.StmtNode {
 			Body:      body,
 		}
 	}
+	if r.tok() == loop {
+		// "LOOP" ProcedureProcStmt1s "END" "LOOP"
+		r.advance()
+		body := r.parseProcedureProcStmt1s()
+		r.expect(end)
+		r.expect(loop)
+		return &ast.ProcedureLoopStmt{
+			Body: body,
+		}
+	}
 	r.expect(repeat)
 	body := r.parseProcedureProcStmt1s()
 	r.expect(until)
@@ -585,7 +628,7 @@ func (r *rdParser) parseProcedureLabeled() ast.StmtNode {
 			labelBlock.LabelEnd = endLabel
 		}
 		return labelBlock
-	case while, repeat:
+	case while, repeat, loop:
 		labelLoop := &ast.ProcedureLabelLoop{
 			LabelName: label,
 			Block:     r.parseProcedureUnlabelLoopStmt(),

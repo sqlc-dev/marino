@@ -46,6 +46,12 @@ type AnalyzeTableStmt struct {
 	// ColumnNames indicate the columns whose statistics need to be collected.
 	ColumnNames  []CIStr
 	ColumnChoice ColumnChoice
+	// HistogramData is the USING DATA 'json' value of UPDATE HISTOGRAM;
+	// empty when absent.
+	HistogramData string
+	// HistogramUpdate is the AUTO UPDATE / MANUAL UPDATE clause of
+	// UPDATE HISTOGRAM.
+	HistogramUpdate HistogramUpdateType
 }
 
 // AnalyzeOptType is the type for analyze options.
@@ -91,6 +97,29 @@ func (hot HistogramOperationType) String() string {
 		return "UPDATE HISTOGRAM"
 	case HistogramOperationDrop:
 		return "DROP HISTOGRAM"
+	}
+	return ""
+}
+
+// HistogramUpdateType is the AUTO UPDATE / MANUAL UPDATE clause of
+// ANALYZE TABLE ... UPDATE HISTOGRAM.
+type HistogramUpdateType int
+
+// Histogram update types.
+const (
+	// HistogramUpdateNop means the clause is absent. Default value.
+	HistogramUpdateNop HistogramUpdateType = iota
+	HistogramUpdateAuto
+	HistogramUpdateManual
+)
+
+// String implements fmt.Stringer for HistogramUpdateType.
+func (hut HistogramUpdateType) String() string {
+	switch hut {
+	case HistogramUpdateAuto:
+		return "AUTO UPDATE"
+	case HistogramUpdateManual:
+		return "MANUAL UPDATE"
 	}
 	return ""
 }
@@ -142,6 +171,10 @@ func (n *AnalyzeTableStmt) Restore(ctx *format.RestoreCtx) error {
 				ctx.WriteName(columnName.O)
 			}
 		}
+		if n.HistogramData != "" {
+			ctx.WriteKeyWord(" USING DATA ")
+			ctx.WriteString(n.HistogramData)
+		}
 	}
 	switch n.ColumnChoice {
 	case AllColumns:
@@ -177,6 +210,10 @@ func (n *AnalyzeTableStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlainf(" %v ", opt.Value.GetValue())
 			ctx.WritePlain(AnalyzeOptionString[opt.Type])
 		}
+	}
+	if n.HistogramUpdate != HistogramUpdateNop {
+		ctx.WritePlain(" ")
+		ctx.WriteKeyWord(n.HistogramUpdate.String())
 	}
 	return nil
 }
