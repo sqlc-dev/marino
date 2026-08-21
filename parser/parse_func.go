@@ -695,7 +695,14 @@ func (r *rdParser) parseSimpleIdentAtom(start int) ast.ExprNode {
 			Args:   args,
 		}, start)
 	}
-	name := &ast.ColumnName{}
+	// The expr and its ColumnName are allocated as one block: column
+	// references are the most-allocated node in typical queries, and the
+	// two objects always live and die together.
+	block := &struct {
+		expr ast.ColumnNameExpr
+		name ast.ColumnName
+	}{}
+	name := &block.name
 	if r.tok() == int('.') && isIdentifierTok(r.la(1)) {
 		r.advance()
 		second := r.parseIdentifier()
@@ -711,7 +718,8 @@ func (r *rdParser) parseSimpleIdentAtom(start int) ast.ExprNode {
 	} else {
 		name.Name = ast.NewCIStr(first)
 	}
-	col := &ast.ColumnNameExpr{Name: name}
+	col := &block.expr
+	col.Name = name
 	r.setOrigin(col, start)
 	switch r.tok() {
 	case jss:

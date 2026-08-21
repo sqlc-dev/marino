@@ -68,6 +68,13 @@ type rdParser struct {
 	done  bool
 	marks []int // absolute indices pinned by speculative parses
 
+	// c points at the current token's window slot, kept in sync by
+	// advance and rewind (the only movers of i) so that cur and tok are
+	// call-free field loads. Slot pointers stay valid across window
+	// growth (the old backing array keeps the same values) and are
+	// recomputed after compaction, which rewrites slots in place.
+	c *rdToken
+
 	// stmtStart mirrors Scanner.stmtStartPos bookkeeping for stmtText().
 	stmtStart int
 	result    []ast.StmtNode
@@ -137,43 +144,67 @@ func (parser *Parser) newRDScanner(sql string) *Scanner {
 func (r *rdParser) lexOne() {
 	var v yySymType
 	tok := r.sc.Lex(&v)
-	t := rdToken{tok: tok, lit: v.ident, item: v.item, offset: v.offset}
+	// Extend the window and fill the slot in place rather than building
+	// an rdToken and copying it in: the struct is large and this is the
+	// hottest allocation-free path in the parser. Recycled slots hold
+	// stale tokens, so every field is (re)assigned.
+	if len(r.win) == cap(r.win) {
+		r.win = append(r.win, rdToken{})
+	} else {
+		r.win = r.win[:len(r.win)+1]
+	}
+	t := &r.win[len(r.win)-1]
+	t.tok, t.lit, t.item, t.offset = tok, v.ident, v.item, v.offset
 	p := r.sc.r.pos()
 	t.endOffset, t.endLine, t.endCol = p.Offset, p.Line, p.Col
 	if tok == hintComment {
 		t.hintPos = r.sc.lastHintPos
+	} else {
+		t.hintPos = Pos{}
 	}
 	if len(r.sc.errs) > 0 {
-		// A lexing problem already recorded its error(s).
+		// A lexing problem already recorded its error(s). The parse is
+		// abandoned, so the token left in the window is harmless.
 		panic(rdLexError{})
 	}
 	if tok == invalid {
 		// The parser side of an invalid token is a plain syntax error at
 		// its position.
-		panic(rdSyntaxError{offset: t.offset, err: r.buildSyntaxError(&t)})
+		panic(rdSyntaxError{offset: t.offset, err: r.buildSyntaxError(t)})
 	}
-	r.win = append(r.win, t)
 	if tok == 0 {
 		r.done = true
 	}
 }
 
 // at returns the token at absolute index abs, lexing forward as needed.
-// Past EOF it returns the EOF token.
+// Past EOF it returns the EOF token. The in-window fast path is kept
+// small enough to inline into tok/la/cur, which are the parser's hottest
+// calls.
 func (r *rdParser) at(abs int) *rdToken {
+	idx := abs - r.base
+	if idx >= len(r.win) {
+		idx = r.fill(abs)
+	}
+	return &r.win[idx]
+}
+
+// fill lexes until the window covers abs (or EOF) and returns the window
+// index to read.
+func (r *rdParser) fill(abs int) int {
 	for abs-r.base >= len(r.win) {
 		if r.done {
-			return &r.win[len(r.win)-1]
+			return len(r.win) - 1
 		}
 		r.lexOne()
 	}
-	return &r.win[abs-r.base]
+	return abs - r.base
 }
 
-func (r *rdParser) cur() *rdToken { return r.at(r.i) }
+func (r *rdParser) cur() *rdToken { return r.c }
 
 // tok returns the current token id (0 at EOF).
-func (r *rdParser) tok() int { return r.at(r.i).tok }
+func (r *rdParser) tok() int { return r.c.tok }
 
 // la returns the token id k positions ahead (la(0) == tok()).
 func (r *rdParser) la(k int) int { return r.at(r.i + k).tok }
@@ -181,7 +212,7 @@ func (r *rdParser) la(k int) int { return r.at(r.i + k).tok }
 // advance moves past the current token and opportunistically drops window
 // tokens that no active mark or the cursor can reach again.
 func (r *rdParser) advance() {
-	if t := r.at(r.i); t.tok != 0 {
+	if r.c.tok != 0 {
 		r.i++
 	}
 	low := r.i
@@ -193,6 +224,7 @@ func (r *rdParser) advance() {
 		r.win = r.win[:n]
 		r.base = low
 	}
+	r.c = r.at(r.i)
 }
 
 // mark pins the current position for a speculative parse. Every mark is
@@ -208,6 +240,7 @@ func (r *rdParser) unmark() {
 
 func (r *rdParser) rewind(m int) {
 	r.i = m
+	r.c = r.at(m)
 	r.unmark()
 }
 
@@ -273,6 +306,7 @@ func (parser *Parser) parseRD(sql string) (stmts []ast.StmtNode, warns []error, 
 		}
 		stmts, err = nil, lexErrs[0]
 	})
+	r.c = r.at(r.i)
 	r.parseStatementList()
 
 	lexWarns, lexErrs := r.sc.Errors()

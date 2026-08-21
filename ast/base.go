@@ -15,6 +15,7 @@ package ast
 
 import (
 	"bytes"
+	"strings"
 	"sync"
 	"unicode"
 	"unicode/utf8"
@@ -52,7 +53,38 @@ func (n *node) OriginTextPosition() int {
 func (n *node) SetText(enc charset.Encoding, text string) {
 	n.enc = enc
 	n.text = text
+	if textConversionIsNoop(enc, text) {
+		// Text() would return text unchanged, so skip allocating the
+		// lazy-conversion Once and let Text() return n.text directly.
+		n.once = nil
+		return
+	}
 	n.once = &sync.Once{}
+}
+
+// textConversionIsNoop reports whether convertBinaryStringLiterals would
+// provably return text unchanged, so that Text() can serve n.text without
+// a per-node sync.Once. It must stay conservative: false only means the
+// lazy path decides at Text() time.
+//
+// With no quote characters, convertBinaryStringLiterals is exactly
+// enc.Transform(nil, text, OpDecodeReplace). That is the identity for the
+// binary and latin1 encodings, and for the utf8 encoding when text is
+// valid UTF-8.
+func textConversionIsNoop(enc charset.Encoding, text string) bool {
+	if enc == nil {
+		return true
+	}
+	if strings.IndexByte(text, '\'') >= 0 || strings.IndexByte(text, '"') >= 0 {
+		return false
+	}
+	switch enc {
+	case charset.EncodingBinImpl, charset.EncodingLatin1Impl:
+		return true
+	case charset.EncodingUTF8Impl:
+		return utf8.ValidString(text)
+	}
+	return false
 }
 
 // SetNoBackslashEscapes marks that the SQL mode NO_BACKSLASH_ESCAPES was active

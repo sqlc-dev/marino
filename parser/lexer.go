@@ -393,15 +393,31 @@ func (*Scanner) handleIdent(lval *yySymType) int {
 	return underscoreCS
 }
 
+// isWhitespaceTable[b] == unicode.IsSpace(rune(b)) for every byte value.
+var isWhitespaceTable = func() (t [256]bool) {
+	for i := range t {
+		t[i] = unicode.IsSpace(rune(i))
+	}
+	return
+}()
+
 func (s *Scanner) skipWhitespace() byte {
-	return s.r.incAsLongAs(func(b byte) bool {
-		return unicode.IsSpace(rune(b))
-	})
+	r := &s.r
+	for {
+		ch := r.peek()
+		if !isWhitespaceTable[ch] {
+			return ch
+		}
+		if r.eof() {
+			return 0
+		}
+		r.inc()
+	}
 }
 
 func (s *Scanner) scan() (tok int, pos Pos, lit string) {
 	ch0 := s.r.peek()
-	if unicode.IsSpace(rune(ch0)) {
+	if isWhitespaceTable[ch0] {
 		ch0 = s.skipWhitespace()
 	}
 	pos = s.r.pos()
@@ -658,7 +674,7 @@ func startWithAt(s *Scanner) (tok int, pos Pos, lit string) {
 
 func scanIdentifier(s *Scanner) (int, Pos, string) {
 	pos := s.r.pos()
-	s.r.incAsLongAs(isIdentChar)
+	s.r.incIdent()
 	return identifier, pos, s.r.data(&pos)
 }
 
@@ -841,7 +857,7 @@ func startWithNumber(s *Scanner) (tok int, pos Pos, lit string) {
 			p2 := s.r.pos()
 			// 0x, 0x7fz3 are identifier
 			if p1 == p2 || isDigit(s.r.peek()) {
-				s.r.incAsLongAs(isIdentChar)
+				s.r.incIdent()
 				return identifier, pos, s.r.data(&pos)
 			}
 			tok = hexLit
@@ -852,14 +868,14 @@ func startWithNumber(s *Scanner) (tok int, pos Pos, lit string) {
 			p2 := s.r.pos()
 			// 0b, 0b123, 0b1ab are identifier
 			if p1 == p2 || isDigit(s.r.peek()) {
-				s.r.incAsLongAs(isIdentChar)
+				s.r.incIdent()
 				return identifier, pos, s.r.data(&pos)
 			}
 			tok = bitLit
 		case ch1 == '.':
 			return s.scanFloat(&pos)
 		case ch1 == 'B':
-			s.r.incAsLongAs(isIdentChar)
+			s.r.incIdent()
 			return identifier, pos, s.r.data(&pos)
 		}
 	}
@@ -872,7 +888,7 @@ func startWithNumber(s *Scanner) (tok int, pos Pos, lit string) {
 
 	// Identifiers may begin with a digit but unless quoted may not consist solely of digits.
 	if !s.r.eof() && isIdentChar(ch0) {
-		s.r.incAsLongAs(isIdentChar)
+		s.r.incIdent()
 		return identifier, pos, s.r.data(&pos)
 	}
 	lit = s.r.data(&pos)
@@ -940,7 +956,7 @@ func (s *Scanner) scanFloat(beg *Pos) (tok int, pos Pos, lit string) {
 			// 9e9e = 9e9(float) + e(identifier)
 			// 9est = 9est(identifier)
 			s.r.updatePos(*beg)
-			s.r.incAsLongAs(isIdentChar)
+			s.r.incIdent()
 			tok = identifier
 		}
 	} else {
@@ -952,7 +968,7 @@ func (s *Scanner) scanFloat(beg *Pos) (tok int, pos Pos, lit string) {
 
 func (s *Scanner) scanDigits() string {
 	pos := s.r.pos()
-	s.r.incAsLongAs(isDigit)
+	s.r.incDigits()
 	return s.r.data(&pos)
 }
 
@@ -1098,6 +1114,36 @@ func (r *reader) incAsLongAs(fn func(b byte) bool) byte {
 		}
 		r.inc()
 	}
+}
+
+// incIdent is incAsLongAs(isIdentChar) without the per-byte closure call:
+// identifier characters never include '\n', so only Offset and Col move.
+// It returns the byte that stopped the scan (0 at EOF).
+func (r *reader) incIdent() byte {
+	i := r.p.Offset
+	for i < r.l && isIdentCharTable[r.s[i]] {
+		i++
+	}
+	r.p.Col += i - r.p.Offset
+	r.p.Offset = i
+	if i >= r.l {
+		return 0
+	}
+	return r.s[i]
+}
+
+// incDigits is incAsLongAs(isDigit) with the same fast shape as incIdent.
+func (r *reader) incDigits() byte {
+	i := r.p.Offset
+	for i < r.l && r.s[i] >= '0' && r.s[i] <= '9' {
+		i++
+	}
+	r.p.Col += i - r.p.Offset
+	r.p.Offset = i
+	if i >= r.l {
+		return 0
+	}
+	return r.s[i]
 }
 
 // skipRune skip mb character, return true indicate something has been skipped.
