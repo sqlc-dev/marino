@@ -43,10 +43,14 @@ func isInCorrectIdentifierName(name string) bool {
 // Initialize a lookup table for isUserVarChar
 var isUserVarCharTable [256]bool
 
+// Lookup table for isIdentChar, used by the lexer's hottest scanning loop.
+var isIdentCharTable [256]bool
+
 func init() {
 	for i := range 256 {
 		ch := byte(i)
 		isUserVarCharTable[i] = isLetter(ch) || isDigit(ch) || ch == '_' || ch == '$' || ch == '.' || isIdentExtend(ch)
+		isIdentCharTable[i] = isIdentChar(ch)
 	}
 }
 
