@@ -859,15 +859,48 @@ func (n *BinlogStmt) Accept(v Visitor) (Node, bool) {
 // ReplicationSourceOption is a single name = value option of
 // ChangeReplicationSourceStmt. Names are stored uppercase; the parser
 // does not validate them against the server's option list. Values are
-// literals: a string, integer, or decimal.
+// usually literals (a string, integer, or decimal, in Value); the
+// non-literal forms are a bare keyword (KeywordValue, e.g.
+// REQUIRE_TABLE_PRIMARY_KEY_CHECK = STREAM or PRIVILEGE_CHECKS_USER =
+// NULL), an account name (User, PRIVILEGE_CHECKS_USER = 'u'@'h'), and a
+// parenthesized server-id list (ServerIDs, IGNORE_SERVER_IDS = (1, 2);
+// non-nil but empty for an empty list).
 type ReplicationSourceOption struct {
-	Name  string
-	Value ValueExpr
+	Name         string
+	Value        ValueExpr
+	KeywordValue string
+	User         *auth.UserIdentity
+	ServerIDs    []ValueExpr
 }
 
 // Restore implements Node interface.
 func (n *ReplicationSourceOption) Restore(ctx *format.RestoreCtx) error {
 	ctx.WriteKeyWord(n.Name)
+	if n.ServerIDs != nil {
+		ctx.WritePlain(" = (")
+		for i, id := range n.ServerIDs {
+			if i != 0 {
+				ctx.WritePlain(", ")
+			}
+			if err := id.Restore(ctx); err != nil {
+				return fmt.Errorf("an error occurred while restore ReplicationSourceOption.ServerIDs[%d]: %w", i, err)
+			}
+		}
+		ctx.WritePlain(")")
+		return nil
+	}
+	if n.User != nil {
+		ctx.WritePlain(" = ")
+		if err := n.User.Restore(ctx); err != nil {
+			return fmt.Errorf("an error occurred while restore ReplicationSourceOption.User: %w", err)
+		}
+		return nil
+	}
+	if n.KeywordValue != "" {
+		ctx.WritePlain(" = ")
+		ctx.WriteKeyWord(n.KeywordValue)
+		return nil
+	}
 	if n.Value == nil {
 		// A bare option name (START REPLICA UNTIL SQL_AFTER_MTS_GAPS).
 		return nil
@@ -934,6 +967,9 @@ func (n *ChangeReplicationSourceStmt) Accept(v Visitor) (Node, bool) {
 	}
 	n = newNode.(*ChangeReplicationSourceStmt)
 	for _, opt := range n.Options {
+		if opt.Value == nil {
+			continue
+		}
 		node, ok := opt.Value.Accept(v)
 		if !ok {
 			return n, false
