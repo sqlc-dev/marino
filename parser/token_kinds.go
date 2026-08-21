@@ -1032,6 +1032,8 @@ const (
 	persistOnly                = 58332
 	relay                      = 58333
 	userResources              = 58334
+	loop                       = 58335
+	condition                  = 58336
 	wrapper                    = 58319
 	write                      = 57592
 	x509                       = 57993

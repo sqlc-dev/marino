@@ -163,9 +163,7 @@ func (r *rdParser) parseSignalAllowedExpr() ast.ExprNode {
 //
 // with OptDiagnosticsArea: empty | "CURRENT" | "STACKED". The statement
 // form assigns statementInfoItemNames, the CONDITION form
-// conditionInfoItemNames. CONDITION is reserved in MySQL but not a
-// keyword here, so it is matched by spelling; a diagnostics target can
-// therefore not be named "condition", exactly as in MySQL.
+// conditionInfoItemNames.
 func (r *rdParser) parseGetDiagnosticsStmt() ast.StmtNode {
 	r.expect(get)
 	x := &ast.GetDiagnosticsStmt{}
@@ -179,7 +177,7 @@ func (r *rdParser) parseGetDiagnosticsStmt() ast.StmtNode {
 	}
 	r.expect(diagnostics)
 	names := statementInfoItemNames
-	if isIdentifierTok(r.tok()) && strings.EqualFold(r.cur().lit, "CONDITION") {
+	if r.tok() == condition {
 		r.advance()
 		x.ConditionNumber = r.parseSignalAllowedExpr()
 		names = conditionInfoItemNames

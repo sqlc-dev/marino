@@ -3864,6 +3864,14 @@ func (checker *nodeTextCleaner) Enter(in ast.Node) (out ast.Node, skipChildren b
 		node.Tp.CleanElemIsBinaryLit()
 	case *ast.PartitionOptions:
 		cleanPartition(node)
+	case *ast.ProcedureBlock:
+		// ProcedureBlock.Accept deliberately does not traverse
+		// ProcedureProcStmts; clean them explicitly so restored
+		// procedure bodies compare deep-equal.
+		var tmpCleaner nodeTextCleaner
+		for _, stmt := range node.ProcedureProcStmts {
+			stmt.Accept(&tmpCleaner)
+		}
 	}
 	return in, false
 }
