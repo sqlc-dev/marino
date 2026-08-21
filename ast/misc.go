@@ -219,6 +219,9 @@ type ExplainStmt struct {
 	SQLDigest string
 	// PlanDigest to explain, used in `EXPLAIN [ANALYZE] <plan_digest>`.
 	PlanDigest string
+	// IntoVar is the user variable of `EXPLAIN FORMAT = ... INTO @var`,
+	// without the leading @; empty when absent.
+	IntoVar string
 }
 
 // Restore implements Node interface.
@@ -232,6 +235,15 @@ func (n *ExplainStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WritePlain(" ")
 			if err := showStmt.Column.Restore(ctx); err != nil {
 				return annotate(err, "An error occurred while restore ExplainStmt.ShowStmt.Column")
+			}
+		} else if showStmt.Pattern != nil && showStmt.Pattern.Pattern != nil {
+			ctx.WritePlain(" ")
+			if pat, ok := showStmt.Pattern.Pattern.(ValueExpr); ok {
+				// Write the wildcard as a plain string: DESC does not
+				// accept a charset-prefixed literal.
+				ctx.WriteString(pat.GetString())
+			} else if err := showStmt.Pattern.Pattern.Restore(ctx); err != nil {
+				return annotate(err, "An error occurred while restore ExplainStmt.ShowStmt.Pattern")
 			}
 		}
 		return nil
@@ -249,6 +261,12 @@ func (n *ExplainStmt) Restore(ctx *format.RestoreCtx) error {
 		ctx.WriteKeyWord("FORMAT ")
 		ctx.WritePlain("= ")
 		ctx.WriteString(n.Format)
+		ctx.WritePlain(" ")
+	}
+	if n.IntoVar != "" {
+		ctx.WriteKeyWord("INTO ")
+		ctx.WritePlain("@")
+		ctx.WriteName(n.IntoVar)
 		ctx.WritePlain(" ")
 	}
 	if n.PlanDigest != "" {

@@ -574,10 +574,17 @@ func (r *rdParser) parseExplainStmt() ast.StmtNode {
 				Format:     formatStr,
 			}
 		}
-		// ... ExplainableStmt
+		// ... ["INTO" UserVariable] ExplainableStmt
+		var intoVar string
+		if r.tok() == into && r.la(1) == singleAtIdentifier {
+			r.advance()
+			intoVar = strings.TrimPrefix(r.cur().lit, "@")
+			r.advance()
+		}
 		return &ast.ExplainStmt{
-			Stmt:   r.parseExplainableStmt(),
-			Format: formatStr,
+			Stmt:    r.parseExplainableStmt(),
+			Format:  formatStr,
+			IntoVar: intoVar,
 		}
 	}
 	if r.tok() == stringLit {
@@ -597,13 +604,21 @@ func (r *rdParser) parseExplainStmt() ast.StmtNode {
 			Format: "row",
 		}
 	}
-	// ExplainSym TableName [ColumnName]
+	// ExplainSym TableName [ColumnName | stringLit]
 	showStmt := &ast.ShowStmt{
 		Tp:    ast.ShowColumns,
 		Table: r.parseTableName(),
 	}
 	if isIdentifierTok(r.tok()) {
 		showStmt.Column = r.parseColumnName()
+	} else if r.tok() == stringLit {
+		// A column-name wildcard pattern, as in SHOW COLUMNS ... LIKE.
+		showStmt.Pattern = &ast.PatternLikeOrIlikeExpr{
+			Pattern:        r.parseSimpleExpr(),
+			Escape:         '\\',
+			EscapeExplicit: false,
+			IsLike:         true,
+		}
 	}
 	return &ast.ExplainStmt{
 		Stmt: showStmt,
@@ -612,12 +627,17 @@ func (r *rdParser) parseExplainStmt() ast.StmtNode {
 
 // parseExplainFormat parses the symbol after "FORMAT" "=": either a
 // stringLit or an ExplainFormatType keyword; both yield their spelling.
+// A bare identifier (e.g. the MySQL TREE format) also parses, yielding
+// its spelling.
 func (r *rdParser) parseExplainFormat() string {
 	switch r.tok() {
 	case stringLit, traditional, jsonType, row, dotType, briefType, verboseType, trueCardCost, tidbJson:
 		lit := r.cur().lit
 		r.advance()
 		return lit
+	}
+	if isIdentifierTok(r.tok()) {
+		return r.parseIdentifier()
 	}
 	r.syntaxError()
 	return ""

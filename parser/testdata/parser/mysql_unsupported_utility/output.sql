@@ -1,9 +1,9 @@
--- error: line 1 column 21 near "TREE SELECT 1" 
+EXPLAIN FORMAT = 'TREE' SELECT 1
 -- case
--- error: line 1 column 29 near "TREE SELECT 1" 
+EXPLAIN ANALYZE FORMAT = 'TREE' SELECT 1
 -- case
--- error: line 1 column 26 near "INTO @plan SELECT 1" 
+EXPLAIN FORMAT = 'JSON' INTO @`plan` SELECT 1
 -- case
--- error: line 1 column 26 near "INTO @plan SELECT t.id, COUNT(*) FROM information_schema.tables t GROUP BY t.id" 
+EXPLAIN FORMAT = 'JSON' INTO @`plan` SELECT `t`.`id`,COUNT(1) FROM `information_schema`.`tables` AS `t` GROUP BY `t`.`id`
 -- case
--- error: line 1 column 14 near "'a%'" 
+DESC `t` 'a%'
