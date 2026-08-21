@@ -3599,6 +3599,9 @@ func (n *ShowStmt) Restore(ctx *format.RestoreCtx) error {
 		case ShowIndex:
 			// here can be INDEX INDEXES KEYS
 			// FROM or IN
+			if n.Extended {
+				ctx.WriteKeyWord("EXTENDED ")
+			}
 			ctx.WriteKeyWord("INDEX IN ")
 			if err := n.Table.Restore(ctx); err != nil {
 				return annotate(err, "An error occurred while restore ShowStmt.Table")
@@ -3619,8 +3622,20 @@ func (n *ShowStmt) Restore(ctx *format.RestoreCtx) error {
 			restoreShowDatabaseNameOpt()
 		case ShowWarnings:
 			ctx.WriteKeyWord("WARNINGS")
+			if n.Limit != nil {
+				ctx.WritePlain(" ")
+				if err := n.Limit.Restore(ctx); err != nil {
+					return annotate(err, "An error occurred while restore ShowStmt.Limit")
+				}
+			}
 		case ShowErrors:
 			ctx.WriteKeyWord("ERRORS")
+			if n.Limit != nil {
+				ctx.WritePlain(" ")
+				if err := n.Limit.Restore(ctx); err != nil {
+					return annotate(err, "An error occurred while restore ShowStmt.Limit")
+				}
+			}
 		case ShowVariables:
 			restoreGlobalScope()
 			ctx.WriteKeyWord("VARIABLES")
@@ -3699,6 +3714,10 @@ func (n *ShowStmt) Restore(ctx *format.RestoreCtx) error {
 			ctx.WriteKeyWord("SESSION_STATES")
 		case ShowReplicaStatus:
 			ctx.WriteKeyWord("REPLICA STATUS")
+			if n.ChannelName != "" {
+				ctx.WriteKeyWord(" FOR CHANNEL ")
+				ctx.WriteString(n.ChannelName)
+			}
 		default:
 			return errors.New("Unknown ShowStmt type")
 		}

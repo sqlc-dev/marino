@@ -1,13 +1,13 @@
--- error: line 1 column 12 near "STORAGE ENGINES" 
+SHOW ENGINES
 -- case
--- error: line 1 column 17 near "LIMIT 5" 
+SHOW ERRORS LIMIT 5
 -- case
--- error: line 1 column 17 near "LIMIT 5, 10" 
+SHOW ERRORS LIMIT 5,10
 -- case
--- error: line 1 column 19 near "LIMIT 1" 
+SHOW WARNINGS LIMIT 1
 -- case
--- error: line 1 column 19 near "LIMIT 5, 10" 
+SHOW WARNINGS LIMIT 5,10
 -- case
--- error: line 1 column 19 near "INDEX FROM t" 
+SHOW EXTENDED INDEX IN `t`
 -- case
--- error: line 1 column 23 near "FOR CHANNEL 'ch'" 
+SHOW REPLICA STATUS FOR CHANNEL 'ch'
