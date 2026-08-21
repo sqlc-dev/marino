@@ -110,11 +110,18 @@ func (r *rdParser) parseSetStmt() ast.StmtNode {
 			return &ast.SetSessionStatesStmt{SessionStates: t.lit}
 		}
 	case resource:
-		// "SET" "RESOURCE" "GROUP" ResourceGroupName
+		// "SET" "RESOURCE" "GROUP" ResourceGroupName ["FOR" NUM (',' NUM)*]
 		if r.la(1) == group {
 			r.advance()
 			r.advance()
-			return &ast.SetResourceGroupStmt{Name: ast.NewCIStr(r.parseResourceGroupName())}
+			stmt := &ast.SetResourceGroupStmt{Name: ast.NewCIStr(r.parseResourceGroupName())}
+			if r.accept(forKwd) {
+				stmt.ThreadIDs = []int64{r.parseInt64Num()}
+				for r.accept(int(',')) {
+					stmt.ThreadIDs = append(stmt.ThreadIDs, r.parseInt64Num())
+				}
+			}
+			return stmt
 		}
 	}
 	// "SET" VariableAssignmentList
@@ -320,6 +327,22 @@ func (r *rdParser) parseVariableAssignment() *ast.VariableAssignment {
 			r.parseEqOrAssignmentEq()
 			return &ast.VariableAssignment{Name: name, Value: r.parseSetExpr(), IsInstance: true, IsSystem: true}
 		}
+	case persist:
+		// "PERSIST" VariableName EqOrAssignmentEq SetExpr
+		if isIdentifierTok(r.la(1)) {
+			r.advance()
+			name := r.parseVariableName()
+			r.parseEqOrAssignmentEq()
+			return &ast.VariableAssignment{Name: name, Value: r.parseSetExpr(), IsPersist: true, IsGlobal: true, IsSystem: true}
+		}
+	case persistOnly:
+		// "PERSIST_ONLY" VariableName EqOrAssignmentEq SetExpr
+		if isIdentifierTok(r.la(1)) {
+			r.advance()
+			name := r.parseVariableName()
+			r.parseEqOrAssignmentEq()
+			return &ast.VariableAssignment{Name: name, Value: r.parseSetExpr(), IsPersistOnly: true, IsGlobal: true, IsSystem: true}
+		}
 	case session, local:
 		// "SESSION"/"LOCAL" VariableName EqOrAssignmentEq SetExpr
 		if isIdentifierTok(r.la(1)) {
@@ -335,12 +358,22 @@ func (r *rdParser) parseVariableAssignment() *ast.VariableAssignment {
 		r.parseEqOrAssignmentEq()
 		var isGlobal bool
 		var isInstance bool
+		var isPersist bool
+		var isPersistOnly bool
 		if strings.HasPrefix(v, "@@global.") {
 			isGlobal = true
 			v = strings.TrimPrefix(v, "@@global.")
 		} else if strings.HasPrefix(v, "@@instance.") {
 			isInstance = true
 			v = strings.TrimPrefix(v, "@@instance.")
+		} else if strings.HasPrefix(v, "@@persist.") {
+			isPersist = true
+			isGlobal = true
+			v = strings.TrimPrefix(v, "@@persist.")
+		} else if strings.HasPrefix(v, "@@persist_only.") {
+			isPersistOnly = true
+			isGlobal = true
+			v = strings.TrimPrefix(v, "@@persist_only.")
 		} else if strings.HasPrefix(v, "@@session.") {
 			v = strings.TrimPrefix(v, "@@session.")
 		} else if strings.HasPrefix(v, "@@local.") {
@@ -348,7 +381,7 @@ func (r *rdParser) parseVariableAssignment() *ast.VariableAssignment {
 		} else if strings.HasPrefix(v, "@@") {
 			v = strings.TrimPrefix(v, "@@")
 		}
-		return &ast.VariableAssignment{Name: v, Value: r.parseSetExpr(), IsGlobal: isGlobal, IsInstance: isInstance, IsSystem: true}
+		return &ast.VariableAssignment{Name: v, Value: r.parseSetExpr(), IsGlobal: isGlobal, IsInstance: isInstance, IsPersist: isPersist, IsPersistOnly: isPersistOnly, IsSystem: true}
 	case singleAtIdentifier:
 		// singleAtIdentifier EqOrAssignmentEq Expression
 		v := strings.TrimPrefix(r.cur().lit, "@")

@@ -1119,11 +1119,13 @@ const (
 // VariableAssignment is a variable assignment struct.
 type VariableAssignment struct {
 	node
-	Name       string
-	Value      ExprNode
-	IsInstance bool
-	IsGlobal   bool
-	IsSystem   bool
+	Name          string
+	Value         ExprNode
+	IsInstance    bool
+	IsGlobal      bool
+	IsSystem      bool
+	IsPersist     bool // SET PERSIST var: persist to mysqld-auto.cnf and set globally
+	IsPersistOnly bool // SET PERSIST_ONLY var: persist without setting the running value
 
 	// ExtendValue is a way to store extended info.
 	// VariableAssignment should be able to store information for SetCharset/SetPWD Stmt.
@@ -1136,7 +1138,11 @@ type VariableAssignment struct {
 func (n *VariableAssignment) Restore(ctx *format.RestoreCtx) error {
 	if n.IsSystem {
 		ctx.WritePlain("@@")
-		if n.IsGlobal {
+		if n.IsPersist {
+			ctx.WriteKeyWord("PERSIST")
+		} else if n.IsPersistOnly {
+			ctx.WriteKeyWord("PERSIST_ONLY")
+		} else if n.IsGlobal {
 			ctx.WriteKeyWord("GLOBAL")
 		} else if n.IsInstance {
 			ctx.WriteKeyWord("INSTANCE")
@@ -1199,6 +1205,8 @@ const (
 	FlushLogs
 	FlushClientErrorsSummary
 	FlushStatsDelta
+	FlushOptimizerCosts
+	FlushUserResources
 )
 
 // LogType is the log type used in FLUSH statement.
@@ -1211,6 +1219,7 @@ const (
 	LogTypeError
 	LogTypeGeneral
 	LogTypeSlow
+	LogTypeRelay
 )
 
 // FlushStmt is a statement to flush tables/privileges/optimizer costs and so on.
@@ -1225,6 +1234,12 @@ type FlushStmt struct {
 	Plugins         []string
 	IsCluster       bool           // For FlushStatsDelta, whether to flush cluster-wide stats delta
 	FlushObjects    []*StatsObject // For FlushStatsDelta, scoped objects (db.tbl, db.*, *.*). Always non-empty.
+	Channel         string         // For FLUSH RELAY LOGS FOR CHANNEL; empty when absent.
+	ForExport       bool           // For FLUSH TABLES ... FOR EXPORT.
+	// MoreOptions are the second and later options of a comma-separated
+	// FLUSH option list (FLUSH BINARY LOGS, STATUS, ...); each carries
+	// only its option fields, not NoWriteToBinLog.
+	MoreOptions []*FlushStmt
 }
 
 // Restore implements Node interface.
@@ -1233,6 +1248,21 @@ func (n *FlushStmt) Restore(ctx *format.RestoreCtx) error {
 	if n.NoWriteToBinLog {
 		ctx.WriteKeyWord("NO_WRITE_TO_BINLOG ")
 	}
+	if err := n.restoreOption(ctx); err != nil {
+		return err
+	}
+	for i, opt := range n.MoreOptions {
+		ctx.WritePlain(", ")
+		if err := opt.restoreOption(ctx); err != nil {
+			return annotatef(err, "An error occurred while restore FlushStmt.MoreOptions[%d]", i)
+		}
+	}
+	return nil
+}
+
+// restoreOption writes one FLUSH option (everything after FLUSH
+// [NO_WRITE_TO_BINLOG] for this statement's own option).
+func (n *FlushStmt) restoreOption(ctx *format.RestoreCtx) error {
 	switch n.Tp {
 	case FlushTables:
 		ctx.WriteKeyWord("TABLES")
@@ -1248,6 +1278,9 @@ func (n *FlushStmt) Restore(ctx *format.RestoreCtx) error {
 		}
 		if n.ReadLock {
 			ctx.WriteKeyWord(" WITH READ LOCK")
+		}
+		if n.ForExport {
+			ctx.WriteKeyWord(" FOR EXPORT")
 		}
 	case FlushPrivileges:
 		ctx.WriteKeyWord("PRIVILEGES")
@@ -1280,8 +1313,18 @@ func (n *FlushStmt) Restore(ctx *format.RestoreCtx) error {
 			logType = "GENERAL LOGS"
 		case LogTypeSlow:
 			logType = "SLOW LOGS"
+		case LogTypeRelay:
+			logType = "RELAY LOGS"
 		}
 		ctx.WriteKeyWord(logType)
+		if n.Channel != "" {
+			ctx.WriteKeyWord(" FOR CHANNEL ")
+			ctx.WriteString(n.Channel)
+		}
+	case FlushOptimizerCosts:
+		ctx.WriteKeyWord("OPTIMIZER_COSTS")
+	case FlushUserResources:
+		ctx.WriteKeyWord("USER_RESOURCES")
 	case FlushClientErrorsSummary:
 		ctx.WriteKeyWord("CLIENT_ERRORS_SUMMARY")
 	case FlushStatsDelta:
@@ -4410,15 +4453,26 @@ type BinaryLiteral interface {
 	ToString() string
 }
 
-// SetResourceGroupStmt is a statement to set the resource group name for current session.
+// SetResourceGroupStmt is a statement to set the resource group name for
+// the current session, or for the given threads (FOR thread_id, ...).
 type SetResourceGroupStmt struct {
 	stmtNode
-	Name CIStr
+	Name      CIStr
+	ThreadIDs []int64 // FOR thread_id list; nil when absent
 }
 
 func (n *SetResourceGroupStmt) Restore(ctx *format.RestoreCtx) error {
 	ctx.WriteKeyWord("SET RESOURCE GROUP ")
 	ctx.WriteName(n.Name.O)
+	if len(n.ThreadIDs) > 0 {
+		ctx.WriteKeyWord(" FOR ")
+		for i, id := range n.ThreadIDs {
+			if i != 0 {
+				ctx.WritePlain(", ")
+			}
+			ctx.WritePlainf("%d", id)
+		}
+	}
 	return nil
 }
 

@@ -1026,6 +1026,12 @@ const (
 	without                    = 57990
 	work                       = 58328
 	workload                   = 57992
+	auto                       = 58329
+	export                     = 58330
+	optimizerCosts             = 58331
+	persistOnly                = 58332
+	relay                      = 58333
+	userResources              = 58334
 	wrapper                    = 58319
 	write                      = 57592
 	x509                       = 57993

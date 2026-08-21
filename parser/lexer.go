@@ -626,7 +626,7 @@ func startWithAt(s *Scanner) (tok int, pos Pos, lit string) {
 		s.r.inc()
 		stream := s.r.s[pos.Offset+2:]
 		var prefix string
-		for _, v := range []string{"global.", "session.", "local."} {
+		for _, v := range []string{"global.", "session.", "local.", "persist.", "persist_only."} {
 			if len(v) > len(stream) {
 				continue
 			}

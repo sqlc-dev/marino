@@ -1,35 +1,35 @@
--- error: line 1 column 44 near "USING DATA 'json'" 
+ANALYZE TABLE `t` UPDATE HISTOGRAM ON `c1` USING DATA 'json'
 -- case
--- error: line 1 column 43 near "AUTO UPDATE" 
+ANALYZE TABLE `t` UPDATE HISTOGRAM ON `c1` AUTO UPDATE
 -- case
--- error: line 1 column 45 near "MANUAL UPDATE" 
+ANALYZE TABLE `t` UPDATE HISTOGRAM ON `c1` MANUAL UPDATE
 -- case
--- error: line 1 column 59 near "AUTO UPDATE" 
+ANALYZE TABLE `t` UPDATE HISTOGRAM ON `c1` WITH 20 BUCKETS AUTO UPDATE
 -- case
--- error: line 1 column 43 near "v1 = 1" 
+INSTALL COMPONENT 'file://c' SET @@PERSIST.`v1`=1
 -- case
--- error: line 1 column 28 near "FORCE" 
+DROP RESOURCE GROUP `rg` FORCE
 -- case
--- error: line 1 column 25 near "FOR 4" 
+SET RESOURCE GROUP `rg` FOR 4
 -- case
--- error: line 1 column 25 near "FOR 4, 5, 6" 
+SET RESOURCE GROUP `rg` FOR 4, 5, 6
 -- case
--- error: line 1 column 21 near "OPTIMIZER_COSTS" 
+FLUSH OPTIMIZER_COSTS
 -- case
--- error: line 1 column 11 near "RELAY LOGS" 
+FLUSH RELAY LOGS
 -- case
--- error: line 1 column 11 near "RELAY LOGS FOR CHANNEL 'ch'" 
+FLUSH RELAY LOGS FOR CHANNEL 'ch'
 -- case
--- error: line 1 column 20 near "USER_RESOURCES" 
+FLUSH USER_RESOURCES
 -- case
--- error: line 1 column 23 near "FOR EXPORT" 
+FLUSH TABLES `t1`, `t2` FOR EXPORT
 -- case
--- error: line 1 column 18 near ", ERROR LOGS, STATUS" 
+FLUSH BINARY LOGS, ERROR LOGS, STATUS
 -- case
--- error: line 1 column 27 near "max_connections = 200" 
+SET @@PERSIST.`max_connections`=200
 -- case
--- error: line 1 column 32 near "max_connections = 250" 
+SET @@PERSIST_ONLY.`max_connections`=250
 -- case
--- error: line 1 column 27 near "max_connections = 200, long_query_time = 0.5" 
+SET @@PERSIST.`max_connections`=200, @@SESSION.`long_query_time`=0.5
 -- case
--- error: line 1 column 57 near "long_query_time = 1" 
+SET @@GLOBAL.`max_connections`=200, @@PERSIST.`long_query_time`=1

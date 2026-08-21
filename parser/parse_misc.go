@@ -157,6 +157,12 @@ func (r *rdParser) parseFlushStmt() ast.StmtNode {
 	}
 	st := r.parseFlushOption()
 	st.NoWriteToBinLog = noWrite
+	// FlushOptionList: a comma continues the list (FLUSH BINARY LOGS,
+	// STATUS, ...). A FLUSH TABLES table list consumes its own commas, so
+	// only commas after a complete option arrive here.
+	for r.accept(int(',')) {
+		st.MoreOptions = append(st.MoreOptions, r.parseFlushOption())
+	}
 	return st
 }
 
@@ -187,8 +193,8 @@ func (r *rdParser) parseFlushOption() *ast.FlushStmt {
 			Tp:      ast.FlushLogs,
 			LogType: ast.LogTypeDefault,
 		}
-	case binaryType, engine, errorKwd, general, slow:
-		// LogTypeOpt "LOGS"
+	case binaryType, engine, errorKwd, general, slow, relay:
+		// LogTypeOpt "LOGS" [ForChannelOpt (RELAY only)]
 		var logType ast.LogType
 		switch r.tok() {
 		case binaryType:
@@ -201,15 +207,27 @@ func (r *rdParser) parseFlushOption() *ast.FlushStmt {
 			logType = ast.LogTypeGeneral
 		case slow:
 			logType = ast.LogTypeSlow
+		case relay:
+			logType = ast.LogTypeRelay
 		}
 		r.advance()
 		r.expect(logs)
-		return &ast.FlushStmt{
+		st := &ast.FlushStmt{
 			Tp:      ast.FlushLogs,
 			LogType: logType,
 		}
+		if logType == ast.LogTypeRelay {
+			st.Channel = r.parseForChannelOpt()
+		}
+		return st
+	case optimizerCosts:
+		r.advance()
+		return &ast.FlushStmt{Tp: ast.FlushOptimizerCosts}
+	case userResources:
+		r.advance()
+		return &ast.FlushStmt{Tp: ast.FlushUserResources}
 	case tableKwd, tables:
-		// TableOrTables TableNameListOpt WithReadLockOpt
+		// TableOrTables TableNameListOpt (WithReadLockOpt | "FOR" "EXPORT")
 		r.advance()
 		st := &ast.FlushStmt{
 			Tp:     ast.FlushTables,
@@ -222,6 +240,10 @@ func (r *rdParser) parseFlushOption() *ast.FlushStmt {
 			r.expect(read)
 			r.expect(lock)
 			st.ReadLock = true
+		} else if r.tok() == forKwd && r.la(1) == export {
+			r.advance()
+			r.advance()
+			st.ForExport = true
 		}
 		return st
 	case clientErrorsSummary:

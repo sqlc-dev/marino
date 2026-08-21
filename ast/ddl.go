@@ -1482,6 +1482,7 @@ type DropResourceGroupStmt struct {
 
 	IfExists          bool
 	ResourceGroupName CIStr
+	Force             bool
 }
 
 // Restore implements Restore interface.
@@ -1495,6 +1496,9 @@ func (n *DropResourceGroupStmt) Restore(ctx *format.RestoreCtx) error {
 		ctx.WriteKeyWord("IF EXISTS ")
 	}
 	ctx.WriteName(n.ResourceGroupName.O)
+	if n.Force {
+		ctx.WriteKeyWord(" FORCE")
+	}
 	return nil
 }
 

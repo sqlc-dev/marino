@@ -74,7 +74,7 @@ func (r *rdParser) parseDropStmtFamily() ast.StmtNode {
 		}
 	case resource:
 		// DropResourceGroupStmt: "DROP" "RESOURCE" "GROUP" IfExists
-		// ResourceGroupName
+		// ResourceGroupName ["FORCE"]
 		r.advance()
 		r.advance()
 		r.expect(group)
@@ -82,6 +82,7 @@ func (r *rdParser) parseDropStmtFamily() ast.StmtNode {
 		return &ast.DropResourceGroupStmt{
 			IfExists:          ifExists,
 			ResourceGroupName: ast.NewCIStr(r.parseResourceGroupName()),
+			Force:             r.accept(force),
 		}
 	case prepare:
 		// DeallocateStmt: DeallocateSym "PREPARE" Identifier, for the
