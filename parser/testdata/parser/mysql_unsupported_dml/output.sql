@@ -1,15 +1,15 @@
--- error: line 1 column 40 near "CHARACTER SET utf8mb4 FROM t" 
+SELECT `a` FROM `t` INTO OUTFILE '/tmp/f' CHARACTER SET utf8mb4
 -- case
--- error: line 1 column 47 near "CHARACTER SET utf8mb4 FIELDS TERMINATED BY ','" 
+SELECT `a` FROM `t` INTO OUTFILE '/tmp/f' CHARACTER SET utf8mb4 FIELDS TERMINATED BY ','
 -- case
--- error: line 1 column 47 near "FOR UPDATE OF t2 SKIP LOCKED" 
+SELECT * FROM (`t1`) JOIN `t2` FOR SHARE OF `t1` NOWAIT FOR UPDATE OF `t2` SKIP LOCKED
 -- case
--- error: line 1 column 27 near "FOR UPDATE" 
+SELECT * FROM `t` FOR UPDATE INTO @`a`
 -- case
--- error: line 1 column 50 near "(c1, c2)" 
+SELECT * FROM (VALUES ROW(1,2), ROW(3,4)) AS `v`(`c1`, `c2`)
 -- case
--- error: line 1 column 20 near "CONCURRENT INFILE '/tmp/f' IGNORE INTO TABLE t" 
+LOAD DATA CONCURRENT INFILE '/tmp/f' IGNORE INTO TABLE `t`
 -- case
--- error: line 1 column 48 near "PARTITION (p0) CHARACTER SET utf8mb4" 
+LOAD DATA INFILE '/tmp/f' INTO TABLE `t` PARTITION (`p0`) CHARACTER SET utf8mb4
 -- case
--- error: line 1 column 78 near "ROWS" 
+LOAD DATA INFILE '/tmp/f' INTO TABLE `t` FIELDS TERMINATED BY ',' IGNORE 2 LINES

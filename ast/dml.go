@@ -1256,6 +1256,9 @@ type SelectStmt struct {
 	Limit *Limit
 	// LockInfo is the lock type
 	LockInfo *SelectLockInfo
+	// MoreLockInfos are the second and later locking clauses of a
+	// statement with several (FOR SHARE OF t1 ... FOR UPDATE OF t2 ...).
+	MoreLockInfos []*SelectLockInfo
 	// TableHints represents the table level Optimizer Hint for join type
 	TableHints []*TableOptimizerHint
 	// IsInBraces indicates whether it's a stmt in brace.
@@ -1477,50 +1480,10 @@ func (n *SelectStmt) Restore(ctx *format.RestoreCtx) error {
 
 	if n.LockInfo != nil {
 		ctx.WritePlain(" ")
-		switch n.LockInfo.LockType {
-		case SelectLockNone:
-		case SelectLockForUpdateNoWait:
-			ctx.WriteKeyWord("for update")
-			if len(n.LockInfo.Tables) != 0 {
-				ctx.WriteKeyWord(" OF ")
-				restoreTables(ctx, n.LockInfo.Tables)
-			}
-			ctx.WriteKeyWord(" nowait")
-		case SelectLockForUpdateWaitN:
-			ctx.WriteKeyWord("for update")
-			if len(n.LockInfo.Tables) != 0 {
-				ctx.WriteKeyWord(" OF ")
-				restoreTables(ctx, n.LockInfo.Tables)
-			}
-			ctx.WriteKeyWord(" wait")
-			ctx.WritePlainf(" %d", n.LockInfo.WaitSec)
-		case SelectLockForShareNoWait:
-			ctx.WriteKeyWord("for share")
-			if len(n.LockInfo.Tables) != 0 {
-				ctx.WriteKeyWord(" OF ")
-				restoreTables(ctx, n.LockInfo.Tables)
-			}
-			ctx.WriteKeyWord(" nowait")
-		case SelectLockForUpdateSkipLocked:
-			ctx.WriteKeyWord("for update")
-			if len(n.LockInfo.Tables) != 0 {
-				ctx.WriteKeyWord(" OF ")
-				restoreTables(ctx, n.LockInfo.Tables)
-			}
-			ctx.WriteKeyWord(" skip locked")
-		case SelectLockForShareSkipLocked:
-			ctx.WriteKeyWord("for share")
-			if len(n.LockInfo.Tables) != 0 {
-				ctx.WriteKeyWord(" OF ")
-				restoreTables(ctx, n.LockInfo.Tables)
-			}
-			ctx.WriteKeyWord(" skip locked")
-		default:
-			ctx.WriteKeyWord(n.LockInfo.LockType.String())
-			if len(n.LockInfo.Tables) != 0 {
-				ctx.WriteKeyWord(" OF ")
-				restoreTables(ctx, n.LockInfo.Tables)
-			}
+		restoreSelectLockInfo(ctx, n.LockInfo)
+		for _, li := range n.MoreLockInfos {
+			ctx.WritePlain(" ")
+			restoreSelectLockInfo(ctx, li)
 		}
 	}
 
@@ -1531,6 +1494,55 @@ func (n *SelectStmt) Restore(ctx *format.RestoreCtx) error {
 		}
 	}
 	return nil
+}
+
+// restoreSelectLockInfo writes one locking clause.
+func restoreSelectLockInfo(ctx *format.RestoreCtx, li *SelectLockInfo) {
+	switch li.LockType {
+	case SelectLockNone:
+	case SelectLockForUpdateNoWait:
+		ctx.WriteKeyWord("for update")
+		if len(li.Tables) != 0 {
+			ctx.WriteKeyWord(" OF ")
+			restoreTables(ctx, li.Tables)
+		}
+		ctx.WriteKeyWord(" nowait")
+	case SelectLockForUpdateWaitN:
+		ctx.WriteKeyWord("for update")
+		if len(li.Tables) != 0 {
+			ctx.WriteKeyWord(" OF ")
+			restoreTables(ctx, li.Tables)
+		}
+		ctx.WriteKeyWord(" wait")
+		ctx.WritePlainf(" %d", li.WaitSec)
+	case SelectLockForShareNoWait:
+		ctx.WriteKeyWord("for share")
+		if len(li.Tables) != 0 {
+			ctx.WriteKeyWord(" OF ")
+			restoreTables(ctx, li.Tables)
+		}
+		ctx.WriteKeyWord(" nowait")
+	case SelectLockForUpdateSkipLocked:
+		ctx.WriteKeyWord("for update")
+		if len(li.Tables) != 0 {
+			ctx.WriteKeyWord(" OF ")
+			restoreTables(ctx, li.Tables)
+		}
+		ctx.WriteKeyWord(" skip locked")
+	case SelectLockForShareSkipLocked:
+		ctx.WriteKeyWord("for share")
+		if len(li.Tables) != 0 {
+			ctx.WriteKeyWord(" OF ")
+			restoreTables(ctx, li.Tables)
+		}
+		ctx.WriteKeyWord(" skip locked")
+	default:
+		ctx.WriteKeyWord(li.LockType.String())
+		if len(li.Tables) != 0 {
+			ctx.WriteKeyWord(" OF ")
+			restoreTables(ctx, li.Tables)
+		}
+	}
 }
 
 func restoreTables(ctx *format.RestoreCtx, ts []*TableName) error {
@@ -1975,11 +1987,13 @@ type LoadDataStmt struct {
 	dmlNode
 
 	LowPriority       bool
+	Concurrent        bool
 	FileLocRef        FileLocRefTp
 	Path              string
 	Format            *string
 	OnDuplicate       OnDuplicateKeyHandlingType
 	Table             *TableName
+	Partitions        []CIStr // PARTITION (p, ...); empty when absent
 	Charset           *string
 	Columns           []*ColumnName
 	FieldsInfo        *FieldsClause
@@ -1996,6 +2010,9 @@ func (n *LoadDataStmt) Restore(ctx *format.RestoreCtx) error {
 	ctx.WriteKeyWord("LOAD DATA ")
 	if n.LowPriority {
 		ctx.WriteKeyWord("LOW_PRIORITY ")
+	}
+	if n.Concurrent {
+		ctx.WriteKeyWord("CONCURRENT ")
 	}
 	switch n.FileLocRef {
 	case FileLocServerOrRemote:
@@ -2016,6 +2033,17 @@ func (n *LoadDataStmt) Restore(ctx *format.RestoreCtx) error {
 	ctx.WriteKeyWord(" INTO TABLE ")
 	if err := n.Table.Restore(ctx); err != nil {
 		return annotate(err, "An error occurred while restore LoadDataStmt.Table")
+	}
+	if len(n.Partitions) > 0 {
+		ctx.WriteKeyWord(" PARTITION ")
+		ctx.WritePlain("(")
+		for i, p := range n.Partitions {
+			if i != 0 {
+				ctx.WritePlain(", ")
+			}
+			ctx.WriteName(p.O)
+		}
+		ctx.WritePlain(")")
 	}
 	if n.Charset != nil {
 		ctx.WriteKeyWord(" CHARACTER SET ")
@@ -3915,6 +3943,9 @@ type SelectIntoOption struct {
 	FileName   string
 	FieldsInfo *FieldsClause
 	LinesInfo  *LinesClause
+	// Charset is the CHARACTER SET of the OUTFILE form; empty when
+	// absent.
+	Charset string
 	// Vars is the variable list of the SelectIntoVars form: user
 	// variables and, in stored programs, program variables (restored as
 	// plain names).
@@ -3946,6 +3977,10 @@ func (n *SelectIntoOption) Restore(ctx *format.RestoreCtx) error {
 
 	ctx.WriteKeyWord("INTO OUTFILE ")
 	ctx.WriteString(n.FileName)
+	if n.Charset != "" {
+		ctx.WriteKeyWord(" CHARACTER SET ")
+		ctx.WritePlain(n.Charset)
+	}
 	if n.FieldsInfo != nil {
 		if err := n.FieldsInfo.Restore(ctx); err != nil {
 			return annotate(err, "An error occurred while restore SelectInto.FieldsInfo")
