@@ -381,8 +381,40 @@ func (r *rdParser) finishCreateStoredFunctionStmt(definer *auth.UserIdentity, if
 	r.expect(returns)
 	stmt.ReturnType = r.parseType()
 	stmt.Characteristics = r.parseRoutineCharacteristics()
+	stmt.Imports = r.parseRoutineImportsOpt()
+	if r.tok() == as {
+		// The AS 'code' body of a LANGUAGE JAVASCRIPT routine.
+		r.advance()
+		s := r.expect(stringLit).lit
+		stmt.CodeBody = &s
+		return stmt
+	}
 	stmt.Body = r.parseRoutineBody()
 	return stmt
+}
+
+// parseRoutineImportsOpt implements the USING clause of LANGUAGE
+// JAVASCRIPT routines:
+// empty | "USING" '(' TableName ["AS" Identifier] (',' ...)* ')'.
+func (r *rdParser) parseRoutineImportsOpt() []*ast.RoutineImport {
+	if r.tok() != using {
+		return nil
+	}
+	r.advance()
+	r.expect(int('('))
+	var imports []*ast.RoutineImport
+	for {
+		imp := &ast.RoutineImport{Library: r.parseTableName()}
+		if r.accept(as) {
+			imp.Alias = ast.NewCIStr(r.parseIdentifier())
+		}
+		imports = append(imports, imp)
+		if !r.accept(int(',')) {
+			break
+		}
+	}
+	r.expect(int(')'))
+	return imports
 }
 
 // parseAlterFunctionStmt implements AlterFunctionStmt:

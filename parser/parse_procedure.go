@@ -88,16 +88,25 @@ func (r *rdParser) parseCreateProcedureStmt() ast.StmtNode {
 	lparen := r.expect(int('('))
 	params := r.parseOptSpPdparams()
 	rparen := r.expect(int(')'))
-	bodyStart := r.cur().offset
-	body := r.parseProcedureProcStmt()
 	x := &ast.ProcedureInfo{
 		IfNotExists:    ifNotExists,
 		ProcedureName:  procName,
 		ProcedureParam: params,
-		ProcedureBody:  body,
 		Definer:        definerV,
 	}
-	r.p.setNodeText(body, strings.TrimSpace(r.src[bodyStart:r.cur().offset]))
+	x.Characteristics = r.parseRoutineCharacteristics()
+	x.Imports = r.parseRoutineImportsOpt()
+	if r.tok() == as {
+		// The AS 'code' body of a LANGUAGE JAVASCRIPT routine.
+		r.advance()
+		s := r.expect(stringLit).lit
+		x.CodeBody = &s
+	} else {
+		bodyStart := r.cur().offset
+		body := r.parseProcedureProcStmt()
+		x.ProcedureBody = body
+		r.p.setNodeText(body, strings.TrimSpace(r.src[bodyStart:r.cur().offset]))
+	}
 	startOffset := lparen.offset
 	if r.src[startOffset] == '(' {
 		startOffset++

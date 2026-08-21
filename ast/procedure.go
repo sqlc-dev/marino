@@ -237,8 +237,17 @@ type ProcedureInfo struct {
 	IfNotExists       bool
 	ProcedureName     *TableName
 	ProcedureParam    []*StoreParameter //procedure param
-	ProcedureBody     StmtNode          //procedure body statement
+	ProcedureBody     StmtNode          //procedure body statement; nil when the routine uses the AS string form (CodeBody)
 	ProcedureParamStr string            //procedure parameter string
+	// Characteristics are the routine characteristics (COMMENT,
+	// LANGUAGE, [NOT] DETERMINISTIC, SQL data access, SQL SECURITY).
+	Characteristics RoutineCharacteristics
+	// Imports is the USING (library [AS alias], ...) clause of LANGUAGE
+	// JAVASCRIPT routines; empty when absent.
+	Imports []*RoutineImport
+	// CodeBody is the AS 'code' body of LANGUAGE JAVASCRIPT routines
+	// (a string or dollar-quoted literal); nil for SQL bodies.
+	CodeBody *string
 	// Definer is the DEFINER = user clause; nil when absent.
 	Definer *auth.UserIdentity
 }
@@ -272,7 +281,19 @@ func (n *ProcedureInfo) Restore(ctx *format.RestoreCtx) error {
 			return err
 		}
 	}
-	ctx.WritePlain(") ")
+	ctx.WritePlain(")")
+	if err := n.Characteristics.Restore(ctx); err != nil {
+		return err
+	}
+	if err := restoreRoutineImports(ctx, n.Imports, "ProcedureInfo"); err != nil {
+		return err
+	}
+	if n.CodeBody != nil {
+		ctx.WriteKeyWord(" AS ")
+		ctx.WriteString(*n.CodeBody)
+		return nil
+	}
+	ctx.WritePlain(" ")
 	err = (n.ProcedureBody).Restore(ctx)
 	if err != nil {
 		return err
@@ -294,11 +315,13 @@ func (n *ProcedureInfo) Accept(v Visitor) (Node, bool) {
 		}
 		n.ProcedureParam[i] = node.(*StoreParameter)
 	}
-	node, ok := n.ProcedureBody.Accept(v)
-	if !ok {
-		return n, false
+	if n.ProcedureBody != nil {
+		node, ok := n.ProcedureBody.Accept(v)
+		if !ok {
+			return n, false
+		}
+		n.ProcedureBody = node.(StmtNode)
 	}
-	n.ProcedureBody = node.(StmtNode)
 	return v.Leave(n)
 }
 

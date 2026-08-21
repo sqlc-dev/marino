@@ -662,6 +662,29 @@ func scanIdentifier(s *Scanner) (int, Pos, string) {
 	return identifier, pos, s.r.data(&pos)
 }
 
+// startWithDollar scans either a dollar-quoted string — $tag$ ... $tag$
+// with tag one or more identifier characters or empty, used by LANGUAGE
+// JAVASCRIPT routine bodies (MySQL 26.7 §11.1.1) — or an ordinary
+// identifier starting with '$'. An opening tag without a matching
+// closing tag falls back to the identifier reading.
+func startWithDollar(s *Scanner) (tok int, pos Pos, lit string) {
+	pos = s.r.pos()
+	stream := s.r.s[pos.Offset:]
+	end := 1
+	for end < len(stream) && (isLetter(stream[end]) || isDigit(stream[end]) || stream[end] == '_') {
+		end++
+	}
+	if end < len(stream) && stream[end] == '$' {
+		tag := stream[:end+1]
+		rest := stream[end+1:]
+		if idx := strings.Index(rest, tag); idx >= 0 {
+			s.r.incN(len(tag)*2 + idx)
+			return stringLit, pos, rest[:idx]
+		}
+	}
+	return scanIdentifier(s)
+}
+
 func scanIdentifierOrString(s *Scanner) (tok int, lit string) {
 	ch1 := s.r.peek()
 	switch ch1 {

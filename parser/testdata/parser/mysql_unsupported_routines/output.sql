@@ -1,49 +1,49 @@
--- error: line 1 column 29 near "COMMENT 'c' SELECT 1" 
+CREATE PROCEDURE `p`() COMMENT 'c' SELECT 1
 -- case
--- error: line 1 column 30 near "LANGUAGE SQL SELECT 1" 
+CREATE PROCEDURE `p`() LANGUAGE SQL SELECT 1
 -- case
--- error: line 1 column 25 near "NOT DETERMINISTIC SELECT 1" 
+CREATE PROCEDURE `p`() NOT DETERMINISTIC SELECT 1
 -- case
--- error: line 1 column 30 near "CONTAINS SQL SELECT 1" 
+CREATE PROCEDURE `p`() CONTAINS SQL SELECT 1
 -- case
--- error: line 1 column 24 near "NO SQL SELECT 1" 
+CREATE PROCEDURE `p`() NO SQL SELECT 1
 -- case
--- error: line 1 column 27 near "READS SQL DATA SELECT 1" 
+CREATE PROCEDURE `p`() READS SQL DATA SELECT 1
 -- case
--- error: line 1 column 30 near "MODIFIES SQL DATA SELECT 1" 
+CREATE PROCEDURE `p`() MODIFIES SQL DATA SELECT 1
 -- case
--- error: line 1 column 25 near "SQL SECURITY DEFINER SELECT 1" 
+CREATE PROCEDURE `p`() SQL SECURITY DEFINER SELECT 1
 -- case
--- error: line 1 column 25 near "SQL SECURITY INVOKER SELECT 1" 
+CREATE PROCEDURE `p`() SQL SECURITY INVOKER SELECT 1
 -- case
--- error: line 1 column 86 near "COMMENT 'c' LANGUAGE SQL NOT DETERMINISTIC CONTAINS SQL SQL SECURITY DEFINER SELECT 1" 
+CREATE DEFINER = `u`@`h` PROCEDURE `p`( IN `a` INT(11), OUT `b` VARCHAR(10), INOUT `c` BIGINT(20)) COMMENT 'c' LANGUAGE SQL NOT DETERMINISTIC CONTAINS SQL SQL SECURITY DEFINER SELECT 1
 -- case
--- error: line 1 column 92 near "AS $$
+CREATE FUNCTION `js_add`(`a` INT, `b` INT) RETURNS INT LANGUAGE JAVASCRIPT DETERMINISTIC NO SQL AS '
   return a + b;
-$$" 
+'
 -- case
--- error: line 1 column 53 near "LANGUAGE JAVASCRIPT AS $$
+CREATE PROCEDURE `js_log`( IN `msg` VARCHAR(255)) LANGUAGE JAVASCRIPT AS '
   console.log(msg);
-$$" 
+'
 -- case
--- error: line 1 column 100 near "AS $body$
+CREATE FUNCTION `js_q`(`s` VARCHAR(64)) RETURNS VARCHAR(128) LANGUAGE JAVASCRIPT DETERMINISTIC NO SQL AS '
   return "got: " + s;
-$body$" 
+'
 -- case
--- error: line 1 column 85 near "AS 'return a'" 
+CREATE FUNCTION `js_str`(`a` INT) RETURNS INT LANGUAGE JAVASCRIPT DETERMINISTIC NO SQL AS 'return a'
 -- case
--- error: line 1 column 49 near "$$
+CREATE LIBRARY `lib_demo` LANGUAGE JAVASCRIPT AS '
   export function inc(n) { return n + 1; }
-$$" 
+'
 -- case
--- error: line 1 column 68 near "$$
+CREATE LIBRARY IF NOT EXISTS `test`.`lib_demo` LANGUAGE JAVASCRIPT AS '
   export const PI = 3.14159;
-$$" 
+'
 -- case
--- error: line 1 column 88 near "USING (lib_demo) AS $$
+CREATE FUNCTION `js_inc`(`a` INT) RETURNS INT LANGUAGE JAVASCRIPT DETERMINISTIC NO SQL USING (`lib_demo`) AS '
   return lib_demo.inc(a);
-$$" 
+'
 -- case
--- error: line 1 column 34 near "LANGUAGE JAVASCRIPT USING (test.lib_demo AS d, other_lib) AS $$
+CREATE PROCEDURE `p_demo`() LANGUAGE JAVASCRIPT USING (`test`.`lib_demo` AS `d`, `other_lib`) AS '
   d.inc(1);
-$$" 
+'
