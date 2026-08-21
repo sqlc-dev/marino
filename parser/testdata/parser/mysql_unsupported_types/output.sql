@@ -1,23 +1,23 @@
--- error: line 1 column 31 near "INVISIBLE)" 
+CREATE TABLE `t` (`a` INT INVISIBLE)
 -- case
--- error: line 1 column 29 near "VISIBLE)" 
+CREATE TABLE `t` (`a` INT VISIBLE)
 -- case
--- error: line 1 column 50 near "INVISIBLE)" 
+CREATE TABLE `t` (`a` INT NOT NULL DEFAULT 5 INVISIBLE)
 -- case
--- error: line 1 column 93 near "INVISIBLE */, `col1` int DEFAULT NULL, PRIMARY KEY (`my_row_id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci" 
+CREATE TABLE `gipk_t` (`my_row_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT INVISIBLE,`col1` INT DEFAULT NULL,PRIMARY KEY(`my_row_id`)) ENGINE = InnoDB DEFAULT CHARACTER SET = UTF8MB4 DEFAULT COLLATE = UTF8MB4_0900_AI_CI
 -- case
--- error: line 1 column 40 near "INVISIBLE" 
+ALTER TABLE `t` ADD COLUMN `a` INT INVISIBLE
 -- case
--- error: line 1 column 40 near "VISIBLE" 
+ALTER TABLE `t` ALTER COLUMN `a` SET VISIBLE
 -- case
--- error: line 1 column 42 near "INVISIBLE" 
+ALTER TABLE `t` ALTER COLUMN `a` SET INVISIBLE
 -- case
--- error: line 1 column 41 near "VISIBLE" 
+ALTER TABLE `t` MODIFY COLUMN `a` INT VISIBLE
 -- case
--- error: line 1 column 38 near "ENGINE_ATTRIBUTE = '{"k": 1}' SECONDARY_ENGINE_ATTRIBUTE = '{"k": 2}')" 
+CREATE TABLE `t` (`a` INT ENGINE_ATTRIBUTE = '{"k": 1}' SECONDARY_ENGINE_ATTRIBUTE = '{"k": 2}')
 -- case
--- error: line 1 column 38 near "ENGINE_ATTRIBUTE '{"k": 1}')" 
+CREATE TABLE `t` (`a` INT ENGINE_ATTRIBUTE = '{"k": 1}')
 -- case
--- error: line 1 column 34 near "+ 1))" 
+CREATE TABLE `t` (`a` INT DEFAULT (1+1))
 -- case
--- error: line 1 column 46 near "+ INTERVAL 1 YEAR))" 
+CREATE TABLE `t` (`a` DATE DEFAULT (DATE_ADD(CURRENT_DATE(), INTERVAL 1 YEAR)))

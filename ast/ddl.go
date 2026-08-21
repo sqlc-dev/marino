@@ -533,6 +533,9 @@ const (
 	ColumnOptionAutoRandom
 	ColumnOptionSecondaryEngineAttribute
 	ColumnOptionSrid
+	ColumnOptionVisible
+	ColumnOptionInvisible
+	ColumnOptionEngineAttribute
 )
 
 var (
@@ -602,6 +605,11 @@ func (n *ColumnOption) Restore(ctx *format.RestoreCtx) error {
 			}
 		}
 		if _, ok := n.Expr.(*ColumnNameExpr); ok {
+			printOuterParentheses = true
+		}
+		if _, ok := n.Expr.(*BinaryOperationExpr); ok {
+			// DEFAULT (expr) with an operator; MySQL requires the
+			// parentheses.
 			printOuterParentheses = true
 		}
 		if printOuterParentheses {
@@ -697,6 +705,14 @@ func (n *ColumnOption) Restore(ctx *format.RestoreCtx) error {
 	case ColumnOptionSrid:
 		ctx.WriteKeyWord("SRID ")
 		ctx.WritePlainf("%d", n.UintValue)
+	case ColumnOptionVisible:
+		ctx.WriteKeyWord("VISIBLE")
+	case ColumnOptionInvisible:
+		ctx.WriteKeyWord("INVISIBLE")
+	case ColumnOptionEngineAttribute:
+		ctx.WriteKeyWord("ENGINE_ATTRIBUTE")
+		ctx.WritePlain(" = ")
+		ctx.WriteString(n.StrValue)
 	default:
 		return errors.New("An error occurred while splicing ColumnOption")
 	}
@@ -3564,6 +3580,11 @@ const (
 	AlterTableDropMaskingPolicy
 	AlterTableModifyMaskingPolicyExpression
 	AlterTableModifyMaskingPolicyRestrictOn
+	// AlterTableAlterColumnVisibility is
+	// ALTER TABLE ... ALTER COLUMN col SET {VISIBLE | INVISIBLE};
+	// the column is NewColumns[0] (name only) and the Visibility field
+	// carries the choice.
+	AlterTableAlterColumnVisibility
 )
 
 // LockType is the type for AlterTableSpec.
@@ -3963,6 +3984,16 @@ func (n *AlterTableSpec) Restore(ctx *format.RestoreCtx) error {
 			}
 		} else {
 			ctx.WriteKeyWord(" DROP DEFAULT")
+		}
+	case AlterTableAlterColumnVisibility:
+		ctx.WriteKeyWord("ALTER COLUMN ")
+		if err := n.NewColumns[0].Restore(ctx); err != nil {
+			return annotate(err, "An error occurred while restore AlterTableSpec.NewColumns[0]")
+		}
+		if n.Visibility == IndexVisibilityInvisible {
+			ctx.WriteKeyWord(" SET INVISIBLE")
+		} else {
+			ctx.WriteKeyWord(" SET VISIBLE")
 		}
 	case AlterTableLock:
 		ctx.WriteKeyWord("LOCK ")

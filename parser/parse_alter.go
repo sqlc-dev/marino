@@ -1136,12 +1136,25 @@ func (r *rdParser) parseAlterTableSpecAlter() *ast.AlterTableSpec {
 		}
 	}
 	// "ALTER" ColumnKeywordOpt ColumnName
-	// ("SET" "DEFAULT" (SignedLiteral | '(' Expression ')') | "DROP" "DEFAULT")
+	// ("SET" "DEFAULT" (SignedLiteral | '(' Expression ')')
+	//  | "SET" ("VISIBLE" | "INVISIBLE") | "DROP" "DEFAULT")
 	r.accept(column)
 	col := r.parseColumnName()
 	switch r.tok() {
 	case set:
 		r.advance()
+		if r.tok() == visible || r.tok() == invisible {
+			visibility := ast.IndexVisibilityVisible
+			if r.tok() == invisible {
+				visibility = ast.IndexVisibilityInvisible
+			}
+			r.advance()
+			return &ast.AlterTableSpec{
+				Tp:         ast.AlterTableAlterColumnVisibility,
+				NewColumns: []*ast.ColumnDef{{Name: col}},
+				Visibility: visibility,
+			}
+		}
 		r.expect(defaultKwd)
 		var expr ast.ExprNode
 		if r.accept(int('(')) {
