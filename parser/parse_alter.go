@@ -1462,6 +1462,9 @@ func (r *rdParser) isAlterDatabaseOptionListStart() bool {
 	switch r.tok() {
 	case defaultKwd, collate, set, placement, character, charType:
 		return true
+	case read:
+		// "READ" "ONLY"
+		return r.la(1) == only
 	}
 	return false
 }

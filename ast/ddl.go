@@ -82,6 +82,7 @@ const (
 	DatabaseOptionCollate
 	DatabaseOptionEncryption
 	DatabaseSetTiFlashReplica
+	DatabaseOptionReadOnly
 	DatabaseOptionPlacementPolicy = DatabaseOptionType(PlacementOptionPolicy)
 )
 
@@ -108,6 +109,10 @@ func (n *DatabaseOption) Restore(ctx *format.RestoreCtx) error {
 		ctx.WriteKeyWord("ENCRYPTION")
 		ctx.WritePlain(" = ")
 		ctx.WriteString(n.Value)
+	case DatabaseOptionReadOnly:
+		ctx.WriteKeyWord("READ ONLY")
+		ctx.WritePlain(" = ")
+		ctx.WriteKeyWord(n.Value)
 	case DatabaseOptionPlacementPolicy:
 		placementOpt := PlacementOption{
 			Tp:        PlacementOptionPolicy,
@@ -754,6 +759,7 @@ type IndexOption struct {
 	PrimaryKeyTp               PrimaryKeyType
 	Global                     bool
 	SplitOpt                   *SplitOption `json:"-"` // SplitOption contains expr nodes, which cannot marshal for DDL job arguments.
+	EngineAttr                 string
 	SecondaryEngineAttr        string
 	AddColumnarReplicaOnDemand int
 	Condition                  ExprNode `json:"-"` // Condition contains expr nodes, which cannot marshal for DDL job arguments. It's used for partial index.
@@ -770,6 +776,7 @@ func (n *IndexOption) IsEmpty() bool {
 		n.Global ||
 		n.Visibility != IndexVisibilityDefault ||
 		n.SplitOpt != nil ||
+		len(n.EngineAttr) > 0 ||
 		len(n.SecondaryEngineAttr) > 0 ||
 		n.Condition != nil {
 		return false
@@ -874,6 +881,16 @@ func (n *IndexOption) Restore(ctx *format.RestoreCtx) error {
 		if err != nil {
 			return err
 		}
+		hasPrevOption = true
+	}
+
+	if n.EngineAttr != "" {
+		if hasPrevOption {
+			ctx.WritePlain(" ")
+		}
+		ctx.WriteKeyWord("ENGINE_ATTRIBUTE")
+		ctx.WritePlain(" = ")
+		ctx.WriteString(n.EngineAttr)
 		hasPrevOption = true
 	}
 
@@ -2888,6 +2905,7 @@ const (
 	TableOptionIetfQuotes
 	TableOptionSequence
 	TableOptionAffinity
+	TableOptionStartTransaction
 	TableOptionPlacementPolicy = TableOptionType(PlacementOptionPolicy)
 	TableOptionStatsBuckets    = TableOptionType(StatsOptionBuckets)
 	TableOptionStatsTopN       = TableOptionType(StatsOptionTopN)
@@ -3275,6 +3293,8 @@ func (n *TableOption) Restore(ctx *format.RestoreCtx) error {
 		ctx.WriteKeyWord("AUTOEXTEND_SIZE ")
 		ctx.WritePlain("= ")
 		ctx.WritePlain(n.StrValue) // e.g. '4M'
+	case TableOptionStartTransaction:
+		ctx.WriteKeyWord("START TRANSACTION")
 
 	// MariaDB specific options
 	case TableOptionPageChecksum:

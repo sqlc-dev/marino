@@ -1019,7 +1019,7 @@ func (r *rdParser) isIndexOptionStart() bool {
 	switch r.tok() {
 	case keyBlockSize, addColumnarReplicaOnDemand, using, tp, with, comment,
 		visible, invisible, clustered, nonclustered, global, local,
-		preSplitRegions, secondaryEngineAttribute, where:
+		preSplitRegions, engine_attribute, secondaryEngineAttribute, where:
 		return true
 	}
 	return false
@@ -1054,6 +1054,8 @@ func (r *rdParser) parseIndexOptionList() *ast.IndexOption {
 			opt1.Global = true
 		} else if opt2.SplitOpt != nil {
 			opt1.SplitOpt = opt2.SplitOpt
+		} else if len(opt2.EngineAttr) > 0 {
+			opt1.EngineAttr = opt2.EngineAttr
 		} else if len(opt2.SecondaryEngineAttr) > 0 {
 			opt1.SecondaryEngineAttr = opt2.SecondaryEngineAttr
 		} else if opt2.Condition != nil {
@@ -1145,6 +1147,11 @@ func (r *rdParser) parseIndexOption() *ast.IndexOption {
 				Num: r.parseInt64Num(),
 			},
 		}
+	case engine_attribute:
+		// "ENGINE_ATTRIBUTE" EqOpt stringLit
+		r.advance()
+		r.parseEqOpt()
+		return &ast.IndexOption{EngineAttr: r.expect(stringLit).lit}
 	case secondaryEngineAttribute:
 		// "SECONDARY_ENGINE_ATTRIBUTE" EqOpt stringLit
 		r.advance()

@@ -479,17 +479,19 @@ func (r *rdParser) parseAlterViewStmt() ast.StmtNode {
 	if cols != nil {
 		x.Cols = cols
 	}
+	// A bare WITH CHECK OPTION means CASCADED, as in MySQL.
 	if r.tok() == with {
 		r.advance()
 		switch r.tok() {
 		case cascaded:
 			x.CheckOption = ast.CheckOptionCascaded
+			r.advance()
 		case local:
 			x.CheckOption = ast.CheckOptionLocal
+			r.advance()
 		default:
-			r.syntaxError()
+			x.CheckOption = ast.CheckOptionCascaded
 		}
-		r.advance()
 		r.expect(check)
 		r.expect(option)
 	} else {

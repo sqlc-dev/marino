@@ -66,6 +66,9 @@ func (r *rdParser) isDatabaseOptionStart() bool {
 	case set:
 		// "SET" "TIFLASH" "REPLICA" ...
 		return r.la(1) == tiFlash
+	case read:
+		// "READ" "ONLY" (ALTER DATABASE)
+		return r.la(1) == only
 	}
 	return false
 }
@@ -95,6 +98,18 @@ func (r *rdParser) parseDatabaseOption() *ast.DatabaseOption {
 			Tp:        ast.DatabaseOptionType(placementOptions.Tp),
 			Value:     placementOptions.StrValue,
 			UintValue: placementOptions.UintValue,
+		}
+	case read:
+		// "READ" "ONLY" EqOpt ("DEFAULT" | Int64Num)
+		r.advance()
+		r.expect(only)
+		r.parseEqOpt()
+		if r.accept(defaultKwd) {
+			return &ast.DatabaseOption{Tp: ast.DatabaseOptionReadOnly, Value: "DEFAULT"}
+		}
+		return &ast.DatabaseOption{
+			Tp:    ast.DatabaseOptionReadOnly,
+			Value: strconv.FormatInt(r.parseInt64Num(), 10),
 		}
 	}
 	// DefaultKwdOpt

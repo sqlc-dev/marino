@@ -1,13 +1,13 @@
--- error: line 1 column 48 near "4194304" 
+CREATE TABLE `t` (`a` INT) AUTOEXTEND_SIZE = 4194304
 -- case
--- error: line 1 column 28 near "START TRANSACTION" 
+CREATE TABLE `t` (`a` INT) START TRANSACTION
 -- case
--- error: line 1 column 41 near "ENGINE_ATTRIBUTE = '{}'" 
+CREATE INDEX `i1` ON `t` (`a`) ENGINE_ATTRIBUTE = '{}'
 -- case
--- error: line 1 column 21 near "READ ONLY = 1" 
+ALTER DATABASE `d` READ ONLY = 1
 -- case
--- error: line 1 column 21 near "READ ONLY = DEFAULT" 
+ALTER DATABASE `d` READ ONLY = DEFAULT
 -- case
--- error: line 1 column 36 near "CHECK OPTION" 
+CREATE ALGORITHM = UNDEFINED DEFINER = CURRENT_USER SQL SECURITY DEFINER VIEW `v` AS SELECT 1
 -- case
--- error: line 1 column 35 near "CHECK OPTION" 
+ALTER ALGORITHM = UNDEFINED DEFINER = CURRENT_USER SQL SECURITY DEFINER VIEW `v` AS SELECT 1
