@@ -1103,6 +1103,10 @@ func (r *rdParser) parseTableFactor() ast.ResultSetNode {
 		ts.Lateral = true
 		ts.ColumnNames = r.parseIdentListWithParenOpt()
 		return ts
+	case r.tok() == identifier && r.la(1) == int('(') && strings.EqualFold(r.cur().lit, "JSON_TABLE"):
+		// TableFactor: the JSON_TABLE table function TableAsNameOpt
+		jt := r.parseJSONTableExpr()
+		return &ast.TableSource{Source: jt, AsName: r.parseTableAsNameOpt()}
 	default:
 		// TableFactor: TableName PartitionNameListOpt TableAsNameOpt
 		// AsOfClauseOpt IndexHintListOpt TableSampleOpt

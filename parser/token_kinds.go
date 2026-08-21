@@ -1034,6 +1034,12 @@ const (
 	userResources              = 58334
 	loop                       = 58335
 	condition                  = 58336
+	sounds                     = 58337
+	zone                       = 58338
+	nested                     = 58340
+	ordinality                 = 58341
+	path                       = 58342
+	returning                  = 58343
 	wrapper                    = 58319
 	write                      = 57592
 	x509                       = 57993

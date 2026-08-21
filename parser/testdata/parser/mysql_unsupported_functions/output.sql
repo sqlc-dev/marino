@@ -1,21 +1,21 @@
--- error: line 1 column 24 near "NCHAR(5))" 
+SELECT CAST(_UTF8MB4'a' AS CHAR(5))
 -- case
--- error: line 1 column 24 near "NCHAR)" 
+SELECT CAST(_UTF8MB4'a' AS CHAR)
 -- case
--- error: line 1 column 45 near "AT TIME ZONE 'UTC' AS DATETIME)" 
+SELECT CAST(TIMESTAMP '2024-01-01 12:00:00' AT TIME ZONE 'UTC' AS DATETIME)
 -- case
--- error: line 1 column 45 near "AT TIME ZONE '+00:00' AS DATETIME(3))" 
+SELECT CAST(TIMESTAMP '2024-01-01 12:00:00' AT TIME ZONE '+00:00' AS DATETIME(3))
 -- case
--- error: line 1 column 25 near "('[{"a":1}]', '$[*]' COLUMNS (a INT PATH '$.a')) AS jt" 
+SELECT * FROM JSON_TABLE(_UTF8MB4'[{"a":1}]', _UTF8MB4'$[*]' COLUMNS (`a` INT PATH _UTF8MB4'$.a')) AS `jt`
 -- case
--- error: line 1 column 25 near "('[]', '$[*]' COLUMNS (ord FOR ORDINALITY, x VARCHAR(10) PATH '$.x' DEFAULT '"d"' ON EMPTY NULL ON ERROR, y INT EXISTS PATH '$.y', NESTED PATH '$.z[*]' COLUMNS (z INT PATH '$'))) AS jt" 
+SELECT * FROM JSON_TABLE(_UTF8MB4'[]', _UTF8MB4'$[*]' COLUMNS (`ord` FOR ORDINALITY, `x` VARCHAR(10) PATH _UTF8MB4'$.x' DEFAULT _UTF8MB4'"d"' ON EMPTY NULL ON ERROR, `y` INT EXISTS PATH _UTF8MB4'$.y', NESTED PATH _UTF8MB4'$.z[*]' COLUMNS (`z` INT PATH _UTF8MB4'$'))) AS `jt`
 -- case
--- error: line 1 column 37 near "(t.j, '$[*]' COLUMNS (x VARCHAR(10) PATH '$.x' ERROR ON EMPTY)) AS jt" 
+SELECT `t`.`id`,`jt`.`x` FROM (`t`) JOIN JSON_TABLE(`t`.`j`, _UTF8MB4'$[*]' COLUMNS (`x` VARCHAR(10) PATH _UTF8MB4'$.x' ERROR ON EMPTY)) AS `jt`
 -- case
--- error: line 1 column 45 near "RETURNING UNSIGNED)" 
+SELECT JSON_VALUE(_UTF8MB4'{"a":42}', _UTF8MB4'$.a' RETURNING UNSIGNED)
 -- case
--- error: line 1 column 47 near "RETURNING DECIMAL(5,2) DEFAULT 0 ON EMPTY DEFAULT 99 ON ERROR)" 
+SELECT JSON_VALUE(_UTF8MB4'{"p":12.5}', _UTF8MB4'$.d' RETURNING DECIMAL(5, 2) DEFAULT 0 ON EMPTY DEFAULT 99 ON ERROR)
 -- case
--- error: line 1 column 39 near "RETURNING CHAR(8) NULL ON EMPTY ERROR ON ERROR)" 
+SELECT JSON_VALUE(_UTF8MB4'{}', _UTF8MB4'$.x' RETURNING CHAR(8) NULL ON EMPTY ERROR ON ERROR)
 -- case
--- error: line 1 column 22 near "LIKE 'b'" 
+SELECT SOUNDEX(_UTF8MB4'a')=SOUNDEX(_UTF8MB4'b')

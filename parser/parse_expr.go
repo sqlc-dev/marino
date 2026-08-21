@@ -336,6 +336,21 @@ func (r *rdParser) parsePredicate() ast.ExprNode {
 		r.advance()
 		pattern := r.parseSimpleExpr()
 		return r.setOrigin(&ast.PatternRegexpExpr{Expr: v, Pattern: pattern, Not: notFlag}, start)
+	case sounds:
+		// PredicateExpr: BitExpr "SOUNDS" "LIKE" BitExpr — there is no
+		// NotSym form. Desugars to SOUNDEX(l) = SOUNDEX(r), which is how
+		// MySQL defines the operator.
+		if notFlag {
+			r.syntaxError()
+		}
+		r.advance()
+		r.expect(like)
+		rhs := r.parseBitExpr(0)
+		return r.setOrigin(&ast.BinaryOperationExpr{
+			Op: opcode.EQ,
+			L:  &ast.FuncCallExpr{FnName: ast.NewCIStr("soundex"), Args: []ast.ExprNode{v}},
+			R:  &ast.FuncCallExpr{FnName: ast.NewCIStr("soundex"), Args: []ast.ExprNode{rhs}},
+		}, start)
 	case memberof:
 		// PredicateExpr: BitExpr memberof '(' SimpleExpr ')' — there is
 		// no NotSym form, so a preceding NOT makes this token the error.
