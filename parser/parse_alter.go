@@ -1437,6 +1437,70 @@ func (r *rdParser) parseReorganizePartitionRuleOpt() *ast.AlterTableSpec {
 	}
 }
 
+// parseAlterUserFactors implements the multi-factor authentication
+// clauses of ALTER USER (MySQL 26.7 §15.7.1.1):
+//
+//	(("ADD" | "MODIFY") NUM "FACTOR" AuthOption
+//	 | "DROP" NUM "FACTOR"
+//	 | NUM "FACTOR" ("INITIATE" "REGISTRATION"
+//	                 | "FINISH" "REGISTRATION" "SET" "CHALLENGE_RESPONSE"
+//	                   "AS" stringLit
+//	                 | "UNREGISTER"))*
+func (r *rdParser) parseAlterUserFactors() []*ast.AlterUserFactor {
+	var factors []*ast.AlterUserFactor
+	for {
+		switch {
+		case (r.tok() == add || r.tok() == modify || r.tok() == drop) &&
+			r.la(1) == intLit && r.la(2) == factor:
+			f := &ast.AlterUserFactor{}
+			switch r.tok() {
+			case add:
+				f.Op = ast.AlterUserFactorAdd
+			case modify:
+				f.Op = ast.AlterUserFactorModify
+			case drop:
+				f.Op = ast.AlterUserFactorDrop
+			}
+			r.advance()
+			f.Factor = r.parseInt64Num()
+			r.expect(factor)
+			if f.Op != ast.AlterUserFactorDrop {
+				f.AuthOpt = r.parseGrantAuthOption()
+				if f.AuthOpt == nil {
+					r.syntaxError()
+				}
+			}
+			factors = append(factors, f)
+		case r.tok() == intLit && r.la(1) == factor:
+			f := &ast.AlterUserFactor{Factor: r.parseInt64Num()}
+			r.expect(factor)
+			switch r.tok() {
+			case initiate:
+				r.advance()
+				r.expect(registration)
+				f.Op = ast.AlterUserFactorInitiateRegistration
+			case finish:
+				r.advance()
+				r.expect(registration)
+				r.expect(set)
+				r.expect(challengeResponse)
+				r.expect(as)
+				s := r.expect(stringLit).lit
+				f.Op = ast.AlterUserFactorFinishRegistration
+				f.ChallengeResponse = &s
+			case unregister:
+				r.advance()
+				f.Op = ast.AlterUserFactorUnregister
+			default:
+				r.syntaxError()
+			}
+			factors = append(factors, f)
+		default:
+			return factors
+		}
+	}
+}
+
 /**************************************AlterDatabaseStmt***************************************/
 
 // parseAlterDatabaseStmt implements AlterDatabaseStmt:
@@ -1515,15 +1579,20 @@ func (r *rdParser) parseAlterUserStmt() ast.StmtNode {
 			CurrentAuth: auth,
 		}
 	}
-	// "ALTER" "USER" IfExists UserSpecList RequireClauseOpt ConnectionOptions
-	// PasswordOrLockOptions CommentOrAttributeOption ResourceGroupNameOption
+	// "ALTER" "USER" IfExists UserSpecList FactorClauses DefaultRoleOpt
+	// RequireClauseOpt ConnectionOptions PasswordOrLockOptions
+	// CommentOrAttributeOption ResourceGroupNameOption
 	specs := r.parseGrantUserSpecList()
+	factors := r.parseAlterUserFactors()
+	defaultRoles := r.parseUserDefaultRolesOpt()
 	tlsOptions := r.parseGrantRequireClauseOpt()
 	resourceOptions := r.parseUserConnectionOptions()
 	passwordOrLockOptions := r.parseUserPasswordOrLockOptions()
 	ret := &ast.AlterUserStmt{
 		IfExists:              ifExists,
 		Specs:                 specs,
+		Factors:               factors,
+		DefaultRoles:          defaultRoles,
 		AuthTokenOrTLSOptions: tlsOptions,
 		ResourceOptions:       resourceOptions,
 		PasswordOrLockOptions: passwordOrLockOptions,

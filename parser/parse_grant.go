@@ -81,6 +81,7 @@ func (r *rdParser) parseGrantStmtFamily() ast.StmtNode {
 			Users:                 users,
 			AuthTokenOrTLSOptions: tlsOptions,
 			WithGrant:             withGrant,
+			AsUser:                r.parseGrantAsOpt(),
 		}
 	case to:
 		// GrantRoleStmt
@@ -90,14 +91,60 @@ func (r *rdParser) parseGrantStmtFamily() ast.StmtNode {
 		if err != nil {
 			r.actionError(err)
 		}
-		return &ast.GrantRoleStmt{
+		stmt := &ast.GrantRoleStmt{
 			Roles: roles,
 			Users: users,
 		}
+		if r.tok() == with && r.la(1) == admin {
+			// "WITH" "ADMIN" "OPTION"
+			r.advance()
+			r.advance()
+			r.expect(option)
+			stmt.AdminOption = true
+		}
+		return stmt
 	default:
 		r.syntaxError()
 		return nil
 	}
+}
+
+// parseGrantAsOpt implements the AS user [WITH ROLE ...] clause of
+// GrantStmt (nil for the empty alternative):
+//
+//	empty | "AS" Username ["WITH" "ROLE" ("DEFAULT" | "NONE" | "ALL"
+//	    | "ALL" "EXCEPT" RolenameList | RolenameList)]
+func (r *rdParser) parseGrantAsOpt() *ast.GrantAs {
+	if r.tok() != as {
+		return nil
+	}
+	r.advance()
+	grantAs := &ast.GrantAs{User: r.parseGrantUsername()}
+	if r.tok() == with && r.la(1) == role {
+		r.advance()
+		r.advance()
+		grantAs.WithRole = true
+		switch r.tok() {
+		case defaultKwd:
+			r.advance()
+			grantAs.RoleOpt = ast.SetRoleDefault
+		case none:
+			r.advance()
+			grantAs.RoleOpt = ast.SetRoleNone
+		case all:
+			r.advance()
+			if r.accept(except) {
+				grantAs.RoleOpt = ast.SetRoleAllExcept
+				grantAs.Roles = r.parseRolenameList()
+			} else {
+				grantAs.RoleOpt = ast.SetRoleAll
+			}
+		default:
+			grantAs.RoleOpt = ast.SetRoleRegular
+			grantAs.Roles = r.parseRolenameList()
+		}
+	}
+	return grantAs
 }
 
 // parseRevokeStmtFamily implements:
@@ -109,6 +156,18 @@ func (r *rdParser) parseGrantStmtFamily() ast.StmtNode {
 // disambiguated by "ON" vs "FROM" after the shared list.
 func (r *rdParser) parseRevokeStmtFamily() ast.StmtNode {
 	r.expect(revoke)
+	ifExists := r.parseIfExists()
+	if r.tok() == proxy && r.la(1) == on {
+		// RevokeProxyStmt: "REVOKE" "PROXY" "ON" Username "FROM" UsernameList
+		r.advance()
+		r.advance()
+		localUser := r.parseGrantUsername()
+		r.expect(from)
+		return &ast.RevokeProxyStmt{
+			LocalUser:     localUser,
+			ExternalUsers: r.parseGrantUsernameList(),
+		}
+	}
 	elems := r.parseRoleOrPrivElemList()
 	switch r.tok() {
 	case on:
@@ -123,10 +182,12 @@ func (r *rdParser) parseRevokeStmtFamily() ast.StmtNode {
 			r.actionError(err)
 		}
 		return &ast.RevokeStmt{
-			Privs:      p,
-			ObjectType: objectType,
-			Level:      level,
-			Users:      users,
+			Privs:             p,
+			ObjectType:        objectType,
+			Level:             level,
+			Users:             users,
+			IfExists:          ifExists,
+			IgnoreUnknownUser: r.parseIgnoreUnknownUserOpt(),
 		}
 	case from:
 		// RevokeRoleStmt
@@ -145,10 +206,12 @@ func (r *rdParser) parseRevokeStmtFamily() ast.StmtNode {
 				})
 			}
 			return &ast.RevokeStmt{
-				Privs:      []*ast.PrivElem{{Priv: mysql.AllPriv}, {Priv: mysql.GrantPriv}},
-				ObjectType: ast.ObjectTypeNone,
-				Level:      &ast.GrantLevel{Level: ast.GrantLevelGlobal},
-				Users:      users,
+				Privs:             []*ast.PrivElem{{Priv: mysql.AllPriv}, {Priv: mysql.GrantPriv}},
+				ObjectType:        ast.ObjectTypeNone,
+				Level:             &ast.GrantLevel{Level: ast.GrantLevelGlobal},
+				Users:             users,
+				IfExists:          ifExists,
+				IgnoreUnknownUser: r.parseIgnoreUnknownUserOpt(),
 			}
 		}
 		roles, err := convertToRole(elems)
@@ -156,13 +219,27 @@ func (r *rdParser) parseRevokeStmtFamily() ast.StmtNode {
 			r.actionError(err)
 		}
 		return &ast.RevokeRoleStmt{
-			Roles: roles,
-			Users: usernames,
+			Roles:             roles,
+			Users:             usernames,
+			IfExists:          ifExists,
+			IgnoreUnknownUser: r.parseIgnoreUnknownUserOpt(),
 		}
 	default:
 		r.syntaxError()
 		return nil
 	}
+}
+
+// parseIgnoreUnknownUserOpt implements the IGNORE UNKNOWN USER clause of
+// the REVOKE statements: empty | "IGNORE" "UNKNOWN" "USER".
+func (r *rdParser) parseIgnoreUnknownUserOpt() bool {
+	if r.tok() != ignore {
+		return false
+	}
+	r.advance()
+	r.expect(unknown)
+	r.expect(user)
+	return true
 }
 
 // parseRoleOrPrivElemList implements RoleOrPrivElemList:
@@ -531,8 +608,21 @@ func (r *rdParser) parseGrantUserSpec() *ast.UserSpec {
 	userSpec := &ast.UserSpec{
 		User: r.parseGrantUsername(),
 	}
+	if r.tok() == discard {
+		// "DISCARD" "OLD" "PASSWORD" replaces the IDENTIFIED clause.
+		r.advance()
+		r.expect(old)
+		r.expect(password)
+		userSpec.AuthOpt = &ast.AuthOption{DiscardOldPassword: true}
+		return userSpec
+	}
 	if opt := r.parseGrantAuthOption(); opt != nil {
 		userSpec.AuthOpt = opt
+		// Multi-factor authentication: "AND" IDENTIFIED ... up to twice.
+		for r.tok() == and && r.la(1) == identified {
+			r.advance()
+			userSpec.MoreAuthOpts = append(userSpec.MoreAuthOpts, r.parseGrantAuthOption())
+		}
 	}
 	return userSpec
 }
@@ -550,30 +640,41 @@ func (r *rdParser) parseGrantUserSpecList() []*ast.UserSpec {
 // parseGrantAuthOption implements AuthOption (nil for the empty
 // alternative):
 //
-//	empty | "IDENTIFIED" "BY" AuthString
-//	| "IDENTIFIED" "WITH" AuthPlugin ["BY" AuthString | "AS" HashString]
+//	empty | "IDENTIFIED" "BY" (AuthString | "RANDOM" "PASSWORD")
+//	| "IDENTIFIED" "WITH" AuthPlugin
+//	  ["BY" (AuthString | "RANDOM" "PASSWORD") | "AS" HashString]
 //	| "IDENTIFIED" "BY" "PASSWORD" HashString
 //
-// with AuthString: stringLit and AuthPlugin: StringName.
+// with AuthString: stringLit and AuthPlugin: StringName, followed by the
+// optional dual-password clauses ["REPLACE" stringLit] ["RETAIN"
+// "CURRENT" "PASSWORD"].
 func (r *rdParser) parseGrantAuthOption() *ast.AuthOption {
 	if r.tok() != identified {
 		return nil
 	}
 	r.advance()
+	var opt *ast.AuthOption
 	switch r.tok() {
 	case by:
 		r.advance()
-		if r.accept(password) {
+		switch {
+		case r.tok() == random:
+			// "BY" "RANDOM" "PASSWORD"
+			r.advance()
+			r.expect(password)
+			opt = &ast.AuthOption{ByRandomPassword: true}
+		case r.accept(password):
 			// "IDENTIFIED" "BY" "PASSWORD" HashString
-			return &ast.AuthOption{
+			opt = &ast.AuthOption{
 				AuthPlugin:   mysql.AuthNativePassword,
 				HashString:   r.parseGrantHashString(),
 				ByHashString: true,
 			}
-		}
-		return &ast.AuthOption{
-			AuthString:   r.expect(stringLit).lit,
-			ByAuthString: true,
+		default:
+			opt = &ast.AuthOption{
+				AuthString:   r.expect(stringLit).lit,
+				ByAuthString: true,
+			}
 		}
 	case with:
 		r.advance()
@@ -581,26 +682,45 @@ func (r *rdParser) parseGrantAuthOption() *ast.AuthOption {
 		switch r.tok() {
 		case by:
 			r.advance()
-			return &ast.AuthOption{
-				AuthPlugin:   plugin,
-				AuthString:   r.expect(stringLit).lit,
-				ByAuthString: true,
+			if r.tok() == random {
+				r.advance()
+				r.expect(password)
+				opt = &ast.AuthOption{AuthPlugin: plugin, ByRandomPassword: true}
+			} else {
+				opt = &ast.AuthOption{
+					AuthPlugin:   plugin,
+					AuthString:   r.expect(stringLit).lit,
+					ByAuthString: true,
+				}
 			}
 		case as:
 			r.advance()
-			return &ast.AuthOption{
+			opt = &ast.AuthOption{
 				AuthPlugin:   plugin,
 				HashString:   r.parseGrantHashString(),
 				ByHashString: true,
 			}
-		}
-		return &ast.AuthOption{
-			AuthPlugin: plugin,
+		default:
+			opt = &ast.AuthOption{
+				AuthPlugin: plugin,
+			}
 		}
 	default:
 		r.syntaxError()
 		return nil
 	}
+	if r.tok() == replace && r.la(1) == stringLit {
+		r.advance()
+		s := r.expect(stringLit).lit
+		opt.ReplacePassword = &s
+	}
+	if r.tok() == retain {
+		r.advance()
+		r.expect(current)
+		r.expect(password)
+		opt.RetainCurrentPassword = true
+	}
+	return opt
 }
 
 // parseGrantHashString implements HashString: stringLit | hexLit.

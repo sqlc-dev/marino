@@ -1040,6 +1040,15 @@ const (
 	ordinality                 = 58341
 	path                       = 58342
 	returning                  = 58343
+	challengeResponse          = 58344
+	factor                     = 58345
+	finish                     = 58346
+	initiate                   = 58347
+	random                     = 58348
+	registration               = 58349
+	retain                     = 58350
+	unregister                 = 58351
+	old                        = 58352
 	wrapper                    = 58319
 	write                      = 57592
 	x509                       = 57993

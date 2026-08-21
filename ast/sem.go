@@ -451,6 +451,8 @@ const (
 	RestartCommand = "RESTART"
 	// RevokeCommand represents REVOKE statement
 	RevokeCommand = "REVOKE"
+	// RevokeProxyCommand represents REVOKE PROXY statement
+	RevokeProxyCommand = "REVOKE PROXY"
 	// RevokeRoleCommand represents REVOKE ROLE statement
 	RevokeRoleCommand = "REVOKE ROLE"
 	// RollbackCommand represents ROLLBACK statement
@@ -1260,6 +1262,11 @@ func (n *GrantStmt) SEMCommand() string {
 // SEMCommand returns the command string for the statement.
 func (n *GrantProxyStmt) SEMCommand() string {
 	return GrantProxyCommand
+}
+
+// SEMCommand returns the command string for the statement.
+func (n *RevokeProxyStmt) SEMCommand() string {
+	return RevokeProxyCommand
 }
 
 // SEMCommand returns the command string for the statement.

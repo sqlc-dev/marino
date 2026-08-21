@@ -63,9 +63,10 @@ func (r *rdParser) parseSetStmt() ast.StmtNode {
 	case password:
 		// "SET" "PASSWORD" EqOrAssignmentEq PasswordOpt
 		// "SET" "PASSWORD" "FOR" Username EqOrAssignmentEq PasswordOpt
+		// "SET" "PASSWORD" ["FOR" Username] "TO" "RANDOM"
 		// The LALR machine shifts toward these on "="/":="/FOR (shift
 		// beats reducing PASSWORD to Identifier).
-		if r.la(1) == forKwd || r.la(1) == eq || r.la(1) == assignmentEq {
+		if r.la(1) == forKwd || r.la(1) == eq || r.la(1) == assignmentEq || r.la(1) == to {
 			return r.parseSetPwdStmt()
 		}
 	case global, session:
@@ -132,13 +133,32 @@ func (r *rdParser) parseSetStmt() ast.StmtNode {
 // (SET already consumed).
 func (r *rdParser) parseSetPwdStmt() ast.StmtNode {
 	r.expect(password)
+	stmt := &ast.SetPwdStmt{}
 	if r.accept(forKwd) {
-		user := r.parseUsername()
-		r.parseEqOrAssignmentEq()
-		return &ast.SetPwdStmt{User: user, Password: r.parsePasswordOpt()}
+		stmt.User = r.parseUsername()
 	}
-	r.parseEqOrAssignmentEq()
-	return &ast.SetPwdStmt{Password: r.parsePasswordOpt()}
+	if r.tok() == to {
+		// "TO" "RANDOM"
+		r.advance()
+		r.expect(random)
+		stmt.ToRandom = true
+	} else {
+		r.parseEqOrAssignmentEq()
+		stmt.Password = r.parsePasswordOpt()
+	}
+	// The dual-password clauses.
+	if r.tok() == replace && r.la(1) == stringLit {
+		r.advance()
+		s := r.expect(stringLit).lit
+		stmt.ReplacePassword = &s
+	}
+	if r.tok() == retain {
+		r.advance()
+		r.expect(current)
+		r.expect(password)
+		stmt.RetainCurrentPassword = true
+	}
+	return stmt
 }
 
 // parseSetConfigStmt implements the SET CONFIG alternatives of SetStmt
