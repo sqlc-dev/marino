@@ -49,3 +49,19 @@ SELECT `a`,`b` FROM `t` LIMIT 1 INTO @`x`, @`y`
 SELECT 1 INTO DUMPFILE '/tmp/out'
 -- case
 SELECT `prev`,`xml`,`dumpfile` FROM `concurrent`
+-- case
+SELECT `a` FROM `t` INTO OUTFILE '/tmp/f' CHARACTER SET utf8mb4
+-- case
+SELECT `a` FROM `t` INTO OUTFILE '/tmp/f' CHARACTER SET utf8mb4 FIELDS TERMINATED BY ','
+-- case
+SELECT * FROM (`t1`) JOIN `t2` FOR SHARE OF `t1` NOWAIT FOR UPDATE OF `t2` SKIP LOCKED
+-- case
+SELECT * FROM `t` FOR UPDATE INTO @`a`
+-- case
+SELECT * FROM (VALUES ROW(1,2), ROW(3,4)) AS `v`(`c1`, `c2`)
+-- case
+LOAD DATA CONCURRENT INFILE '/tmp/f' IGNORE INTO TABLE `t`
+-- case
+LOAD DATA INFILE '/tmp/f' INTO TABLE `t` PARTITION (`p0`) CHARACTER SET utf8mb4
+-- case
+LOAD DATA INFILE '/tmp/f' INTO TABLE `t` FIELDS TERMINATED BY ',' IGNORE 2 LINES

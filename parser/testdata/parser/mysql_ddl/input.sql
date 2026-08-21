@@ -145,3 +145,17 @@ DROP MASKING POLICY p
 DROP MASKING POLICY IF EXISTS p
 -- case
 SELECT `at`, `every`, `starts`, `ends`, `server`, `options`, `wrapper`, `contains`, `duality`, `rotate`, `innodb` FROM t
+-- case
+CREATE TABLE t (a INT) AUTOEXTEND_SIZE = 4194304
+-- case
+CREATE TABLE t (a INT) START TRANSACTION
+-- case
+CREATE INDEX i1 ON t (a) ENGINE_ATTRIBUTE = '{}'
+-- case
+ALTER DATABASE d READ ONLY = 1
+-- case
+ALTER DATABASE d READ ONLY = DEFAULT
+-- case
+CREATE VIEW v AS SELECT 1 WITH CHECK OPTION
+-- case
+ALTER VIEW v AS SELECT 1 WITH CHECK OPTION
