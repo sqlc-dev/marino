@@ -1110,7 +1110,19 @@ func (r *rdParser) parseTableFactor() ast.ResultSetNode {
 	default:
 		// TableFactor: TableName PartitionNameListOpt TableAsNameOpt
 		// AsOfClauseOpt IndexHintListOpt TableSampleOpt
+		//
+		// Unlike goyacc, which stamped only <expr> symbols, the
+		// production's start offset is recorded on the table reference:
+		// consumers placing comments or errors need its position, and 0
+		// (the unstamped value) is indistinguishable from the start of
+		// the input. Only this production stamps a TableName — every
+		// TableName here is reachable by Accept, which the restore
+		// round-trip test relies on to reset positions.
+		offset := r.cur().offset
 		tn := r.parseTableName()
+		if !r.sc.skipPositionRecording {
+			tn.SetOriginTextPosition(offset)
+		}
 		tn.PartitionNames = r.parsePartitionNameListOpt()
 		asName := r.parseTableAsNameOpt()
 		if r.tok() == asof {
