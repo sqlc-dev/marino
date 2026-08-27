@@ -57,7 +57,14 @@ func (r *rdParser) parseInsertIntoStmt() ast.StmtNode {
 	priority := r.parsePriorityOpt()
 	ignoreErr := r.accept(ignore)
 	r.accept(into)
+	// The table reference's start offset is recorded the way
+	// parseTableFactor stamps FROM-clause tables; InsertStmt.Accept
+	// visits the TableName, so the restore round-trip test resets it.
+	offset := r.cur().offset
 	tn := r.parseTableName()
+	if !r.sc.skipPositionRecording {
+		tn.SetOriginTextPosition(offset)
+	}
 	partitions := r.parsePartitionNameListOpt()
 	x := r.parseInsertValues()
 	x.Priority = priority
@@ -87,7 +94,12 @@ func (r *rdParser) parseReplaceIntoStmt() ast.StmtNode {
 	hints := r.parseTableOptimizerHintsOpt()
 	priority := r.parsePriorityOpt()
 	r.accept(into)
+	// Stamped like the INSERT INTO table reference above.
+	offset := r.cur().offset
 	tn := r.parseTableName()
+	if !r.sc.skipPositionRecording {
+		tn.SetOriginTextPosition(offset)
+	}
 	partitions := r.parsePartitionNameListOpt()
 	x := r.parseInsertValues()
 	if hints != nil {
@@ -107,11 +119,23 @@ func (r *rdParser) parseInsertValues() *ast.InsertStmt {
 	case r.tok() == int('(') && !r.subSelectFollows():
 		// '(' ColumnNameListOpt ')' followed by values or a query.
 		r.advance()
-		var cols []*ast.ColumnName
+		cols := []*ast.ColumnName{}
 		if r.tok() != int(')') {
-			cols = r.parseColumnNameList()
-		} else {
-			cols = []*ast.ColumnName{}
+			// Each column records its start offset (InsertStmt.Accept
+			// visits Columns, so the restore round-trip test resets
+			// them); parseColumnNameList stays unstamped because other
+			// call sites hang its columns off nodes Accept skips.
+			for {
+				offset := r.cur().offset
+				col := r.parseColumnName()
+				if !r.sc.skipPositionRecording {
+					col.SetOriginTextPosition(offset)
+				}
+				cols = append(cols, col)
+				if !r.accept(int(',')) {
+					break
+				}
+			}
 		}
 		r.expect(int(')'))
 		if r.tok() == value || (r.tok() == values && r.la(1) != row) {

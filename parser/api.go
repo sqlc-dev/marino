@@ -182,6 +182,13 @@ func (parser *Parser) ParseOneStmt(sql, charset, collation string) (ast.StmtNode
 	return stmts[0], nil
 }
 
+// Comments returns the comments the lexer scanned during the most recent
+// Parse, ParseSQL or ParseOneStmt call, ordered by position. Offsets index
+// the sql string given to that call. The slice is reused by the next parse.
+func (parser *Parser) Comments() []Comment {
+	return parser.rdScan.Comments()
+}
+
 // SetSQLMode sets the SQL mode for parser.
 func (parser *Parser) SetSQLMode(mode mysql.SQLMode) {
 	parser.lexer.SetSQLMode(mode)

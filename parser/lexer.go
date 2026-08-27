@@ -45,6 +45,7 @@ type Scanner struct {
 
 	errs         []error
 	warns        []error
+	comments     []Comment
 	stmtStartPos int
 
 	// inBangComment is true if we are inside a `/*! ... */` block.
@@ -91,6 +92,33 @@ func (s *Scanner) Errors() (warns []error, errs []error) {
 	return s.warns, s.errs
 }
 
+// Comment is one comment the scanner skipped while lexing: a `-- ` or `#`
+// line comment (End excludes the terminating newline) or a `/* ... */`
+// block comment (End includes the closing `*/`). Begin and End are byte
+// offsets into the source. Executable comments (`/*! ... */` and
+// recognized `/*T![...] ... */`) and optimizer hints (`/*+ ... */`) are
+// lexed as SQL rather than skipped, so they are not recorded.
+type Comment struct {
+	Begin int
+	End   int
+}
+
+// Comments returns the comments scanned so far, ordered by position.
+func (s *Scanner) Comments() []Comment {
+	return s.comments
+}
+
+// recordComment appends a scanned comment. The scanner re-reads source
+// text when it looks ahead (getNextToken and friends save and restore the
+// reader), so the same comment can be scanned more than once; recording is
+// gated on strictly increasing positions to keep one entry per comment.
+func (s *Scanner) recordComment(begin, end int) {
+	if n := len(s.comments); n > 0 && s.comments[n-1].Begin >= begin {
+		return
+	}
+	s.comments = append(s.comments, Comment{Begin: begin, End: end})
+}
+
 // reset resets the sql string to be scanned.
 func (s *Scanner) reset(sql string) {
 	s.client = charset.FindEncoding(mysql.DefaultCharset)
@@ -99,6 +127,7 @@ func (s *Scanner) reset(sql string) {
 	s.buf.Reset()
 	s.errs = s.errs[:0]
 	s.warns = s.warns[:0]
+	s.comments = s.comments[:0]
 	s.stmtStartPos = 0
 	s.inBangComment = false
 	s.lastKeyword = 0
@@ -497,9 +526,11 @@ func startWithBb(s *Scanner) (tok int, pos Pos, lit string) {
 }
 
 func startWithSharp(s *Scanner) (tok int, pos Pos, lit string) {
+	begin := s.r.pos().Offset
 	s.r.incAsLongAs(func(ch byte) bool {
 		return ch != '\n'
 	})
+	s.recordComment(begin, s.r.pos().Offset)
 	return s.scan()
 }
 
@@ -511,6 +542,7 @@ func startWithDash(s *Scanner) (tok int, pos Pos, lit string) {
 			s.r.incAsLongAs(func(ch byte) bool {
 				return ch != '\n'
 			})
+			s.recordComment(pos.Offset, s.r.pos().Offset)
 			return s.scan()
 		}
 	}
@@ -602,6 +634,7 @@ func startWithSlash(s *Scanner) (tok int, pos Pos, lit string) {
 					s.lastHintPos = pos
 					return hintComment, pos, s.r.data(&pos)
 				}
+				s.recordComment(pos.Offset, s.r.pos().Offset)
 				return s.scan()
 			case '*':
 				currentCharIsStar = true
